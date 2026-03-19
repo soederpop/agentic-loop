@@ -56,6 +56,12 @@ The [Voice Command Handlers](./commands/voice/handlers) are modules which match 
 
 ### Voice Setup
 
+Running the following will tell you if your system supports it:
+
+```shell
+luca voice --check
+```
+
 Voice mode requires **two wake words** — you'll record samples of your voice for each:
 
 1. **"yo chief"** or **"hey chief"** — activates the **Chief of Staff** assistant (must contain the word "chief")
@@ -82,6 +88,7 @@ luca TEST-VOICE-MODE
 ```
 
 The `luca train --voice` command will open up a web app to help you iterate on voice command handlers.
+
 
 ## Project Commands
 
