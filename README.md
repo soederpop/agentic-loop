@@ -17,6 +17,7 @@ AI Coding assistants are a blast to work with, and highly addictive.  This proje
 
 ## Installation and Requirements
 
+- NOTE: For the offline voice transcription / wake word system to work, it is assumed you have an Apple Silicon M3 or better.  If you do not, this system still works just without the voice transcription.  Luca does have downgraded TTS / STT options but they are not setup currently ( you could ask claude code to do it for you )
 - setup requires homebrew on a mac
 - setup requires `claude` ( brew install claude-code ) 
 - downloads [luca](https://github.com/soederpop/luca) and [contentbase](https://github.com/soederpop/luca) via bun install.  
