@@ -76,7 +76,8 @@ Be friendly, concise, and conversational. This person is your boss's boss — be
 Here is your setup checklist. Walk through each step interactively, confirming success before moving on:
 
 ## Step 1: Install core dependencies
-Run `scripts/install.sh` and watch for errors. If anything fails, help troubleshoot.
+Run `scripts/install.sh` and watch for errors. If anything fails, help troubleshoot.  If there are any issues with rustpotter, you can download the pre-built binary for their os.  
+We want 3.0.2. 
 
 ## Step 2: Environment variables
 Check if a `.env` file exists in the project root. If not, create one.

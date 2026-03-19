@@ -20,6 +20,17 @@ AI Coding assistants are a blast to work with, and highly addictive.  This proje
 - setup requires homebrew on a mac
 - setup requires `claude` ( brew install claude-code ) 
 - downloads [luca](https://github.com/soederpop/luca) and [contentbase](https://github.com/soederpop/luca) via bun install.  
+- copy `.env.example` to `.env` and put in real values
+
+**quick path fix**
+
+Add the following to your `~/.zshrc`
+
+```zsh
+export PATH=./node_modules/.bin:$PATH
+```
+
+and then run `source ~/.zshrc` so the changes take effect.
  
 As long as you have the `claude` code CLI installed and in your path, to get started with the rest of the installation, run the following:
 
