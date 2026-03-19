@@ -33,10 +33,18 @@ export const VoiceChatOptionsSchema = FeatureOptionsSchema.extend({
 	prependPrompt: z.string().optional(),
 })
 
+export type CapabilityResult = {
+	available: boolean
+	missing: string[]
+}
+
 export const VoiceChatStateSchema = FeatureStateSchema.extend({
 	conversing: z.boolean().default(false),
 	started: z.boolean().default(false),
 	turnCount: z.number().default(0),
+	capabilitiesChecked: z.boolean().default(false),
+	ttsAvailable: z.boolean().default(false),
+	capabilityMissing: z.array(z.string()).default([]),
 })
 
 export type VoiceChatOptions = z.infer<typeof VoiceChatOptionsSchema>
@@ -55,6 +63,10 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 	static {
 		Feature.register(this as any, 'voiceChat')
 	}
+
+	// Capability resolution (memoized per instance)
+	private _capabilitiesChecked = false
+	private _ttsAvailable = false
 
 	override get initialState(): VoiceChatState {
 		return {
@@ -83,7 +95,13 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		if(this.isStarted) {
 			return this
 		}
-		
+
+		const caps = await this.checkCapabilities()
+		if (!caps.available) {
+			this.emit('info', `[voice-chat] cannot start — missing: ${caps.missing.join(', ')}`)
+			return this
+		}
+
 		await this.assistantsManager.discover()
 
 		await this.assistant.start()
@@ -91,7 +109,7 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 
 		this.loadPhraseManifest()
 		this.wireUpResponseEvents()
-		
+
 		this.emit('started')
 		return this
 	}
@@ -173,14 +191,63 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		const fs = this.container.feature('fs')
 
 		const voiceConfigPath = this.assistant.paths.join('voice.yaml')
+
+		if (!fs.exists(voiceConfigPath)) {
+			throw new Error(`[voice-chat] voice.yaml not found at ${voiceConfigPath}`)
+		}
+
 		const voiceConfig = yaml.parse(fs.readFile(voiceConfigPath))
-		
+
 		this.state.set('voiceConfig', voiceConfig)
-		
+
 		return voiceConfig
 	}
 	
+	async checkCapabilities(): Promise<CapabilityResult> {
+		if (this._capabilitiesChecked) {
+			return {
+				available: this._ttsAvailable,
+				missing: (this.state.get('capabilityMissing') as string[]) ?? [],
+			}
+		}
+
+		const missing: string[] = []
+
+		// ElevenLabs API key
+		if (!process.env.ELEVENLABS_API_KEY) {
+			missing.push('ELEVENLABS_API_KEY env var')
+		}
+
+		// voice.yaml with a voiceId for this assistant
+		let hasVoiceConfig = false
+		try {
+			const fs = this.container.feature('fs')
+			const voiceConfigPath = this.assistant.paths.join('voice.yaml')
+			if (fs.exists(voiceConfigPath)) {
+				const yaml = this.container.feature('yaml')
+				const cfg = yaml.parse(fs.readFile(voiceConfigPath))
+				hasVoiceConfig = !!cfg?.voiceId
+			}
+		} catch {}
+		if (!hasVoiceConfig) missing.push(`voice.yaml for ${this.options.assistant}`)
+
+		this._ttsAvailable = missing.length === 0
+		this._capabilitiesChecked = true
+
+		this.state.setState({
+			capabilitiesChecked: true,
+			ttsAvailable: this._ttsAvailable,
+			capabilityMissing: missing,
+		})
+
+		return { available: this._ttsAvailable, missing }
+	}
+
 	async speakPhrase(phrase: string) {
+		if (!this._ttsAvailable) {
+			this.emit('info', `[voice-chat] TTS unavailable, skipping speakPhrase`)
+			return this
+		}
 		const streamer = this.createSpeechStreamer()
 		await streamer.push(phrase)
 		await streamer.finish()
@@ -296,7 +363,11 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		if (!this.isStarted) {
 			await this.start()
 		}
-		
+		if (!this.isStarted) {
+			this.emit('info', `[voice-chat] skipping say() — TTS not available`)
+			return ''
+		}
+
 		if (this.isConversing) {
 			this.emit('info', 'Waiting for conversation to finish')
 			await this.waitFor('finished')

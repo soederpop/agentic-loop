@@ -3,6 +3,7 @@ import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 
 export const argsSchema = CommandOptionsSchema.extend({
+	check: z.boolean().default(false).describe('Check voice capability status without starting the service'),
 	train: z.boolean().default(false).describe('Launch the voice command training studio'),
 	port: z.number().default(4377).describe('Port for the training web server'),
 	open: z.boolean().default(true).describe('Open the training app in a browser'),
@@ -240,6 +241,40 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 	const { container } = context
 	const proc = container.feature('proc')
 
+	if (options.check) {
+		const listener = container.feature('voiceListener' as any) as any
+		const chat = container.feature('voiceChat', { assistant: 'voice-assistant' }) as any
+
+		const [listenerCaps, chatCaps] = await Promise.all([
+			listener.checkCapabilities(),
+			chat.checkCapabilities(),
+		])
+
+		const mark = (ok: boolean) => ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'
+
+		console.log('')
+		console.log('  Voice Capability Check')
+		console.log('  ──────────────────────')
+		console.log(`  ${mark(listener.state.get('wakeWordAvailable'))} Wake word   rustpotter + .rpw models`)
+		console.log(`  ${mark(listener.state.get('sttAvailable'))}  STT         sox + mlx_whisper`)
+		console.log(`  ${mark(chatCaps.available)}  TTS/LLM     ELEVENLABS_API_KEY + voice.yaml`)
+		console.log('')
+
+		const allMissing = [...listenerCaps.missing, ...chatCaps.missing]
+		if (allMissing.length) {
+			console.log('  Missing:')
+			for (const m of allMissing) {
+				console.log(`    - ${m}`)
+			}
+			console.log('')
+		} else {
+			console.log('  All capabilities available.')
+			console.log('')
+		}
+
+		return
+	}
+
 	if (options.train) {
 		await container.helpers.discover('features')
 		const router = container.feature('voiceRouter' as any, { enable: true }) as any
@@ -272,7 +307,20 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 	})
 
 	await voiceService.start()
-	console.log(`[voice] listening (${voiceService.manifest.length} handlers)`)
+
+	const st = voiceService.state
+	const modes: string[] = []
+	if (st.get('wakeWordAvailable')) modes.push('wake-word')
+	if (st.get('sttAvailable')) modes.push('STT')
+	if (st.get('ttsAvailable')) modes.push('TTS/LLM')
+
+	if (modes.length === 0) {
+		console.log('[voice] started in degraded mode — no voice capabilities available')
+		const missing = (st.get('capabilityMissing') as string[]) ?? []
+		if (missing.length) console.log(`[voice] missing: ${missing.join(', ')}`)
+	} else {
+		console.log(`[voice] listening — active: ${modes.join(', ')} | ${voiceService.manifest.length} handlers`)
+	}
 
 	// Keep process alive, but let Ctrl+C kill it cleanly
 	const shutdown = async () => {

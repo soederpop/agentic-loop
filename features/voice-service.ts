@@ -16,6 +16,10 @@ export const VoiceServiceStateSchema = FeatureStateSchema.extend({
   running: z.boolean().default(false),
   handlerCount: z.number().default(0),
   socketPath: z.string().default(''),
+  wakeWordAvailable: z.boolean().default(false),
+  sttAvailable: z.boolean().default(false),
+  ttsAvailable: z.boolean().default(false),
+  capabilityMissing: z.array(z.string()).default([]),
 })
 export type VoiceServiceState = z.infer<typeof VoiceServiceStateSchema>
 
@@ -82,45 +86,77 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       this.emit('info', 'Voice service already starting, waiting 100ms')
       await this.container.sleep(100)
       return this.start()
-    } 
+    }
 
     this.state.set('starting', true)
     this.emit('info', 'Voice service starting')
 
     const { listener, router, chiefChat, voiceAssistantChat } = this
 
-    chiefChat.mute()
+    // 1. Check all capabilities before booting anything
+    const [listenerCaps, chatCaps] = await Promise.all([
+      listener.checkCapabilities(),
+      voiceAssistantChat.checkCapabilities(),
+    ])
 
-    await Promise.all([
-      router.start(),
-      chiefChat.start(),
-      voiceAssistantChat.start(),
-    ]).catch((err: any) => {
+    const allMissing = [...listenerCaps.missing, ...chatCaps.missing]
+
+    this.state.setState({
+      wakeWordAvailable: listener.state.get('wakeWordAvailable') as boolean,
+      sttAvailable: listener.state.get('sttAvailable') as boolean,
+      ttsAvailable: chatCaps.available,
+      capabilityMissing: allMissing,
+    })
+
+    // 2. Log a clear startup summary
+    this.emit('info', '── Voice capability check ──')
+    this.emit('info', `  Wake word: ${listener.state.get('wakeWordAvailable') ? 'available' : `UNAVAILABLE (${listenerCaps.missing.filter(m => m.includes('rustpotter') || m.includes('.rpw')).join(', ') || 'unknown'})`}`)
+    this.emit('info', `  STT:       ${listener.state.get('sttAvailable') ? 'available' : `UNAVAILABLE (${listenerCaps.missing.filter(m => m.includes('sox') || m.includes('mlx_whisper')).join(', ') || 'unknown'})`}`)
+    this.emit('info', `  TTS/LLM:   ${chatCaps.available ? 'available' : `UNAVAILABLE (${chatCaps.missing.join(', ')})`}`)
+
+    // 3. Always start the router (no external deps)
+    await router.start().catch((err: any) => {
       this.emit('error', err)
-      this.emit('started')
       throw err
     })
 
-    // Give handlers access to TTS via speakPhrase
-    router.chat = voiceAssistantChat
+    // 4. Boot TTS chats only if available
+    if (chatCaps.available) {
+      chiefChat.mute()
 
-    this.emit('info', 'Preloading context for chief chat')
-    await chiefChat.ask('Read your readme, memories, todos, my goals, and be ready to answer questions.')
-    this.emit('info', 'Context preloaded for chief chat')
-    chiefChat.unmute()
+      await Promise.all([
+        chiefChat.start(),
+        voiceAssistantChat.start(),
+      ]).catch((err: any) => {
+        this.emit('error', err)
+        this.emit('info', `TTS chat startup failed: ${err.message}`)
+      })
 
-    listener.on('triggerWord', (wakeword: string) => {
-      this.emit('info', `Trigger word: ${wakeword}`)
-      this.handleTriggerWord(wakeword)
-    })
-    
-    listener.waitForTriggerWord()
+      // Give handlers access to TTS via speakPhrase
+      router.chat = voiceAssistantChat
 
-    // Update state
+      this.emit('info', 'Preloading context for chief chat')
+      await chiefChat.ask('Read your readme, memories, todos, my goals, and be ready to answer questions.')
+      this.emit('info', 'Context preloaded for chief chat')
+      chiefChat.unmute()
+    } else {
+      this.emit('info', 'TTS/LLM unavailable — voice output disabled')
+    }
+
+    // 5. Wire up wake word listener only if available
+    if (listener.state.get('wakeWordAvailable')) {
+      listener.on('triggerWord', (wakeword: string) => {
+        this.emit('info', `Trigger word: ${wakeword}`)
+        this.handleTriggerWord(wakeword)
+      })
+      listener.waitForTriggerWord()
+    } else {
+      this.emit('info', 'Wake word listener not started — run voice/wakeword/setup-wakeword.sh to enable')
+    }
+
     this.state.set('running', true)
-
     this.emit('started')
-    
+
     return this
   }
 
@@ -138,6 +174,13 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
 
   async handleTriggerWord(wakeword: string) {
     const { listener, router } = this
+
+    // Guard: STT must be available to transcribe voice input
+    if (!listener.state.get('sttAvailable')) {
+      this.emit('info', 'Triggered but STT unavailable — cannot transcribe')
+      if (this.state.get('ttsAvailable')) router.playPhrase('error')
+      return
+    }
 
     listener.lock()
 

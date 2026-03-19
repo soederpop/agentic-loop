@@ -656,7 +656,13 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
     try {
       await voiceService.start()
-      log('voice', `listening (${voiceService.manifest.length} handlers)`)
+      const vst = voiceService.state
+      const modes: string[] = []
+      if (vst.get('wakeWordAvailable')) modes.push('wake-word')
+      if (vst.get('sttAvailable')) modes.push('STT')
+      if (vst.get('ttsAvailable')) modes.push('TTS/LLM')
+      const label = modes.length ? modes.join(', ') : 'degraded (no voice capabilities)'
+      log('voice', `started [${label}] | ${voiceService.manifest.length} handlers`)
     } catch (err: any) {
       log('voice', `failed to start: ${err?.message || err}`)
     }

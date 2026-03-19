@@ -9,6 +9,11 @@ declare module '@soederpop/luca' {
   }
 }
 
+export type CapabilityResult = {
+  available: boolean
+  missing: string[]
+}
+
 export const VoiceListenerStateSchema = FeatureStateSchema.extend({
   waitingForTriggerWord: z.boolean().default(false),
   triggerProcessPids: z.array(z.number()).default([]),
@@ -16,6 +21,10 @@ export const VoiceListenerStateSchema = FeatureStateSchema.extend({
   recording: z.boolean().default(false),
   locked: z.boolean().default(false),
   lockedAt: z.number().optional(),
+  capabilitiesChecked: z.boolean().default(false),
+  wakeWordAvailable: z.boolean().default(false),
+  sttAvailable: z.boolean().default(false),
+  capabilityMissing: z.array(z.string()).default([]),
 })
 export type VoiceListenerState = z.infer<typeof VoiceListenerStateSchema>
 
@@ -64,6 +73,12 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
   private static CONFIRM_THRESHOLD = 0.35
   private static CONFIRM_COUNT = 2
 
+  // Capability resolution (memoized per instance, like gws._resolved)
+  private _capabilitiesChecked = false
+  private _wakeWordAvailable = false
+  private _sttAvailable = false
+  private _rustpotterBin: string | null = null
+
   static {
 	  Feature.register(this, 'voiceListener')
   }
@@ -101,6 +116,67 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
     this.emit('unlocked')
 
     return this
+  }
+
+  async checkCapabilities(): Promise<CapabilityResult> {
+    if (this._capabilitiesChecked) {
+      return {
+        available: this._wakeWordAvailable || this._sttAvailable,
+        missing: (this.state.get('capabilityMissing') as string[]) ?? [],
+      }
+    }
+
+    const proc = this.container.feature('proc')
+    const fs = this.container.feature('fs')
+    const missing: string[] = []
+
+    // Wake word: rustpotter binary
+    try {
+      const result = proc.exec('which rustpotter').trim()
+      if (result) this._rustpotterBin = result
+    } catch {}
+    if (!this._rustpotterBin) missing.push('rustpotter binary')
+
+    // Wake word: .rpw model files
+    let modelCount = 0
+    try {
+      const entries = await fs.readdir(this.modelsDir)
+      modelCount = entries.filter((e: string) => e.endsWith('.rpw')).length
+    } catch {}
+    if (modelCount === 0) missing.push('.rpw wake word model files')
+
+    this._wakeWordAvailable = !!this._rustpotterBin && modelCount > 0
+
+    // STT: sox binary
+    let hasSox = false
+    try {
+      const result = proc.exec('which sox').trim()
+      if (result) hasSox = true
+    } catch {}
+    if (!hasSox) missing.push('sox binary')
+
+    // STT: mlx_whisper binary
+    let hasWhisper = false
+    try {
+      const result = proc.exec('which mlx_whisper').trim()
+      if (result) hasWhisper = true
+    } catch {}
+    if (!hasWhisper) missing.push('mlx_whisper binary')
+
+    this._sttAvailable = hasSox && hasWhisper
+    this._capabilitiesChecked = true
+
+    this.state.setState({
+      capabilitiesChecked: true,
+      wakeWordAvailable: this._wakeWordAvailable,
+      sttAvailable: this._sttAvailable,
+      capabilityMissing: missing,
+    })
+
+    return {
+      available: this._wakeWordAvailable || this._sttAvailable,
+      missing,
+    }
   }
 
   async stopWaitingForTriggerWord() {
@@ -169,7 +245,14 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
   async waitForTriggerWord() {
 	  console.log('Waiting for trigger word')
 
-	const bin = this.container.proc.exec(`which rustpotter`).trim() 
+	// Use cached capability check instead of bare `which` call
+	const caps = await this.checkCapabilities()
+	if (!this._wakeWordAvailable) {
+		this.emit('triggerWordErrorOutput', `Wake word unavailable: ${caps.missing.join(', ')}`)
+		return this
+	}
+
+	const bin = this._rustpotterBin!
 
 	if (this.state.get('waitingForTriggerWord')) {
 		return this
@@ -182,12 +265,6 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 	const modelPaths = entries
 		.filter((e: string) => e.endsWith('.rpw'))
 		.map((e: string) => `${this.modelsDir}/${e}`)
-
-	if (modelPaths.length === 0) {
-		this.emit('triggerWordErrorOutput', 'No .rpw model files found in models directory')
-		this.state.set('waitingForTriggerWord', false)
-		return this
-	}
 
 	const listener = this
 	const pids: number[] = []
