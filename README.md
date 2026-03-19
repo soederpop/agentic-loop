@@ -40,7 +40,28 @@ luca serve
 
 This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.  You can write your own voice comand handlers to spawn terminal processes.
 
-The [Voice Command Handlers](./commands/voice/handlers) are modules which match command utterances picked up by the `luca main` voice system and route them to handler functions, which you can write to trigger certain commands in the system.  
+The [Voice Command Handlers](./commands/voice/handlers) are modules which match command utterances picked up by the `luca main` voice system and route them to handler functions, which you can write to trigger certain commands in the system.
+
+### Voice Setup
+
+Voice mode requires **two wake words** — you'll record samples of your voice for each:
+
+1. **"yo chief"** or **"hey chief"** — activates the **Chief of Staff** assistant (must contain the word "chief")
+2. **Your choice** (e.g. "hey friday") — activates the general **voice command router**
+
+Run the guided setup (requires `rustpotter` in your PATH):
+
+```shell
+./voice/wakeword/setup-wakeword.sh
+```
+
+This walks you through recording 5 samples of each wake word and builds the detection models. You can also set up a single wake word directly:
+
+```shell
+./voice/wakeword/setup-wakeword.sh "yo chief"
+```
+
+### Testing Voice
 
 Run the following to test if the voice system works:
 
@@ -48,8 +69,7 @@ Run the following to test if the voice system works:
 luca TEST-VOICE-MODE
 ```
 
-
-The `luca train --voice` command will open up a web app to help you.
+The `luca train --voice` command will open up a web app to help you iterate on voice command handlers.
 
 ## Project Commands
 
