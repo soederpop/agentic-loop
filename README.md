@@ -23,6 +23,14 @@ As long as you have the `claude` code CLI installed and in your path, to get sta
 sh setup.sh
 ```
 
+## Native OSX App and Voice Command System
+
+This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.  You can write your own voice comand handlers to spawn terminal processes.
+
+The [Voice Command Handlers](./commands/voice/handlers) are modules which match command utterances picked up by the `luca main` voice system and route them to handler functions, which you can write to trigger certain commands in the system.  
+
+The `luca train --voice` command will open up a web app to help you.
+
 ## Project Commands
 
 The following are things you can run from the terminal to interact with the Agentic Loop process.
@@ -101,6 +109,14 @@ Run the following for a full help
 
 ```shell
 cnotes --help
+```
+
+### Validating Documents
+
+The following command will validate the documents produced by you, or the agents, follow the structure we need them to
+
+```shell
+cnotes validate
 ```
 
 
