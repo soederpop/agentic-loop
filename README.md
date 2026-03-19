@@ -38,6 +38,13 @@ This project [contains a Native OSX App](./apps/presenter-windows/) whose only r
 
 The [Voice Command Handlers](./commands/voice/handlers) are modules which match command utterances picked up by the `luca main` voice system and route them to handler functions, which you can write to trigger certain commands in the system.  
 
+Run the following to test if the voice system works:
+
+```shell
+luca TEST-VOICE-MODE
+```
+
+
 The `luca train --voice` command will open up a web app to help you.
 
 ## Project Commands
