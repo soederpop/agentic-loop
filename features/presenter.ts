@@ -8,8 +8,8 @@ declare module '@soederpop/luca' {
   }
 }
 
-export const PRESENTER_EXPRESS_PORT = 9200
-export const PRESENTER_LINK_PORT = 9201
+export const PRESENTER_EXPRESS_PORT = 9210
+export const PRESENTER_LINK_PORT = 9211
 
 export const PresenterStateSchema = FeatureStateSchema.extend({
   running: z.boolean().default(false),

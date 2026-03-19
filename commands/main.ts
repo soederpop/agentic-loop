@@ -4,7 +4,7 @@ import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 import type { TaskEntry } from '../features/task-scheduler'
 
 export const argsSchema = CommandOptionsSchema.extend({
-  port: z.number().default(4400).describe('WebSocket port for assistant/client connections'),
+  port: z.number().default(4410).describe('WebSocket port for assistant/client connections'),
   force: z.boolean().default(false).describe('Kill anything already running on managed ports before starting'),
   probeInterval: z.number().default(60).describe('Seconds between domain health probes'),
   taskInterval: z.number().default(1).describe('Minutes between task scheduler ticks'),
