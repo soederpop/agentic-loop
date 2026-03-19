@@ -15,9 +15,13 @@ This is essentially an AI Assisted, structured writing exercise that takes place
 
 AI Coding assistants are a blast to work with, and highly addictive.  This project allows for more asynchronous, thoughtful, and indirect relationship with them that takes place through longer form written exchange. 
 
-## Installation
+## Installation and Requirements
 
-As long as you have the `claude` code CLI installed and in your path, to get started with the installation, run the following:
+- setup requires homebrew on a mac
+- setup requires `claude` ( brew install claude-code ) 
+- downloads [luca](https://github.com/soederpop/luca) and [contentbase](https://github.com/soederpop/luca) via bun install.  
+ 
+As long as you have the `claude` code CLI installed and in your path, to get started with the rest of the installation, run the following:
 
 ```shell
 sh setup.sh
