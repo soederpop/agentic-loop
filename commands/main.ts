@@ -5,8 +5,6 @@ import type { TaskEntry } from '../features/task-scheduler'
 
 export const argsSchema = CommandOptionsSchema.extend({
   port: z.number().default(4410).describe('WebSocket port for assistant/client connections'),
-  force: z.boolean().default(false).describe('Kill anything already running on managed ports before starting'),
-  probeInterval: z.number().default(60).describe('Seconds between domain health probes'),
   taskInterval: z.number().default(1).describe('Minutes between task scheduler ticks'),
   watchInterval: z.number().default(60_000).describe('Ms between project builder polls'),
   docsPath: z.string().default('./docs').describe('Path to the docs folder'),
@@ -18,7 +16,6 @@ export const argsSchema = CommandOptionsSchema.extend({
   console: z.boolean().default(false).describe('Connect to running main process with a remote eval console'),
   concurrencyOneOff: z.number().default(4).describe('Max concurrent one-off tasks'),
   concurrencyScheduled: z.number().default(2).describe('Max concurrent scheduled tasks'),
-  domainServices: z.boolean().default(true).describe('Enable domain services (use --no-domain-services to disable)'),
   voiceService: z.boolean().default(true).describe('Enable voice service (use --no-voice-service to disable)'),
   presenterService: z.boolean().default(true).describe('Enable presenter service (use --no-presenter-service to disable)'),
 })
@@ -248,7 +245,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     builder.stopWatcher()
     if (voiceService) voiceService.stop().catch(() => {})
     if (presenter) presenter.stop().catch(() => {})
-    domains.stop().catch(() => {})
     log('main', 'All subsystems paused. Process alive, WebSocket still listening.')
     recordEvent('main', 'paused')
   }
@@ -267,11 +263,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     if (presenter) {
       try { await presenter.start() } catch (err: any) {
         log('presenter', `failed to resume: ${err?.message || err}`)
-      }
-    }
-    if (options.domainServices && !process.env.NO_SOEDERPOP_DOMAIN_SERVICES) {
-      try { await domains.start() } catch (err: any) {
-        log('domains', `failed to resume: ${err?.message || err}`)
       }
     }
     log('main', 'All subsystems resumed.')
@@ -305,12 +296,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         expressPort: presenter.state.get('expressPort'),
         linkPort: presenter.state.get('linkPort'),
       } : { running: false, disabled: true },
-      domains: {
-        running: domains.state.get('running'),
-        serviceCount: domains.state.get('serviceCount'),
-        healthyCount: domains.state.get('healthyCount'),
-        services: domains.services,
-      },
       git: gitSummary,
       content: contentCounts,
       recentEvents: events.slice(-50),
@@ -364,7 +349,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       builder,
       voiceService,
       presenter,
-      domains,
       log,
       events,
       getStatusSnapshot,
@@ -696,54 +680,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('presenter', 'disabled via --no-presenter-service')
   }
 
-  // 5. Domain Services
-  let domains: any
-
-  if (options.domainServices && !process.env.NO_SOEDERPOP_DOMAIN_SERVICES) {
-    domains = container.feature('domainServices', {
-      force: options.force,
-      probeInterval: options.probeInterval,
-    })
-
-    domains.on('service:started', (d: any) => {
-      log('domains', `started: ${d.name} (${d.type}, port ${d.port})`)
-      recordEvent('domains', 'service:started', d)
-    })
-    domains.on('service:crashed', (d: any) => {
-      log('domains', `CRASHED: ${d.name} (exit ${d.exitCode})`)
-      recordEvent('domains', 'service:crashed', d)
-    })
-    domains.on('service:restarted', (d: any) => {
-      log('domains', `restarted: ${d.name}`)
-      recordEvent('domains', 'service:restarted', d)
-    })
-    domains.on('probe:down', (d: any) => {
-      if (d.name !== '*') log('domains', `DOWN: ${d.name} port ${d.port}`)
-      recordEvent('domains', 'probe:down', d)
-    })
-    domains.on('service:stdout', (d: any) => {
-      log(d.name, d.text)
-    })
-    domains.on('service:stderr', (d: any) => {
-      log(d.name, `[stderr] ${d.text}`)
-    })
-
-    try {
-      await domains.start()
-      log('domains', `${domains.state.get('serviceCount')} services managed`)
-    } catch (err: any) {
-      log('domains', `failed to start: ${err?.message || err}`)
-    }
-  } else {
-    // Stub so getStatusSnapshot and shutdown don't blow up
-    domains = {
-      state: new Map([['running', false], ['serviceCount', 0], ['healthyCount', 0]]),
-      services: [],
-      stop: async () => {},
-    }
-    log('domains', 'disabled (--no-domain-services)')
-  }
-
   // --- Status summary ---
   log('main', '')
   log('main', `luca main running (pid ${process.pid})`)
@@ -760,7 +696,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Builder: ${status.builder.buildsInProgress.length} building`)
     log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.handlerCount} handlers`)
     log('main', `Presenter: ${status.presenter.running ? `running (http: ${status.presenter.expressPort}, ws: ${status.presenter.linkPort})` : 'stopped'}`)
-    log('main', `Domains: ${status.domains.serviceCount} services, ${status.domains.healthyCount} healthy`)
     log('main', '')
   })
 
@@ -774,7 +709,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
     voiceService?.stop().catch(() => {})
     presenter?.stop().catch(() => {})
-    domains.stop().catch(() => {})
 
     wss.stop().catch(() => {})
 
@@ -821,9 +755,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
     }
     return sourceColors[source]!
   }
-
-  // Domain ticker state
-  let tickerOffset = 0
 
   ws.on('open', () => {
     ws.send({ type: 'query', id: 'init' })
@@ -885,7 +816,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
     process.stdout.write('\x1b[?25h\x1b[?1049l')
     if (renderTimer) clearInterval(renderTimer)
     if (refreshTimer) clearInterval(refreshTimer)
-    if (tickerTimer) clearInterval(tickerTimer)
   }
 
   // --- Drawing helpers ---
@@ -963,8 +893,7 @@ async function runClient(container: any, options: MainOptions, ui: any) {
     const leftW = Math.max(30, Math.floor(cols * 0.38))
     const rightW = cols - leftW
     const headerH = 2
-    const bottomH = 3  // domain ticker
-    const bodyH = rows - headerH - bottomH
+    const bodyH = rows - headerH
 
     const output: string[] = []
 
@@ -990,9 +919,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
       status.presenter?.running
         ? chalk.green('●') + ` presenter ${chalk.gray(`http:${status.presenter.expressPort} ws:${status.presenter.linkPort}`)}`
         : chalk.yellow('●') + ' presenter',
-      status.domains.running
-        ? chalk.green('●') + ` domains ${chalk.gray(`${status.domains.healthyCount}/${status.domains.serviceCount}`)}`
-        : chalk.yellow('●') + ' domains',
     ]
     output.push(' ' + indicators.join(chalk.gray('  │  ')))
 
@@ -1180,35 +1106,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
       output.push(fit(left, leftW) + fit(right, rightW))
     }
 
-    // ═══ BOTTOM: Domain service ticker ═══
-    const services = status.domains.services || []
-    const domainsRunning = status.domains.running
-    if (services.length) {
-      const tickerItems = services.map((svc: any) => {
-        const dot = svc.healthy === true ? chalk.green('●') : svc.healthy === false ? chalk.red('●') : chalk.gray('●')
-        return `${dot} ${svc.name}${chalk.gray(':' + (svc.port || '?'))}`
-      })
-      const separator = '  │  '
-      const viewW = cols - 4
-
-      // Scroll by rotating which item starts the display
-      const itemOffset = tickerOffset % services.length
-      const rotated = [...tickerItems.slice(itemOffset), ...tickerItems.slice(0, itemOffset)]
-      const displayTicker = rotated.join(chalk.gray(separator))
-
-      output.push(chalk.gray('─'.repeat(cols)))
-      output.push(chalk.gray(' ') + fit(displayTicker, viewW) + chalk.gray(' '))
-      output.push(chalk.gray('─'.repeat(cols)))
-    } else if (!domainsRunning) {
-      output.push(chalk.gray('─'.repeat(cols)))
-      output.push(chalk.gray(' Domain services disabled'))
-      output.push(chalk.gray('─'.repeat(cols)))
-    } else {
-      output.push(chalk.gray('─'.repeat(cols)))
-      output.push(chalk.gray(' No domain services'))
-      output.push(chalk.gray('─'.repeat(cols)))
-    }
-
     // Render frame
     const frame = '\x1b[H' + output.slice(0, rows).map(l => l + '\x1b[K').join('\n') + '\x1b[J'
     process.stdout.write(frame)
@@ -1250,12 +1147,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
   const refreshTimer = setInterval(() => {
     try { ws.send({ type: 'query', id: 'refresh' }) } catch {}
   }, 5000)
-
-  // Ticker scroll
-  const tickerTimer = setInterval(() => {
-    tickerOffset++
-    needsRender = true
-  }, 500)
 
   await new Promise(() => {})
 }
@@ -1301,7 +1192,7 @@ async function runConsole(container: any, options: MainOptions, ui: any) {
 
   console.log()
   console.log(ui.colors.dim('  Remote console — evaluating in the running luca main process.'))
-  console.log(ui.colors.dim('  Live objects: scheduler, builder, voiceService, presenter, domains, container'))
+  console.log(ui.colors.dim('  Live objects: scheduler, builder, voiceService, presenter, container'))
   console.log(ui.colors.dim('  Last result available as _'))
   console.log(ui.colors.dim('  Type .exit to quit.'))
   console.log()
