@@ -23,3 +23,85 @@ As long as you have the `claude` code CLI installed and in your path, to get sta
 sh setup.sh
 ```
 
+## Project Commands
+
+The following are things you can run from the terminal to interact with the Agentic Loop process.
+
+The `luca` cli will run any `commands/whatever.ts` folder as `luca whatever`.  
+
+Run `luca scaffold command --tutorial` to get an idea for what a command looks like.
+
+**IN GENERAL** if you have a question about the `luca` CLI , ask `claude` as it is loaded with the skills.
+
+```shell
+# run this with no args for a help 
+luca
+# the describe command can teach you about any of the components
+luca describe --help 
+# the scaffold command can create new features, commands, assistants
+luca scaffold --help
+```
+
+### The Main Agentic Loop Process
+
+Run the [main agentic loop process](./commands/main.ts) ( long lived server essentially ).  It is also possible to run this with launchctl on startup on your mac.
+
+```shell
+luca main
+```
+
+This process is a system wide singleton and uses a locking mechanism to ensure only one is running.
+
+If you run this same command in another terminal, you will get a dashboard that views the activity.
+
+You can pause / unpause the agentic loop with the following:
+
+```shell
+luca main --pause
+luca main --resume # when you're ready for it to start back up again
+```
+
+You can also connect to it via a REPL
+
+```shell
+luca main --console
+```
+
+### Chat with an Assistant
+
+To chat with the chief of staff using a text interface ( this is a good way to test tools you're adding )
+
+```shell
+luca chat chiefOfStaff
+```
+
+The chief has the ability to make anything happen.
+
+### The Project Builder
+
+The main agentic loop process will be running this headlessly, but this utility is a good way to bundle up multiple claude code sessions and run them in sequence
+
+```shell
+luca project-builder $project-slug # e.g if you have docs/projects/marketing-website.md marketing-website is the slug
+```
+
+### Run a prompt document through a coding assistant
+
+Rather than "chatting" with Claude code, it is best to write a prompt document in markdown.  You can then run the prompt
+
+```shell
+luca prompt claude|codex|chiefOfStaff docs/prompts/whatever.md
+```
+
+## Contentbase
+
+As the [folder of docs grows](./docs), and it should if the loop is running, contentbase provides organization structure and the ability to query, and perform bulk operations on these documents, summarize them, extract only certain sections, and more.
+
+Run the following for a full help
+
+```shell
+cnotes --help
+```
+
+
+
