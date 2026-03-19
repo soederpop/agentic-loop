@@ -40,4 +40,4 @@ You can run the following command to open up a chat session with the chief of st
 luca chat chiefOfStaff
 ```
 
-This is just a terminal chat, the chiefOfStaff can power the entire operation through here.
+This is just a terminal chat, the chiefOfStaff can power the entire operation through here.  The chat sessions will persist for a rolling 12 hour period.  After which, the chief will rely on the memories written to disk in [docs/memories](../memories) 

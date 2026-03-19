@@ -120,7 +120,7 @@ export async function ls() : Promise<string> {
 }
 
 export async function README() : Promise<string> {
-	const docs = await assistant.contentDb.readMultiple(['README','assistant-README'])
+	const docs = await assistant.contentDb.readMultiple(['memories/SELF', 'memories/USER', 'memories/TODO', 'README','assistant-README'])
 	return docs
 }
 
