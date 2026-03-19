@@ -1,0 +1,11 @@
+filePaths:
+  assistants: assistants
+  commands: commands
+  features: features
+  docs: docs
+  ideas: docs/ideas
+  projects: docs/projects
+  goals: docs/goals
+
+aliases:
+  assistant: assistants

@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ---- Config ----
+MODEL="${MODEL:-mlx-community/whisper-large-v3-mlx}"
+SILENCE_SECS="${SILENCE_SECS:-1.5}"
+THRESH="${THRESH:-2%}"
+SR="${SR:-16000}"
+CHANNELS="${CHANNELS:-1}"
+
+OUTDIR="${1:-./tmp}"
+mkdir -p "$OUTDIR"
+
+ts="$(date +"%Y%m%d-%H%M%S")"
+base="dictation-$ts"
+wav="$OUTDIR/$base.wav"
+
+command -v sox >/dev/null 2>&1 || { echo "Missing sox. Install: brew install sox"; exit 1; }
+command -v mlx_whisper >/dev/null 2>&1 || { echo "Missing mlx_whisper. Install: pipx install mlx-whisper"; exit 1; }
+
+echo "Recording... (will stop after ${SILENCE_SECS}s of silence)"
+echo "Output: $wav"
+
+# If WAIT_TIMEOUT is set, sample the mic first to detect speech presence
+if [ -n "${WAIT_TIMEOUT:-}" ]; then
+  SAMPLE_DURATION="0.5"
+  ELAPSED=0
+  SPEECH_FOUND=0
+
+  while [ "$(echo "$ELAPSED < $WAIT_TIMEOUT" | bc)" -eq 1 ]; do
+    PEAK=$(sox -d -n trim 0 "$SAMPLE_DURATION" stat 2>&1 | awk '/Maximum amplitude/{print $3}')
+    echo "VU:${PEAK:-0.000000}"
+
+    if [ -n "$PEAK" ] && [ "$(echo "$PEAK > 0.02" | bc)" -eq 1 ]; then
+      SPEECH_FOUND=1
+      break
+    fi
+
+    ELAPSED=$(echo "$ELAPSED + $SAMPLE_DURATION" | bc)
+  done
+
+  if [ "$SPEECH_FOUND" -eq 0 ]; then
+    echo "---NO_SPEECH_DETECTED---"
+    exit 0
+  fi
+fi
+
+sox -d -c "$CHANNELS" -r "$SR" "$wav" silence 1 0.1 "$THRESH" 1 "$SILENCE_SECS" "$THRESH"
+
+echo "Transcribing with mlx-whisper ($MODEL)..."
+# mlx_whisper CLI writes output files itself:
+# -f txt sets format; --output-dir and --output-name control where/name.
+mlx_whisper "$wav" --model "$MODEL" -f txt --output-dir "$OUTDIR" --output-name "$base"
+
+echo "---START_TRANSCRIPT---"
+cat $OUTDIR/$base.txt
+echo "---END_TRANSCRIPT---"

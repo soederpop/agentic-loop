@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "luca-sandbox": {
+	    "command": "luca",
+	    "args": ["sandbox-mcp"]
+    },
+    "contentbase": {
+      "command": "cnotes",
+      "args": ["mcp"]
+    }
+  }
+}

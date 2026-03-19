@@ -1,0 +1,22 @@
+voiceId: sgk995upfe3tYLvoGcBN 
+conversationModePrefix: "[thick irish accent]"
+voiceSettings:
+  stability: 0.35
+  similarityBoost: 0.8
+  style: 0.6
+  speed: 1.05
+  useSpeakerBoost: true
+aliases:
+  - Friday
+phrases:
+  generic-ack:
+    - "Got it"
+  generic-finish:
+    - "Done"
+  greeting:
+    - "Hello"
+  farewell:
+    - "Check you later"
+  thinking:
+    - "Hold up, let me cook..."
+    - "Thinking..."

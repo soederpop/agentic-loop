@@ -1,0 +1,28 @@
+# dependencies (bun install)
+node_modules
+
+# tmp
+tmp/
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+secrets/
+
+# Contentbase Embeddings
+.contentbase
+
+# Finder (MacOS) folder config
+.DS_Store
+
+# Voice System
+voice/wakeword/models/*.rpw
+voice/wakeword/samples/*.wav
+
+# Claude Stuff
+.claude/settings.local.json
+
+assistants/*/generated
