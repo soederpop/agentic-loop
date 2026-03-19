@@ -23,6 +23,15 @@ As long as you have the `claude` code CLI installed and in your path, to get sta
 sh setup.sh
 ```
 
+## A Visual Explainer
+
+Run the following to view a visual explainer:
+
+```
+luca serve
+```
+
+
 ## Native OSX App and Voice Command System
 
 This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.  You can write your own voice comand handlers to spawn terminal processes.

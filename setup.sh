@@ -147,6 +147,7 @@ Summarize what was set up and what they can do next. Suggest:
 - Reading the README for more context
 
 IMPORTANT RULES:
+- Make this as frictionless as possible, don't ask needless questions. Just make the thing work.
 - Always wait for confirmation between steps
 - If a command fails, help debug — do not just move on
 - Keep it interactive — this is a conversation, not a script dump
@@ -166,5 +167,3 @@ echo "I just cloned the Agentic Loop repo and I am ready to set it up. Walk me t
   --append-system-prompt "$SYSTEM_PROMPT" \
   --model sonnet \
   --allowedTools "Bash(scripts/*),Bash(brew *),Bash(bun *),Bash(cnotes *),Bash(luca *),Bash(rustpotter *),Bash(which *),Bash(cat .env*),Bash(test *),Bash(ls *),Bash(swift *),Bash(xcode-select *),Bash(bash apps/*),Bash(bun add -g *),Bash(gws *),Read,Write(.env),Edit(.env)"
-
-luca serve
