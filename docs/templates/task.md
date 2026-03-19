@@ -1,8 +1,5 @@
 ---
 agent: claudeCode
-tags: []
-repeatable: true
-schedule: daily
 ---
 
 # {{title}}
