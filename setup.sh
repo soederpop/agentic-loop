@@ -28,6 +28,42 @@ fi
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
 
+# Ensure project dependencies are installed
+if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
+  echo "Installing project dependencies..."
+  bun install
+fi
+
+# Check that cnotes and luca are accessible
+MISSING_BINS=()
+command -v cnotes >/dev/null 2>&1 || MISSING_BINS+=(cnotes)
+command -v luca >/dev/null 2>&1 || MISSING_BINS+=(luca)
+
+if [ ${#MISSING_BINS[@]} -gt 0 ]; then
+  echo "  ⚠  ${MISSING_BINS[*]} not found in your PATH."
+  echo ""
+  echo "  These were installed by bun into ./node_modules/.bin/"
+  echo "  You have two options to fix this:"
+  echo ""
+  echo "  Option 1 — Add to PATH for this project (recommended):"
+  echo "    Add this line to your ~/.zshrc (or ~/.bashrc):"
+  echo ""
+  echo "      export PATH=\"./node_modules/.bin:\$PATH\""
+  echo ""
+  echo "    Then run:  source ~/.zshrc"
+  echo ""
+  echo "  Option 2 — Use absolute paths for this project only:"
+  echo "    Add these aliases to your ~/.zshrc (or ~/.bashrc):"
+  echo ""
+  echo "      alias cnotes=\"$PROJECT_ROOT/node_modules/.bin/cnotes\""
+  echo "      alias luca=\"$PROJECT_ROOT/node_modules/.bin/luca\""
+  echo ""
+  echo "    Then run:  source ~/.zshrc"
+  echo ""
+  echo "  After fixing your PATH, re-run this script."
+  exit 1
+fi
+
 # Write system prompt to a temp file to avoid shell escaping issues
 PROMPT_FILE=$(mktemp)
 trap "rm -f $PROMPT_FILE" EXIT
@@ -130,3 +166,5 @@ echo "I just cloned the Agentic Loop repo and I am ready to set it up. Walk me t
   --append-system-prompt "$SYSTEM_PROMPT" \
   --model sonnet \
   --allowedTools "Bash(scripts/*),Bash(brew *),Bash(bun *),Bash(cnotes *),Bash(luca *),Bash(rustpotter *),Bash(which *),Bash(cat .env*),Bash(test *),Bash(ls *),Bash(swift *),Bash(xcode-select *),Bash(bash apps/*),Bash(bun add -g *),Bash(gws *),Read,Write(.env),Edit(.env)"
+
+luca serve
