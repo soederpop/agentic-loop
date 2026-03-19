@@ -126,6 +126,10 @@ luca scaffold endpoint users --description "User management API"
 
 Run `luca scaffold` with no arguments for full usage and examples.
 
+## Extending the Agentic Loop
+
+- See the guide [Extending the Agentic Loop](./docs/guides/extending-the-agentic-loop.md)
+
 ## Git Strategy
 
 Roll on main. Commit with good messages that explain why, not just what.

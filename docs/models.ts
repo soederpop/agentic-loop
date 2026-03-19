@@ -84,9 +84,9 @@ export const Play = defineModel("Play", {
 
 export const Task = defineModel("Task", {
 	prefix: "tasks",
-	description: "Tasks are one-off prompts for small changes, bugfixes, documentation, reports, etc. They run once and are marked completed.",
+	description: "Tasks are one-off prompts for small changes, bugfixes, documentation, reports, etc. They run once and are marked completed.  The Conditions section is a special section used to short circuit the task being run.  You will almost never need this.",
 	meta: z.object({
-		agent: z.string().describe("The agent that is responsible for the task.").default("claude"),
+		agent: z.enum(["claude", "codex"]).describe("The agent that is responsible for the task.").default("claude"),
 		createdBy: z.string().describe("Who created this task").default("soederpop"),
 		tags: z.array(z.string()).describe("Tags for categorizing the task").optional(),
 		completedAt: z.string().optional().describe("ISO timestamp of when this task was completed"),

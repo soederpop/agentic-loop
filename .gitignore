@@ -26,3 +26,6 @@ voice/wakeword/samples/*.wav
 .claude/settings.local.json
 
 assistants/*/generated
+
+# logs
+logs/prompt-outputs
