@@ -55,7 +55,8 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       playPhrases: true,
       prependPrompt: VOICE_INSTRUCTIONS_PRE,
       appendPrompt: VOICE_INSTRUCTIONS_POST,
-      maxTokens: 500 
+      maxTokens: 500,
+      historyMode: 'daily' 
     }) as unknown as VoiceChat
   }
  
@@ -65,7 +66,8 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       playPhrases: true,
       prependPrompt: VOICE_INSTRUCTIONS_PRE,
       appendPrompt: VOICE_INSTRUCTIONS_POST,
-      maxTokens: 500 
+      maxTokens: 500 ,
+      historyMode: 'daily'
     }) as unknown as VoiceChat
   }
 

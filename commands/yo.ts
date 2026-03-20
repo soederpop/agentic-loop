@@ -6,7 +6,7 @@ export const description = 'simulate a wakeword driven voice command flow by typ
 export const positionals = ['target']
 
 export const argsSchema = z.object({
-  _: z.array(z.string()).describe('the words that come after'),
+  _: z.array(z.union([z.string(),z.number()])).describe('the words that come after'),
   target: z.string()
     .optional()
     .describe('Which assistant to route to (friday, chief)'),
@@ -108,6 +108,14 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
   } else {
     // Friday / default path: route through voice router
     await routeThroughRouter(router, text, voiceService, ui)
+  }
+
+  // Stop the file watcher so the process can exit
+  router.stopWatchingHandlers()
+
+  // Wait for any afplay processes to finish before exiting
+  while (container.proc.isProcessRunning('afplay')) {
+    await container.sleep(50)
   }
 }
 

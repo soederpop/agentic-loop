@@ -27,6 +27,7 @@ type VoiceConfig = {
 export const VoiceChatOptionsSchema = FeatureOptionsSchema.extend({
 	voiceId: z.string().optional(),
 	assistant: z.string(),
+	historyMode: z.string().default('lifecycle').describe('how to persist history across chats, defaults to no persistence.'),
 	playPhrases: z.boolean().default(false),
 	toolPhraseWindowSeconds: z.number().default(15).describe('Minimum seconds between tool call/result/error phrases'),
 	appendPrompt: z.string().optional(),
@@ -88,6 +89,7 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		return this.assistantsManager.create(this.options.assistant, {
 			...(this.options.prependPrompt ? { prependPrompt: this.options.prependPrompt } : {}),
 			...(this.options.appendPrompt ? { appendPrompt: this.options.appendPrompt } : {}),
+			...(this.options.historyMode ? { historyMode: this.options.historyMode } : {}),
 		})
 	}
 
