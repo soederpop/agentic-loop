@@ -1,7 +1,11 @@
 ---
-tags: [web, chat, assistant, luca-web]
+tags:
+  - web
+  - chat
+  - assistant
+  - luca-web
 status: exploring
-goal: ""
+goal: ''
 ---
 
 # web based assistant chat application
@@ -50,20 +54,20 @@ The existing `public/index.html` establishes the visual identity: deep-blue (`#0
 A single `public/chief-chat/index.html` page served at `http://localhost:3000/chief-chat` that:
 
 1. Connects to the luca server via `window.luca` WebSocket client
-2. Sends user messages to a new `/api/chat` endpoint
-3. The endpoint creates/resumes a chiefOfStaff assistant session and streams the response back
+2. Sends user messages over WebSocket (no HTTP/SSE chat endpoint)
+3. The server routes messages into a chiefOfStaff assistant session and streams events back over the same WebSocket channel
 4. Renders the conversation with basic markdown support
+5. Shows tool calls in-flight (start/update/end) so the UI always has feedback during long operations
+6. Persists the conversation thread until the user clears it (reload resumes the same thread)
 
-New files needed:
+New files needed (expected):
 - `public/chief-chat/index.html` — self-contained chat UI (HTML + CSS + JS, no build step)
-- `endpoints/chat.ts` — POST endpoint that bridges HTTP to the assistant's `ask()` method
+- WebSocket message router/handler on the server to bridge browser <-> assistant `ask()`
 
 ### Bicycle (next iteration)
 
-- Streaming responses via WebSocket instead of HTTP polling
-- Conversation thread persistence (resume where you left off)
-- Tool call visualization (show when Chief is calling `readDocs`, `getOverallStatusSummary`, etc.)
-- Inline document rendering when Chief references a doc
+- Tool call visualization details (args, partial progress, outputs)
+- Inline document rendering when Chief references a doc (e.g. render `docs/...` content in a side panel)
 
 ### Motorcycle (future)
 
@@ -71,11 +75,41 @@ New files needed:
 - Multi-assistant switching (Chief, Friday, custom)
 - Mobile-responsive layout
 
-## Key Technical Decisions to Make
+## Key Technical Decisions (Locked In)
 
-1. **Streaming approach**: SSE from the `/api/chat` endpoint vs. full WebSocket conversation channel? SSE is simpler for the skateboard, WebSocket scales better for the bicycle.
-2. **Session identity**: Use a cookie/localStorage session ID to resume threads, or start fresh each page load?
-3. **Tool call transparency**: Should the UI show tool calls in-flight (like Claude Code does), or just show the final response?
+1. **Streaming approach**: WebSocket-only (no SSE / no `/api/chat` streaming endpoint)
+2. **Tool call transparency**: Required. The UI must show tool calls in-flight (similar to Claude Code) so the user is never waiting without feedback.
+3. **Thread persistence**: Required. The chat thread must persist across reloads until the user explicitly clears it.
+
+## Implementation Notes (for architects)
+
+### Session / Thread Identity
+
+- Browser generates and stores a stable `sessionId` in `localStorage` (e.g. `chief_chat_session_id`).
+- On WS connect, client sends `{ type: 'init', sessionId }`.
+- Server maps `sessionId` -> assistant conversation/thread id via `ConversationHistory` (disk persisted).
+- Provide a UI control "Clear" that:
+  - clears local transcript
+  - clears localStorage `sessionId` (or rotates it)
+  - sends `{ type: 'clear_thread' }` to server so server can start a fresh thread
+
+### WebSocket Event Schema (minimum viable)
+
+Client -> Server:
+- `init`: `{ type: 'init', sessionId: string }`
+- `user_message`: `{ type: 'user_message', sessionId: string, message: string }`
+- `clear_thread`: `{ type: 'clear_thread', sessionId: string }`
+
+Server -> Client:
+- `thread_state`: `{ type: 'thread_state', sessionId: string, threadId: string, messages: Array<{ role: 'user'|'assistant'|'tool', content: string, ts?: number }> }` (sent after init to hydrate UI)
+- `assistant_delta`: `{ type: 'assistant_delta', sessionId: string, textDelta: string }`
+- `assistant_final`: `{ type: 'assistant_final', sessionId: string, messageId?: string }`
+- `tool_call_started`: `{ type: 'tool_call_started', sessionId: string, toolCallId: string, name: string, args: any }`
+- `tool_call_finished`: `{ type: 'tool_call_finished', sessionId: string, toolCallId: string, name: string, result: any }`
+- `error`: `{ type: 'error', sessionId: string, message: string, details?: any }`
+
+Notes:
+- The schema should be adapted to whatever the current Luca WS server conventions already use; the important part is lifecycle events for tool calls and a hydration message for persistent threads.
 
 ## References
 

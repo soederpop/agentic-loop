@@ -1076,6 +1076,13 @@
   </div><!-- /main -->
 </div><!-- /wrap -->
 
+<!-- Luca browser container -->
+<script type="module">
+  import container from 'https://esm.sh/@soederpop/luca@0.0.11/src/browser.ts'
+  window.luca = container
+  console.log('[luca] browser container ready:', container)
+</script>
+
 <!-- Scroll spy -->
 <script>
 (function() {

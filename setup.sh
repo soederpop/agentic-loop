@@ -34,34 +34,30 @@ if [ ! -d "$PROJECT_ROOT/node_modules" ]; then
   bun install
 fi
 
-# Check that cnotes and luca are accessible
-MISSING_BINS=()
-command -v cnotes >/dev/null 2>&1 || MISSING_BINS+=(cnotes)
-command -v luca >/dev/null 2>&1 || MISSING_BINS+=(luca)
+# Symlink luca and cnotes into ~/.local/bin
+SYMLINK_DIR="$HOME/.local/bin"
+mkdir -p "$SYMLINK_DIR"
 
-if [ ${#MISSING_BINS[@]} -gt 0 ]; then
-  echo "  ⚠  ${MISSING_BINS[*]} not found in your PATH."
+for bin in luca cnotes; do
+  SOURCE="$PROJECT_ROOT/node_modules/.bin/$bin"
+  TARGET="$SYMLINK_DIR/$bin"
+  if [ -e "$SOURCE" ]; then
+    ln -sf "$SOURCE" "$TARGET"
+    echo "  Linked $bin -> $TARGET"
+  else
+    echo "  ⚠  $SOURCE not found — skipping $bin symlink"
+  fi
+done
+
+# Ensure ~/.local/bin is in PATH
+if ! echo "$PATH" | tr ':' '\n' | grep -qx "$SYMLINK_DIR"; then
   echo ""
-  echo "  These were installed by bun into ./node_modules/.bin/"
-  echo "  You have two options to fix this:"
+  echo "  ~/.local/bin is not in your PATH."
+  echo "  Add this to your ~/.zshrc (or ~/.bashrc):"
   echo ""
-  echo "  Option 1 — Add to PATH for this project (recommended):"
-  echo "    Add this line to your ~/.zshrc (or ~/.bashrc):"
+  echo "    export PATH=\"\$HOME/.local/bin:\$PATH\""
   echo ""
-  echo "      export PATH=\"./node_modules/.bin:\$PATH\""
-  echo ""
-  echo "    Then run:  source ~/.zshrc"
-  echo ""
-  echo "  Option 2 — Use absolute paths for this project only:"
-  echo "    Add these aliases to your ~/.zshrc (or ~/.bashrc):"
-  echo ""
-  echo "      alias cnotes=\"$PROJECT_ROOT/node_modules/.bin/cnotes\""
-  echo "      alias luca=\"$PROJECT_ROOT/node_modules/.bin/luca\""
-  echo ""
-  echo "    Then run:  source ~/.zshrc"
-  echo ""
-  echo "  After fixing your PATH, re-run this script."
-  exit 1
+  echo "  Then run:  source ~/.zshrc"
 fi
 
 # Write system prompt to a temp file to avoid shell escaping issues

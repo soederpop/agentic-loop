@@ -296,6 +296,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         expressPort: presenter.state.get('expressPort'),
         linkPort: presenter.state.get('linkPort'),
       } : { running: false, disabled: true },
+      contentServer: {
+        running: contentServerRunning,
+        port: 4100,
+      },
       git: gitSummary,
       content: contentCounts,
       recentEvents: events.slice(-50),
@@ -686,6 +690,33 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('presenter', 'disabled via --no-presenter-service')
   }
 
+  // 5. Content Server (cnotes serve)
+  let contentServerRunning = true
+  const cnotesProcess = proc.spawnAndCapture('cnotes', ['serve', '--port', '4100'], {
+    onOutput: (data: string) => {
+      for (const line of data.split('\n')) {
+        if (line) log('content', line)
+      }
+    },
+    onError: (data: string) => {
+      for (const line of data.split('\n')) {
+        if (line) log('content', `[stderr] ${line}`)
+      }
+    },
+  })
+
+  cnotesProcess.then((result: any) => {
+    contentServerRunning = false
+    if (result.exitCode !== 0) {
+      log('content', `exited with code ${result.exitCode}`)
+    }
+  }).catch((err: any) => {
+    contentServerRunning = false
+    log('content', `error: ${err?.message || err}`)
+  })
+
+  log('content', 'serving on http://localhost:4100')
+
   // --- Status summary ---
   log('main', '')
   log('main', `luca main running (pid ${process.pid})`)
@@ -925,6 +956,9 @@ async function runClient(container: any, options: MainOptions, ui: any) {
       status.presenter?.running
         ? chalk.green('●') + ` presenter ${chalk.gray(`http:${status.presenter.expressPort} ws:${status.presenter.linkPort}`)}`
         : chalk.yellow('●') + ' presenter',
+      status.contentServer?.running
+        ? chalk.green('●') + ` content ${chalk.gray(`:${status.contentServer.port}`)}`
+        : chalk.red('●') + ' content',
     ]
     output.push(' ' + indicators.join(chalk.gray('  │  ')))
 

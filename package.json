@@ -8,8 +8,8 @@
     "typescript": "^5"
   },
   "dependencies": {
-    "@soederpop/luca": "^0.0.9",
-    "contentbase": "^0.1.1",
+    "@soederpop/luca": "^0.0.12",
+    "contentbase": "^0.1.4",
     "node-llama-cpp": "^3.18.1"
   }
 }
