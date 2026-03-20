@@ -31,6 +31,8 @@ cnotes inspect
 
 This project uses the [Luca framework](https://github.com/soederpop/luca) — Lightweight Universal Conversational Architecture.
 
+It can be used to build any kind of server, process, script, daemon on the server, and any kind of stateful, reactive web application on the frontend.
+
 For a deep dive into the framework internals, see the [Luca GitHub repository](https://github.com/soederpop/luca).
 
 You also have the [Luca Framework Skill](.claude/skils/luca-framework/SKILL.md)
