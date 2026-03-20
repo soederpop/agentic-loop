@@ -6,35 +6,35 @@ These models are used to define structure to various documents which are used as
 
 Every subfolder (e.g. `goals`, `ideas`, `tasks`) tells you what structure the documents inside of it will need to follow in terms of the YAML frontmatter (e.g. for tags, status tracking ) and section headings.  ( Certain ## H2 Headings the document expects you to use )
 
-
 ## Summary
 
 ```
 Collection: /Users/jonathansoeder/@agentic-loop/docs
 Root: /Users/jonathansoeder/@agentic-loop/docs
-Items: 10
+Items: 14
 
   Model: Goal
     Prefix: goals
     Meta: horizon(enum(`short`, `medium`, `long`))
     Sections: successCriteria, motivation
     Relationships: (none)
-    Documents: 1
-    IDs: goals/release-a-compelling-product-marketing-website
+    Documents: 0
 
   Model: Idea
     Prefix: ideas
     Meta: goal(string), tags(string[]), status(enum(`spark`, `exploring`, `ready`, `parked`, `promoted`))
     Sections: (none)
     Relationships: goal
-    Documents: 0
+    Documents: 1
+    IDs: ideas/web-based-assistant-chat-application
 
   Model: Memory
     Prefix: memories
     Meta: (none)
     Sections: (none)
     Relationships: (none)
-    Documents: 0
+    Documents: 4
+    IDs: memories/README, memories/USER, memories/TODO, memories/SELF
 
   Model: Plan
     Prefix: plans
@@ -49,7 +49,7 @@ Items: 10
     Sections: conditions
     Relationships: (none)
     Documents: 2
-    IDs: plays/turn-one-of-my-ideas-into-a-project-plan, plays/begin-exploring-one-of-the-spark-ideas
+    IDs: plays/begin-exploring-one-of-the-spark-ideas, plays/turn-one-of-my-ideas-into-a-project-plan
 
   Model: Project
     Prefix: projects
@@ -70,16 +70,15 @@ Items: 10
     Meta: goal(string), tags(string[])
     Sections: (none)
     Relationships: (none)
-    Documents: 2
-    IDs: reports/non-voice-workflows, reports/onboarding-troubleshooting-log
+    Documents: 1
+    IDs: reports/onboarding-troubleshooting-log
 
   Model: Task
     Prefix: tasks
-    Meta: agent(string), createdBy(string), tags(string[]), completedAt(string), lastRanAt(number), running(boolean)
+    Meta: agent(enum(`claude`, `codex`)), createdBy(string), tags(string[]), completedAt(string), lastRanAt(number), running(boolean)
     Sections: conditions
     Relationships: (none)
-    Documents: 1
-    IDs: tasks/example-task
+    Documents: 0
 
   Model: Base
     Prefix: 
@@ -87,5 +86,5 @@ Items: 10
     Sections: (none)
     Relationships: (none)
     Documents: 4
-    IDs: TABLE-OF-CONTENTS, VISION, assistant-README, README
+    IDs: VISION, README, TABLE-OF-CONTENTS, assistant-README
 ```

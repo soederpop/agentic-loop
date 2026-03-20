@@ -144,6 +144,22 @@ luca chat chiefOfStaff
 
 The chief has the ability to make anything happen.
 
+## The `yo` command
+
+The yo command is a way to simulate the voice wakeword + transcription when your system doesn't support it, but it has some cool uses as well that you can't get with the wakeword flow.
+
+```shell
+luca yo chief im giving a demo please say something funny for the boys
+```
+
+You can pipe files to it!
+
+```shell
+cat YO.md |luca yo chief
+```
+
+Then it will start talking to you about the file.
+
 ### The Project Builder
 
 The main agentic loop process will be running this headlessly, but this utility is a good way to bundle up multiple claude code sessions and run them in sequence
@@ -158,6 +174,7 @@ Rather than "chatting" with Claude code, it is best to write a prompt document i
 
 ```shell
 luca prompt claude|codex|chiefOfStaff docs/prompts/whatever.md
+luca prompt claude|codex|chiefOfStaff docs/prompts/whatever.md --chrome ( allow it to use the browser )
 ```
 
 ## Contentbase

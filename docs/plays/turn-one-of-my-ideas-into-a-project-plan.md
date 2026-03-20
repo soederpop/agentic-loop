@@ -63,9 +63,20 @@ Describe this phase of the plan
 
 ## Validation
 
-How you will validate the plan is successful
+- How you will validate the plan is successful
+- another test
+- be thorough
 ```
 
+This structure allows us to turn this project / plans into an multi-stage agent swarm which builds the project in stages, learns as it goes, and adjusts the plans.
+
+## What goes into a good project / plan?
+
+At each stage of the delivery, from plan 1, to plan 2, to plan 3, there should be some usable, demoable, thing of value.  Think of the analogy of building a car, wouldn't it be better to go from a skateboard to a scooter to a motorbike to a motorcyle to a car than from an idea to waiting the whole time until you have the whole car?
+
+That is the key thing that should determine the boundaries between plans.  
+
+Even if the usable thing is a script / command based demo to prove that the lan worked.
 
 ## Only When
 

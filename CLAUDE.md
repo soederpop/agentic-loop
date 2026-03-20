@@ -135,3 +135,12 @@ Run `luca scaffold` with no arguments for full usage and examples.
 ## Git Strategy
 
 Roll on main. Commit with good messages that explain why, not just what.
+
+Always commit your work, and only your work.
+
+If you've made any changes to docs, please run:
+
+```shell
+cnotes validate --setDefaultMeta # make sure the docs structure is what we expect
+cnotes summary # this will regenerate docs/README.md
+```

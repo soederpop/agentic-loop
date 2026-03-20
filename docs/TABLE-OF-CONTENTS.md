@@ -1,8 +1,15 @@
 # Table of Contents
 
-## Goals
+## Ideas
 
-- [Release a compelling product marketing website](./goals/release-a-compelling-product-marketing-website.md)
+- [web based assistant chat application](./ideas/web-based-assistant-chat-application.md)
+
+## Memories
+
+- [Chief of Staff Memories](./memories/README.md)
+- [SELF Notes](./memories/SELF.md)
+- [Chief of Staff Todo List](./memories/TODO.md)
+- [USER Notes](./memories/USER.md)
 
 ## Plays
 
@@ -11,12 +18,7 @@
 
 ## Reports
 
-- [Non Voice Workflows](./reports/non-voice-workflows.md)
 - [Onboarding Troubleshooting Log](./reports/onboarding-troubleshooting-log.md)
-
-## Tasks
-
-- [Example Task](./tasks/example-task.md)
 
 ## Bases
 
@@ -24,3 +26,8 @@
 - [Table of Contents](./TABLE-OF-CONTENTS.md)
 - [Vision Statement](./VISION.md)
 - [Chief of Staff Guide](./assistant-README.md)
+
+## Other
+
+- [Extending the Agentic Loop](./guides/extending-the-agentic-loop.md)
+- [Non Voice Workflows](./guides/non-voice-workflows.md)
