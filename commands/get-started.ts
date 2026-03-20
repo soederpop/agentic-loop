@@ -29,8 +29,15 @@ export default async function getStarted(options: z.infer<typeof argsSchema>, co
   const no = colors.red('✗')
   const dim = colors.dim
 
+  // Check if the main authority process is running (port 4410)
+  const networking = container.feature('networking')
+  const mainPort = 4410
+  const authorityRunning = !(await networking.isPortOpen(mainPort))
+
   console.log(colors.bold('  System Status'))
   console.log(dim('  ─────────────────────────────────'))
+
+  console.log(`  ${authorityRunning ? ok : no} Authority Process      ${authorityRunning ? dim(`running on port ${mainPort}`) : colors.yellow('not running — start it in another terminal with: luca main')}`)
 
   // Native app window launcher
   const appPath = container.paths.resolve('apps/presenter-windows/dist/LucaVoiceLauncher.app')

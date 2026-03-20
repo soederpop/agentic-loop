@@ -42,7 +42,7 @@ sh setup.sh
 To verify what works / what might still need attention:
 
 ```shell
-luca status
+luca get-started
 ```
 
 ## A Visual Explainer
