@@ -7,8 +7,13 @@
   "permissions": {
     "allow": [
       "Bash(luca *)",
+      "Bash(cnotes *)",
       "Bash(bun run *)",
-      "Bash(bun test *)"
+      "Bash(bun test *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git stash *)"
     ]
   }
 }
