@@ -1,6 +1,8 @@
 ---
 agent: claude
 schedule: every-ten-minutes
+running: false
+lastRanAt: 1773978474887
 ---
 
 # Turn one of my ideas into a Project Plan
@@ -19,7 +21,55 @@ You are running in a headless, agentic mode, so please don't ask me questions, w
 
 Commit your work, and only your work. No destructive git actions period.
 
+## Example of a well structured project and plan
+
+Syntactically, we need a couple of things to make the projects / plans relate to eachother, which helps them power the project builder UI 
+
+The marketing-website project document lives in the projects/marketing-website.md
+
+```markdown
+---
+status: approved
+goal: whatever-goal-it-aligns-to
+---
+
+# Marketing Website
+
+Every project has a title, this is an executive summary level description of what it is.  Feel free to include whatever other sections are necessary, between here and the `## Execution section`
+
+## Execution
+
+This should have a markdown list with links to the individual plan documents.
+
+- [Frontend](../plans/marketing-website/frontend.md)
+- [Backend](../plans/marketing-website/backend.md)
+```
+
+Each plan lives in the `plans/:project-name/:slug.md` and should reference the project by its slug in its YAML frontmatter 
+
+```markdown
+---
+status: approved
+project: marketing-website
+---
+
+# Plan Title
+
+Describe this phase of the plan
+
+## Resources
+
+- list of whatver
+
+## Validation
+
+How you will validate the plan is successful
+```
+
+
 ## Only When
+
+This play will only run when there are ideas in a ready status.
 
 ```ts
 const docs = container.docs

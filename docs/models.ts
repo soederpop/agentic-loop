@@ -169,6 +169,7 @@ export const Project = defineModel("Project", {
 export const Plan = defineModel("Plan", {
 	prefix: "plans",
 	description: "Plans are literal claude code generated /plan documents with testing criteria, resources, etc.  They need to be approved to be picked up by the project builder",
+	pattern: ["plans/:project/:slug", "plans/:slug"],
 	meta: z.object({
 		status: z.enum(["approved", "pending", "rejected", "completed", "building", "in_progress"]).default("pending").describe("The status of the plan, approved is ready to implement, pending is waiting for approval, rejected is not approved, completed means successfully executed."),
 		project: z.string().optional().describe("Slug of the project this plan belongs to"),

@@ -59,7 +59,7 @@ function taskLabel(task: TaskEntry): string {
 function getTaskCommand(task: TaskEntry, outDir: string): string[] {
   const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 13) // e.g. 20260304-0147
   const outFile = `${outDir}/${task.id.replace(/\//g, '--')}-${ts}.md`
-  return ['prompt', task.agent, task.id, '--out-file', outFile, '--permission-mode', 'bypassPermissions', '--exclude-sections', 'Only When,Only If,Run Condition,Conditions']
+  return ['prompt', task.agent, task.id, '--out-file', outFile, '--permission-mode', 'bypassPermissions', '--exclude-sections', 'Only When,Only If,Run Condition,Conditions', '--chrome']
 }
 
 async function handler(options: AgenticLoopOptions, context: ContainerContext) {

@@ -15,13 +15,16 @@ export const PresenterStateSchema = FeatureStateSchema.extend({
   running: z.boolean().default(false),
   expressPort: z.number().default(PRESENTER_EXPRESS_PORT),
   linkPort: z.number().default(PRESENTER_LINK_PORT),
+  windowManagerConnected: z.boolean().default(false),
 })
 export type PresenterState = z.infer<typeof PresenterStateSchema>
 
 export const PresenterOptionsSchema = FeatureOptionsSchema.extend({
   expressPort: z.number().default(PRESENTER_EXPRESS_PORT),
   linkPort: z.number().default(PRESENTER_LINK_PORT),
-  lucaScriptUrl: z.string().default('http://localhost:4101/dist/luca.browser.js'),
+  lucaScriptUrl: z.string().default('https://esm.sh/@soederpop/luca@0.0.11/src/browser.ts'),
+  /** Path to the native launcher .app bundle — launched automatically if window manager isn't connected */
+  launcherAppPath: z.string().default('apps/presenter-windows/dist/LucaVoiceLauncher.app'),
 })
 export type PresenterOptions = z.infer<typeof PresenterOptionsSchema>
 
@@ -43,11 +46,13 @@ export class Presenter extends Feature<PresenterState, PresenterOptions> {
 
   private _expressServer: any = null
   private _link: any = null
+  private _wm: any = null
 
   get expressPort() { return this.state.get('expressPort') }
   get linkPort() { return this.state.get('linkPort') }
   get link() { return this._link }
   get expressServer() { return this._expressServer }
+  get windowManagerConnected() { return this.state.get('windowManagerConnected') }
 
   async start() {
     if (this.state.get('running')) return this
@@ -86,17 +91,9 @@ export class Presenter extends Feature<PresenterState, PresenterOptions> {
     })
 
     app.get(lucaProxyPath, async (_req: any, res: any) => {
-      try {
-        const response = await fetch(lucaScriptUrl)
-        if (!response.ok) {
-          res.status(502).type('text/plain').send(`Failed to fetch luca browser bundle (${response.status})`)
-          return
-        }
-        const js = await response.text()
-        res.type('application/javascript').send(js)
-      } catch (err: any) {
-        res.status(502).type('text/plain').send(`Failed to proxy luca browser bundle: ${err?.message || String(err)}`)
-      }
+      // Serve an ESM shim that imports the luca browser module and exposes window.luca
+      const loader = `import container from ${JSON.stringify(lucaScriptUrl)};\nwindow.luca = container;\n`
+      res.type('application/javascript').send(loader)
     })
 
     await this._expressServer.start({ port: expressPort })
@@ -104,6 +101,9 @@ export class Presenter extends Feature<PresenterState, PresenterOptions> {
     this.state.set('expressPort', expressPort)
     this.state.set('linkPort', linkPort)
     this.state.set('running', true)
+
+    // Track window manager connection status
+    this._trackWindowManager()
 
     return this
   }
@@ -117,11 +117,71 @@ export class Presenter extends Feature<PresenterState, PresenterOptions> {
     return `http://localhost:${expressPort}?url=${encodeURIComponent(opts.url)}&title=${encodeURIComponent(opts.title || 'Presenter')}&wsUrl=${encodeURIComponent(wsUrl)}&mode=${opts.mode || 'input'}&lucaScriptUrl=${encodeURIComponent(localLucaScriptUrl)}`
   }
 
+  /** Whether we already attempted to launch the .app bundle (only try once) */
+  private _launchAttempted = false
+
+  private _trackWindowManager() {
+    try {
+      const wm = this.container.feature('windowManager')
+      this._wm = wm
+
+      // Sync current state
+      this.state.set('windowManagerConnected', !!wm.isClientConnected)
+
+      // Listen for changes
+      wm.on('clientConnected', () => {
+        this.state.set('windowManagerConnected', true)
+        this.emit('windowManagerConnected')
+      })
+      wm.on('clientDisconnected', () => {
+        this.state.set('windowManagerConnected', false)
+        this.emit('windowManagerDisconnected')
+      })
+
+      // If not already connected, try launching the native app
+      if (!wm.isClientConnected) {
+        this._tryLaunchApp()
+      }
+    } catch {
+      // windowManager feature not available
+      this.state.set('windowManagerConnected', false)
+    }
+  }
+
+  /**
+   * Attempt to launch the native LucaVoiceLauncher.app exactly once.
+   * Fire-and-forget — the clientConnected event handler in _trackWindowManager
+   * will update state when the app connects. No timeout or blocking needed.
+   */
+  private async _tryLaunchApp() {
+    if (this._launchAttempted) return
+    this._launchAttempted = true
+
+    const { container } = this
+    const fs = container.feature('fs')
+    const appPath = container.paths.resolve(this.options.launcherAppPath)
+
+    const exists = await fs.exists(appPath)
+    if (!exists) return
+
+    try {
+      const proc = container.feature('proc')
+      const result = await proc.spawnAndCapture('open', ['-a', appPath])
+      if (result.exitCode !== 0) {
+        console.log(`Launcher open failed (exit ${result.exitCode}): ${result.stderr}`)
+      }
+    } catch (err: any) {
+      console.log(`Launcher open error: ${err?.message || err}`)
+    }
+  }
+
   async stop() {
     if (!this.state.get('running')) return
     try { await this._link?.stop() } catch {}
     try { await this._expressServer?.stop() } catch {}
+    this._wm = null
     this.state.set('running', false)
+    this.state.set('windowManagerConnected', false)
   }
 }
 
@@ -261,18 +321,24 @@ function buildPresenterHTML(): string {
   function loadScript(src) {
     return new Promise(function(resolve, reject) {
       if (window.luca) { resolve(window.luca); return; }
-      function finishLoad() {
-        if (window.luca) { resolve(window.luca); } else { reject(new Error('luca bundle loaded but window.luca is missing')); }
+      function waitForLuca(timeout) {
+        var start = Date.now();
+        function check() {
+          if (window.luca) { resolve(window.luca); }
+          else if (Date.now() - start > timeout) { reject(new Error('luca bundle loaded but window.luca is missing')); }
+          else { setTimeout(check, 50); }
+        }
+        check();
       }
       var moduleTag = document.createElement('script');
       moduleTag.type = 'module';
       moduleTag.src = src;
-      moduleTag.onload = finishLoad;
+      moduleTag.onload = function() { waitForLuca(3000); };
       moduleTag.onerror = function() {
         var classicTag = document.createElement('script');
         classicTag.src = src;
         classicTag.async = true;
-        classicTag.onload = finishLoad;
+        classicTag.onload = function() { waitForLuca(3000); };
         classicTag.onerror = function() { reject(new Error('failed to load luca browser bundle')); };
         document.head.appendChild(classicTag);
       };

@@ -9,7 +9,7 @@ export const argsSchema = CommandOptionsSchema.extend({
   expressPort: z.number().int().positive().max(65535).optional().describe('Optional fixed port for the presenter HTTP server'),
   linkPort: z.number().int().positive().max(65535).optional().describe('Optional fixed port for containerLink WebSocket'),
   startupTimeoutMs: z.number().int().positive().default(8000).describe('Startup timeout for server boot (ms)'),
-  lucaScriptUrl: z.string().default('http://localhost:4101/dist/luca.browser.js').describe('Browser script URL that exposes window.luca'),
+  lucaScriptUrl: z.string().default('https://esm.sh/@soederpop/luca@0.0.11/src/browser.ts').describe('Browser script URL that exposes window.luca'),
 })
 
 function buildPresenterHTML(): string {
@@ -152,30 +152,25 @@ function buildPresenterHTML(): string {
 
   function loadScript(src) {
     return new Promise(function(resolve, reject) {
-      if (window.luca) {
-        resolve(window.luca);
-        return;
-      }
-
-      function finishLoad() {
-        if (window.luca) {
-          resolve(window.luca);
-        } else {
-          reject(new Error('luca bundle loaded but window.luca is missing'));
+      if (window.luca) { resolve(window.luca); return; }
+      function waitForLuca(timeout) {
+        var start = Date.now();
+        function check() {
+          if (window.luca) { resolve(window.luca); }
+          else if (Date.now() - start > timeout) { reject(new Error('luca bundle loaded but window.luca is missing')); }
+          else { setTimeout(check, 50); }
         }
+        check();
       }
-
-      // Prefer ESM loading because luca.browser.js exports ESM.
       var moduleTag = document.createElement('script');
       moduleTag.type = 'module';
       moduleTag.src = src;
-      moduleTag.onload = finishLoad;
+      moduleTag.onload = function() { waitForLuca(3000); };
       moduleTag.onerror = function() {
-        // Fallback for non-ESM builds.
         var classicTag = document.createElement('script');
         classicTag.src = src;
         classicTag.async = true;
-        classicTag.onload = finishLoad;
+        classicTag.onload = function() { waitForLuca(3000); };
         classicTag.onerror = function() { reject(new Error('failed to load luca browser bundle')); };
         document.head.appendChild(classicTag);
       };
@@ -393,17 +388,9 @@ async function present(options: z.infer<typeof argsSchema>, context: ContainerCo
   })
 
   app.get(lucaProxyPath, async (_req: any, res: any) => {
-    try {
-      const response = await fetch(lucaScriptUrl)
-      if (!response.ok) {
-        res.status(502).type('text/plain').send(`Failed to fetch luca browser bundle (${response.status})`)
-        return
-      }
-      const js = await response.text()
-      res.type('application/javascript').send(js)
-    } catch (err: any) {
-      res.status(502).type('text/plain').send(`Failed to proxy luca browser bundle: ${err?.message || String(err)}`)
-    }
+    // Serve an ESM shim that imports the luca browser module and exposes window.luca
+    const loader = `import container from ${JSON.stringify(lucaScriptUrl)};\nwindow.luca = container;\n`
+    res.type('application/javascript').send(loader)
   })
 
   try {
@@ -434,15 +421,26 @@ async function present(options: z.infer<typeof argsSchema>, context: ContainerCo
   let useNativeWindow = false
   let nativeWindowId: string | undefined
 
+  // Check if the window manager is available and connected before attempting spawn
+  let wmAvailable = false
   try {
     const wm = container.feature('windowManager')
-    const result = await wm.spawn({ url: pageUrl, width: 1200, height: 900 })
-    if (result?.windowId) {
-      useNativeWindow = true
-      nativeWindowId = String(result.windowId)
+    wmAvailable = !!wm.isClientConnected
+  } catch {}
+
+  if (wmAvailable) {
+    try {
+      const wm = container.feature('windowManager')
+      const result = await wm.spawn({ url: pageUrl, width: 1200, height: 900 })
+      if (result?.windowId) {
+        useNativeWindow = true
+        nativeWindowId = String(result.windowId)
+      }
+    } catch {
+      console.log('Window manager connected but spawn failed — falling back to browser')
     }
-  } catch {
-    // windowManager not available or spawn failed
+  } else {
+    console.log('Window manager not connected — opening in browser')
   }
 
   if (!useNativeWindow) {
@@ -552,7 +550,7 @@ async function presentViaAuthority(
   console.log(`Presenter serving at ${pageUrl}`)
 
   // Connect to luca main's authority WS and register for presenter events
-  const authorityPort = 4400
+  const authorityPort = 4410
   const ws = container.client('websocket', {
     baseURL: `ws://localhost:${authorityPort}`,
     json: true,
@@ -570,41 +568,16 @@ async function presentViaAuthority(
     }
 
     ws.on('open', () => {
-      // Ask luca main to forward presenter events to us
-      ws.send({ type: 'command', payload: { action: 'present', sessionId: Date.now().toString() } })
+      // Ask luca main to open the window and forward presenter events to us
+      ws.send({ type: 'command', payload: { action: 'present', pageUrl, sessionId: Date.now().toString() } })
     })
 
     ws.on('message', async (msg: any) => {
-      // Initial response from the present command registration
+      // Initial response — authority has opened the window (native or browser)
       if (msg.type === 'response' && msg.data?.ok) {
-        // Open the window now that we're listening
-        let opened = false
-        try {
-          const wm = container.feature('windowManager')
-          const result = await wm.spawn({ url: pageUrl, width: 1200, height: 900 })
-          if (result?.windowId) {
-            opened = true
-            // Watch for native window close
-            wm.on('windowClosed', (wmMsg: any) => {
-              if (String(wmMsg?.windowId || '') === String(result.windowId)) {
-                marker(`__PRESENTER_EVENT__=windowClosed`)
-                done({ action: 'closed' })
-              }
-            })
-            wm.on('clientDisconnected', () => {
-              marker(`__PRESENTER_EVENT__=clientDisconnected`)
-              done({ action: 'closed' })
-            })
-          }
-        } catch {}
-
-        if (!opened) {
-          try {
-            const opener = container.feature('opener')
-            await opener.open(pageUrl)
-          } catch {
-            console.log('Could not open browser automatically. Open manually:', pageUrl)
-          }
+        const windowId = msg.data.windowId
+        if (windowId) {
+          console.log(`Native window spawned: ${windowId}`)
         }
         return
       }
@@ -639,6 +612,12 @@ async function presentViaAuthority(
             marker(`__PRESENTER_EVENT__=disconnected`)
             done({ action: 'closed' })
           }
+        } else if (event === 'windowClosed') {
+          marker(`__PRESENTER_EVENT__=windowClosed`)
+          done({ action: 'closed' })
+        } else if (event === 'clientDisconnected') {
+          marker(`__PRESENTER_EVENT__=clientDisconnected`)
+          done({ action: 'closed' })
         }
       }
     })

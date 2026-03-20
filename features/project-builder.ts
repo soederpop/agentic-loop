@@ -571,10 +571,15 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
     const executionOrder: string[][] = projectInstance.computed.executionOrder
 
     const plans: PlanInfo[] = []
+    const projectDir = projectPath.includes('/') ? projectPath.slice(0, projectPath.lastIndexOf('/') + 1) : ''
     for (let groupIdx = 0; groupIdx < executionOrder.length; groupIdx++) {
       const group = executionOrder[groupIdx]
       for (const planUrl of group) {
-        const planPath = planUrl.replace(/\.(md|mdx)$/, '')
+        // Resolve relative URLs (e.g. "../plans/foo") against the project's directory
+        const rawPath = planUrl.replace(/\.(md|mdx)$/, '')
+        const planPath = rawPath.startsWith('.')
+          ? new URL(rawPath, `file:///${projectDir}`).pathname.replace(/^\//, '')
+          : rawPath
         try {
           collection.getModel(planPath, Plan)
           const doc = collection.document(planPath)

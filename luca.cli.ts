@@ -34,6 +34,7 @@ export async function main(container: any) {
   container
   	.addContext('luca', container)
 	.addContext('chief', chief)
+	.addContext('docs', await container.docs.load())
 
 
 }

@@ -101,6 +101,10 @@ export const schemas = {
 }
 
 export async function ls() : Promise<string> {
+	await assistant.contentDb.collection.load({ refresh: true }).catch(e => {
+		console.error('error refreshing collection', e)
+	})
+
 	const available = assistant.contentDb.collection.available
 
 	return [

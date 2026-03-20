@@ -400,7 +400,7 @@ export class TaskScheduler extends Feature<TaskSchedulerState, TaskSchedulerOpti
       } else {
         const proc = this.container.feature('proc')
         const outFile = `tmp/agentic-loop/${taskId.replace(/\//g, '--')}.md`
-        const result = await proc.execAndCapture(`luca prompt ${task.agent} ${taskId} --out-file ${outFile}`)
+        const result = await proc.execAndCapture(`luca prompt ${task.agent} ${taskId} --out-file ${outFile} --chrome`)
         if (result.exitCode !== 0) {
           throw new Error(result.stderr || `luca prompt exited with code ${result.exitCode}`)
         }
