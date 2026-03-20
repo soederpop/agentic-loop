@@ -21,14 +21,24 @@ console.log("Methods", Object.keys(windowManager.introspect().methods))
 ## You can spawn multiple windows with the spawnLayout feature
 
 ```ts
-const layout = await windowManager.spawnLayout([{ url: "https://www.google.com", width: "50%", x: 0, y: 0, height: "100%" }])
-console.log(layout)
+const layout2 = await windowManager.spawnLayout([{
+   type: 'tty',
+   command: 'luca serve --port 6942 --force --no-open',
+   cwd: container.cwd,
+   height: "20%", width: "50%",
+   x: "50%", y: "80%"
+}])
 
-await container.sleep(5000)
+await container.sleep(4000)
 
-if (layout?.length > 0) {
-    await layout[0].close()
-}
+const layout = await windowManager.spawnLayout([{ 
+    url: "http://localhost:6942", 
+    width: "50%", x: "50%", y: 0, height: "70%" 
+}])
+
+await container.sleep(15000)
+await layout.map(handle => handle.close())
+await layout2.map(handle => handle.close())
 ```
 
 
