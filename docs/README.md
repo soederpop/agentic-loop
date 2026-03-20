@@ -11,80 +11,75 @@ Every subfolder (e.g. `goals`, `ideas`, `tasks`) tells you what structure the do
 ```
 Collection: /Users/jonathansoeder/@agentic-loop/docs
 Root: /Users/jonathansoeder/@agentic-loop/docs
-Items: 15
+Items: 16
 
   Model: Goal
-    Prefix: goals
+    Description: A Goal has metadata (horizon) and sections (Success Criteria, Motivation).
+    Path prefix: docs/goals/*.md
     Meta: horizon(enum(`short`, `medium`, `long`))
     Sections: successCriteria, motivation
     Relationships: (none)
-    Documents: 0
 
   Model: Idea
-    Prefix: ideas
+    Description: An idea is something that is aligned to a Goal, and can eventually become a Project/Plans for our Agents to work on
+    Path prefix: docs/ideas/*.md
     Meta: goal(string), tags(string[]), status(enum(`spark`, `exploring`, `ready`, `parked`, `promoted`))
     Sections: (none)
     Relationships: goal
-    Documents: 1
-    IDs: ideas/web-based-assistant-chat-application
 
   Model: Memory
-    Prefix: memories
+    Description: Memories are used to control the chief of staff assistant's personality, knowledge of me, and its immediate todos
+    Path prefix: docs/memories/*.md
     Meta: (none)
     Sections: (none)
     Relationships: (none)
-    Documents: 4
-    IDs: memories/SELF, memories/USER, memories/TODO, memories/README
 
   Model: Plan
-    Prefix: plans
+    Description: Plans are literal claude code generated /plan documents with testing criteria, resources, etc.  They need to be approved to be picked up by the project builder
+    Path prefix: plans/:project/:slug, plans/:slug
     Meta: status(enum(`approved`, `pending`, `rejected`, `completed`, `building`, `in_progress`)), project(string), costUsd(number), turns(number), toolCalls(number), completedAt(string)
     Sections: references, verification
     Relationships: project
-    Documents: 0
 
   Model: Play
-    Prefix: plays
+    Description: Plays are repeatable, schedulable prompts executed by the agentic loop on a defined schedule.
+    Path prefix: docs/plays/*.md
     Meta: agent(string), tags(string[]), schedule(string), lastRanAt(number), running(boolean)
     Sections: conditions
     Relationships: (none)
-    Documents: 2
-    IDs: plays/turn-one-of-my-ideas-into-a-project-plan, plays/begin-exploring-one-of-the-spark-ideas
 
   Model: Project
-    Prefix: projects
+    Description: Projects are home documents for one or more plans that need to be sequentially carried out by one or more different agents with unique setups.
+    Path prefix: docs/projects/*.md
     Meta: status(enum(`draft`, `approved`, `building`, `in_progress`, `completed`, `failed`, `reviewing`)), goal(string)
     Sections: overview, execution
     Relationships: goal, plans
-    Documents: 0
 
   Model: Prompt
-    Prefix: prompts
+    Description: Prompts are reusable prompts that can be handled by coding assistants, or luca's assistants, through the `luca prompt` command.
+    Path prefix: docs/prompts/*.md
     Meta: tags(string[]), repeatable(boolean), lastRanAt(number), inputs(record<string, object>)
     Sections: (none)
     Relationships: (none)
-    Documents: 0
 
   Model: Report
-    Prefix: reports
+    Description: Reports either I write, or the AI writes.  They're long form, detailed writeups usually
+    Path prefix: docs/reports/*.md
     Meta: goal(string), tags(string[])
     Sections: (none)
     Relationships: (none)
-    Documents: 1
-    IDs: reports/onboarding-troubleshooting-log
 
   Model: Task
-    Prefix: tasks
+    Description: Tasks are one-off prompts for small changes, bugfixes, documentation, reports, etc. They run once and are marked completed.  The Conditions section is a special section used to short circuit the task being run.  You will almost never need this.
+    Path prefix: docs/tasks/*.md
     Meta: agent(enum(`claude`, `codex`)), createdBy(string), tags(string[]), completedAt(string), lastRanAt(number), running(boolean)
     Sections: conditions
     Relationships: (none)
-    Documents: 0
 
   Model: Base
-    Prefix: 
+    Description: A Base document.
+    Path prefix: docs/*.md
     Meta: (none)
     Sections: (none)
     Relationships: (none)
-    Documents: 4
-    IDs: README, TABLE-OF-CONTENTS, assistant-README, VISION
 ```
