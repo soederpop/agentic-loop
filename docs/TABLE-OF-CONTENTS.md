@@ -1,5 +1,16 @@
 # Table of Contents
 
+## Goals
+
+- [User Experience Improvements](./goals/user-experience-improvements.md)
+
+## Ideas
+
+- [Customize The Voice Assistant Personality](./ideas/customize-assistant-voice-personality.md)
+- [Web Based Streaming Chat Experience](./ideas/develop-a-web-based-streaming-chat-experience.md)
+- [Develop Voice Commands for Working with Docs](./ideas/develop-voice-commands-for-working-with-docs.md)
+- [Draw Command Screenshotting](./ideas/draw-command-screenshotting.md)
+
 ## Memories
 
 - [Chief of Staff Memories](./memories/README.md)
@@ -10,7 +21,6 @@
 ## Plays
 
 - [Begin Exploring on of my ideas](./plays/begin-exploring-one-of-the-spark-ideas.md)
-- [example-play](./plays/example-play.md)
 - [Turn one of my ideas into a Project Plan](./plays/turn-one-of-my-ideas-into-a-project-plan.md)
 
 ## Reports
@@ -30,4 +40,5 @@
 - [Creating Your Own Assistant](./guides/creating-your-own-assistant.md)
 - [Extending the Agentic Loop](./guides/extending-the-agentic-loop.md)
 - [Non Voice Workflows](./guides/non-voice-workflows.md)
+- [Running the Agentic Loop](./guides/running-the-agentic-loop.md)
 - [Window Manager Layouts](./guides/window-manager-layouts.md)
