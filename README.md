@@ -39,6 +39,12 @@ As long as you have the `claude` code CLI installed and in your path, to get sta
 sh setup.sh
 ```
 
+To verify what works / what might still need attention:
+
+```shell
+luca status
+```
+
 ## A Visual Explainer
 
 Run the following to view a visual explainer:
@@ -47,6 +53,10 @@ Run the following to view a visual explainer:
 luca serve
 ```
 
+## Howto Guides
+- [Extending the Agentic Loop](./docs/guides/extending-the-agentic-loop.md)
+- [Writing Voice Command Handlers](./docs/guides/creating-new-voice-command-handlers.md)
+- [Non-Voice Workflows](./docs/guides/non-voice-workflows.md) 
 
 ## Native OSX App and Voice Command System
 

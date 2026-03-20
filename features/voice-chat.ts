@@ -148,7 +148,7 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			this.speechStreamer!.push(chunk)
 		})
 
-		this.assistant.once('response', async () => {
+		this.assistant.on('response', async () => {
 			console.log('assistant response finished')
 			await this.speechStreamer!.finish()
 			// Reset for next exchange

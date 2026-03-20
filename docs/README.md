@@ -34,7 +34,7 @@ Items: 15
     Sections: (none)
     Relationships: (none)
     Documents: 4
-    IDs: memories/TODO, memories/USER, memories/SELF, memories/README
+    IDs: memories/SELF, memories/USER, memories/TODO, memories/README
 
   Model: Plan
     Prefix: plans
@@ -86,5 +86,5 @@ Items: 15
     Sections: (none)
     Relationships: (none)
     Documents: 4
-    IDs: README, VISION, TABLE-OF-CONTENTS, assistant-README
+    IDs: README, TABLE-OF-CONTENTS, assistant-README, VISION
 ```

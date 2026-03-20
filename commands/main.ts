@@ -838,7 +838,8 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
   // 6. Content Server (cnotes serve)
   let contentServerRunning = true
-  const cnotesProcess = proc.spawnAndCapture('cnotes', ['serve', '--port', '4100'], {
+  const cnotesBin = container.paths.resolve('node_modules/.bin/cnotes')
+  const cnotesProcess = proc.spawnAndCapture(cnotesBin, ['serve', '--port', '4100', '--force'], {
     onOutput: (data: string) => {
       for (const line of data.split('\n')) {
         if (line) log('content', line)

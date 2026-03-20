@@ -154,6 +154,9 @@ async function relayThroughAuthority(container: any, port: number, target: strin
     })
 
     ws.on('message', (msg: any) => {
+      // Ignore non-response messages (initial state snapshot, broadcast logs/events)
+      if (msg.type && msg.type !== 'response') return
+
       clearTimeout(timeout)
       ws.disconnect()
 
