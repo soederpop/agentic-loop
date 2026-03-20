@@ -1,9 +1,5 @@
 # Table of Contents
 
-## Ideas
-
-- [web based assistant chat application](./ideas/web-based-assistant-chat-application.md)
-
 ## Memories
 
 - [Chief of Staff Memories](./memories/README.md)
