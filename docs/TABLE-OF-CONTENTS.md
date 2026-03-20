@@ -29,7 +29,7 @@
 
 ## Reports
 
-- [Friction Report — 2026-03-20 04:00](./reports/friction/2026-03-20-04.md)
+- [Friction Report — Agentic Loop Prompt Outputs](./reports/friction/2026-03-20-22.md)
 - [Onboarding Troubleshooting Log](./reports/onboarding-troubleshooting-log.md)
 
 ## Bases
