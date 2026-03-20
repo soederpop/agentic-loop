@@ -11,7 +11,7 @@ Every subfolder (e.g. `goals`, `ideas`, `tasks`) tells you what structure the do
 ```
 Collection: /Users/jonathansoeder/@agentic-loop/docs
 Root: /Users/jonathansoeder/@agentic-loop/docs
-Items: 14
+Items: 15
 
   Model: Goal
     Prefix: goals
@@ -34,7 +34,7 @@ Items: 14
     Sections: (none)
     Relationships: (none)
     Documents: 4
-    IDs: memories/README, memories/USER, memories/TODO, memories/SELF
+    IDs: memories/TODO, memories/USER, memories/SELF, memories/README
 
   Model: Plan
     Prefix: plans
@@ -49,7 +49,7 @@ Items: 14
     Sections: conditions
     Relationships: (none)
     Documents: 2
-    IDs: plays/begin-exploring-one-of-the-spark-ideas, plays/turn-one-of-my-ideas-into-a-project-plan
+    IDs: plays/turn-one-of-my-ideas-into-a-project-plan, plays/begin-exploring-one-of-the-spark-ideas
 
   Model: Project
     Prefix: projects
@@ -86,5 +86,5 @@ Items: 14
     Sections: (none)
     Relationships: (none)
     Documents: 4
-    IDs: VISION, README, TABLE-OF-CONTENTS, assistant-README
+    IDs: README, VISION, TABLE-OF-CONTENTS, assistant-README
 ```

@@ -29,5 +29,6 @@
 
 ## Other
 
+- [Creating New Voice Command Handlers](./guides/creating-new-voice-command-handlers.md)
 - [Extending the Agentic Loop](./guides/extending-the-agentic-loop.md)
 - [Non Voice Workflows](./guides/non-voice-workflows.md)
