@@ -23,8 +23,13 @@
 - [Begin Exploring on of my ideas](./plays/begin-exploring-one-of-the-spark-ideas.md)
 - [Turn one of my ideas into a Project Plan](./plays/turn-one-of-my-ideas-into-a-project-plan.md)
 
+## Prompts
+
+- [Analyze Prompt Outputs](./prompts/analyze-prompt-outputs.md)
+
 ## Reports
 
+- [Friction Report — 2026-03-20 04:00](./reports/friction/2026-03-20-04.md)
 - [Onboarding Troubleshooting Log](./reports/onboarding-troubleshooting-log.md)
 
 ## Bases

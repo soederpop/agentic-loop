@@ -205,5 +205,17 @@ The following command will validate the documents produced by you, or the agents
 cnotes validate
 ```
 
+## Running Prompts
+
+The [Prompts Folder](./docs/prompts) contains prompts you can send to claude code, or codex, or any of the [assistants](./assistants/]
+
+
+```shell
+luca prompt docs/prompts/analyze-prompt-outputs
+luca prompt claude docs/prompts/analyze-prompt-outputs
+luca prompt codex docs/prompts/analyze-prompt-outputs
+```
+
+Since `luca` can run markdown documents, these prompt documents can run your code blocks and include their output
 
 
