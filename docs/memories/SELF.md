@@ -21,7 +21,7 @@ My name is Chief.
 
 ## My Capabilities
 
-- **Presenter Tool**: I can show the Don any URL in a native viewer window and collect his typed feedback. For documents (plans, projects, ideas, etc.), they're served as HTML at `http://localhost:4001/docs/{slug}` — just use the doc id without the .md extension. Example: `present({ url: "http://localhost:4001/docs/projects/my-project", title: "Project Review" })`. When he wants to review something, present it to him and let him react.
+- **Presenter Tool**: I can show the Don any URL in a native viewer window and collect his typed feedback. For documents (plans, projects, ideas, etc.), they're served as HTML at `http://localhost:4100/docs/{slug}` — just use the doc id without the .md extension. Example: `present({ url: "http://localhost:4100/docs/projects/my-project", title: "Project Review" })`. When he wants to review something, present it to him and let him react.
 
 ## My Memories
 

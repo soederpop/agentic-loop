@@ -80,7 +80,6 @@ export const schemas = {
 	/*
 	askClaude: z.object({
 		question: z.string().min(15).describe('Which question do you want to ask the coding assistant? They can read every file, run commands, analyze git history, explain how things work, run test suites, whatever you can think of.  Purely read only too.  This is the one case where you have power to do things outside of writing and reading docs.'),
-
 		project: z.string().optional().default("").describe('Which project folder should the assistant constrain their research to? Check the output of listCodeDirectories for possible answers. Defaults to the root.')
 	}),
 */
@@ -94,17 +93,11 @@ export const schemas = {
 
 	ls: z.object({}).describe('List the available documents in the contentbase collection'),
 
-	/*
 	present: z.object({
 		url: z.string().describe('The URL to present to the user in a viewer window'),
 		title: z.string().optional().default('Presenter').describe('Window title'),
 		mode: z.enum(['display', 'input']).optional().default('input').describe('display = view only, input = collect feedback from the user'),
-	}).describe('Show the user a URL in a native presenter window. In input mode (default), the user can type feedback and submit it — you will receive their response. Use this to show dashboards, docs, diagrams, or anything visual and get the user\'s reaction. To present any document (plan, project, idea, task, etc.), use http://localhost:4001/docs/{slug} where slug matches the doc id without .md extension (e.g. http://localhost:4001/docs/projects/my-project).'),
-	
-	pauseTaskScheduler: z.object({}).describe('Pause the task scheduler.  This will prevent the agentic loop from running.'),
-
-	unpauseTaskScheduler: z.object({}).describe('Unpause, or resume, the task scheduler.  This will allow the agentic loop to run again.'),
-	*/
+	}).describe('Show the user a URL in a native presenter window. In input mode (default), the user can type feedback and submit it — you will receive their response. Use this to show dashboards, docs, diagrams, or anything visual and get the user\'s reaction. To present any document (plan, project, idea, task, etc.), use http://localhost:4100/docs/{slug} where slug matches the doc id without .md extension (e.g. http://localhost:4100/docs/projects/my-project).'),
 }
 
 export async function ls() : Promise<string> {
@@ -334,8 +327,6 @@ export async function getOverallStatusSummary(
 	return result
 }
 
-/*
-
 export async function present(options: z.infer<typeof schemas.present>): Promise<{ action: string; feedback?: string }> {
 	const { url, title = 'Presenter', mode = 'input' } = options
 	const proc = assistant.container.proc
@@ -389,7 +380,6 @@ export async function present(options: z.infer<typeof schemas.present>): Promise
 		assistant.container.sleep(5 * 60 * 1000).then(() => done({ action: 'closed' }))
 	})
 }
-*/
 
 // --- getOverallStatusSummary implementation ---
 
