@@ -222,7 +222,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       finish: (data) => {
         if (data?.result?.action === "unknown") {
           this.emit('info', 'Unknown command')
-          router.playPhrase('error')
         }
         listener.unlock()
         return true
@@ -236,9 +235,7 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     
     if (!result.matched) {
       this.emit('info', `No handler matched for: ${text}`)
-      
-      this.askVoiceAssistant(text)
-
+      await this.askVoiceAssistant(text)
     }
 
     listener.unlock()
