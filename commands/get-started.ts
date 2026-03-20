@@ -15,15 +15,35 @@ export default async function getStarted(options: z.infer<typeof argsSchema>, co
   
   const fs = container.feature('fs')
   const ui = container.feature('ui')
-
+  const docs = container.feature('contentDb', {
+    rootPath: container.paths.resolve('docs')
+  })
   
   const visionHash = container.utils.hashObject({
     vision: fs.readFile(`docs/VISION.md`)
   })
   
   if (visionHash === '6pvu54') {
-    ui.print.red(`You lack vision?`)
+    console.log('User has not edited the vision file yet')
+  } else {
+    console.log('User has edited the vision file')
   }
   
-  console.log(visionHash)
+  await docs.load()
+  
+  const numberOfGoals = await docs.queries.goals.count()
+  
+  if (numberOfGoals === 0) {
+    console.log('User has no goals yet')
+  } else {
+    console.log('User has goals')
+  }
+
+  const numberOfIdeas = await docs.queries.goals.count()
+  
+  if (numberOfIdeas === 0) {
+    console.log('User has no ideas yet')
+  } else {
+    console.log('User has ideas')
+  }
 }

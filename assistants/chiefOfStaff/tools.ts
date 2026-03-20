@@ -47,8 +47,16 @@ interface PlanCoverage {
 
 interface OverallStatusSummary {
 	generatedAt: string
+	visionEdited: boolean
+	totals: {
+		ideas: number
+		goals: number
+		projects: number
+		plans: number
+	}
 	gitActivity: RepoCommits[]
 	ideaStatusCounts: StatusCounts
+	goalStatusCounts: StatusCounts
 	projectStatusCounts: StatusCounts
 	staleIdeas: StaleItem[]
 	staleProjects: StaleItem[]
@@ -234,8 +242,16 @@ export async function getOverallStatusSummary(
 	const cdb = assistant.contentDb
 	const collection = cdb.collection
 
+	const fs = assistant.container.feature('fs')
+
 	// Ensure collection is loaded
 	if (!collection.isLoaded) await collection.load()
+
+	// 0. Vision hash check
+	const visionHash = assistant.container.utils.hashObject({
+		vision: fs.readFile('docs/VISION.md')
+	})
+	const visionEdited = visionHash !== '6pvu54'
 
 	// 1. Git activity across repos (parallel)
 	const repos = resolveRepoPaths()
@@ -254,7 +270,18 @@ export async function getOverallStatusSummary(
 		ideaStatusCounts[status] = (ideaStatusCounts[status] || 0) + 1
 	}
 
-	// 3. Projects status counts
+	// 3. Goals status counts
+	const goalDocs = collection.available
+		.filter((id: string) => id.startsWith('goals/'))
+		.map((id: string) => collection.document(id))
+
+	const goalStatusCounts: StatusCounts = {}
+	for (const doc of goalDocs) {
+		const status = inferStatus(doc, 'goals')
+		goalStatusCounts[status] = (goalStatusCounts[status] || 0) + 1
+	}
+
+	// 4. Projects status counts
 	const projectDocs = collection.available
 		.filter((id: string) => id.startsWith('projects/'))
 		.map((id: string) => collection.document(id))
@@ -321,8 +348,16 @@ export async function getOverallStatusSummary(
 
 	const summary: OverallStatusSummary = {
 		generatedAt: new Date().toISOString(),
+		visionEdited,
+		totals: {
+			ideas: ideaDocs.length,
+			goals: goalDocs.length,
+			projects: projectDocs.length,
+			plans: planDocs.length,
+		},
 		gitActivity,
 		ideaStatusCounts,
+		goalStatusCounts,
 		projectStatusCounts,
 		staleIdeas,
 		staleProjects,
@@ -572,6 +607,19 @@ function formatSummaryAsMarkdown(s: OverallStatusSummary): string {
 	lines.push(`# Overall Status Summary`)
 	lines.push(`_Generated: ${s.generatedAt}_\n`)
 
+	// Vision status
+	if (!s.visionEdited) {
+		lines.push(`> ⚠️ **userHasNotEditedVisionDocument** — The vision file has not been customized yet.\n`)
+	}
+
+	// Totals
+	lines.push(`## Document Totals\n`)
+	lines.push(`- **Ideas**: ${s.totals.ideas}`)
+	lines.push(`- **Goals**: ${s.totals.goals}`)
+	lines.push(`- **Projects**: ${s.totals.projects}`)
+	lines.push(`- **Plans**: ${s.totals.plans}`)
+	lines.push('')
+
 	// Git activity
 	lines.push(`## Recent Git Activity\n`)
 	for (const repo of s.gitActivity) {
@@ -599,6 +647,15 @@ function formatSummaryAsMarkdown(s: OverallStatusSummary): string {
 	const ideaTotal = Object.values(s.ideaStatusCounts).reduce((a, b) => a + b, 0)
 	lines.push(`Total: ${ideaTotal}\n`)
 	for (const [status, count] of Object.entries(s.ideaStatusCounts).sort((a, b) => b[1] - a[1])) {
+		lines.push(`- **${status}**: ${count}`)
+	}
+	lines.push('')
+
+	// Goal status counts
+	lines.push(`## Goals by Status\n`)
+	const goalTotal = Object.values(s.goalStatusCounts).reduce((a, b) => a + b, 0)
+	lines.push(`Total: ${goalTotal}\n`)
+	for (const [status, count] of Object.entries(s.goalStatusCounts).sort((a, b) => b[1] - a[1])) {
 		lines.push(`- **${status}**: ${count}`)
 	}
 	lines.push('')
