@@ -403,6 +403,9 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         resumeAll()
         respond({ ok: true, paused: false })
         break
+      case 'voice-route':
+        handleVoiceRoute(payload, ws, respond)
+        break
       case 'eval':
         handleEval(payload, ws, respond)
         break
@@ -412,6 +415,78 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       default:
         respond({ error: `unknown action: ${action}` })
     }
+  }
+
+  async function handleVoiceRoute(payload: any, ws: any, respond: (data: any) => void) {
+    if (!voiceService) {
+      respond({ error: 'voice service not running' })
+      return
+    }
+
+    const { text, target } = payload || {}
+    if (!text) {
+      respond({ error: 'missing text' })
+      return
+    }
+
+    const isChief = target === 'chief' || target === 'chiefofstaff'
+
+    log('voice', `yo relay: "${text}" (target: ${target || 'friday'})`)
+
+    try {
+      if (isChief) {
+        const chiefChat = voiceService.chiefChat
+        const caps = await chiefChat.checkCapabilities()
+
+        if (!caps.available) {
+          // Fall through to router
+          const routeResult = await voiceRouteThrough(text)
+          respond({ ok: true, ...routeResult })
+          return
+        }
+
+        await chiefChat.start()
+        const response = await chiefChat.ask(text)
+        respond({ ok: true, response, source: 'chief' })
+      } else {
+        const routeResult = await voiceRouteThrough(text)
+        respond({ ok: true, ...routeResult })
+      }
+    } catch (err: any) {
+      respond({ error: err?.message || String(err) })
+    }
+  }
+
+  async function voiceRouteThrough(text: string) {
+    const router = voiceService!.router
+
+    let resultData: any = null
+    const result = await router.route({
+      id: `yo-relay-${Date.now()}`,
+      source: 'yo-relay',
+      text,
+      payload: { text, source: 'yo-relay' },
+      isFinished: false,
+      ack: () => true,
+      progress: () => true,
+      finish: (data: any) => { resultData = data; return true },
+      fail: (data: any) => { resultData = { error: data?.error }; return true },
+    })
+
+    if (!result.matched) {
+      const voiceAssistantChat = voiceService!.voiceAssistantChat
+      const caps = await voiceAssistantChat.checkCapabilities()
+
+      if (!caps.available) {
+        return { matched: false, response: null, source: 'none', error: `Voice assistant unavailable: ${caps.missing.join(', ')}` }
+      }
+
+      await voiceAssistantChat.start()
+      const response = await voiceAssistantChat.ask(text)
+      return { matched: false, response, source: 'voice-assistant' }
+    }
+
+    return { matched: true, result: resultData, source: 'handler' }
   }
 
   async function handlePresent(payload: any, ws: any, respond: (data: any) => void) {

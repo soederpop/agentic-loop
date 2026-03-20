@@ -117,6 +117,11 @@ export async function ls() : Promise<string> {
 }
 
 export async function README() : Promise<string> {
+	// regenerate the readme fresh
+	await assistant.container.proc.spawnAndCapture('cnotes', ['summary'])
+	// make sure the collection is fresh
+	await assistant.contentDb.collection.load({ refresh: true })
+
 	const docs = await assistant.contentDb.readMultiple(['memories/SELF', 'memories/USER', 'memories/TODO', 'README','assistant-README'])
 	return docs
 }
@@ -125,6 +130,9 @@ export async function readDocs(options: z.infer<typeof schemas.readDocs>): Promi
 	const { idOrIdsCsv } = options
 
 	const ids = idOrIdsCsv.split(',').map(id => id.trim().replace(/.md$/i, '').replace(/^docs\//i, ''))
+
+	// make sure the collection is fresh, this is expensive i know
+	await assistant.contentDb.collection.load({ refresh: true })
 
 	const combinedDocs = await assistant.contentDb.readMultiple(ids, {
 		meta: true,

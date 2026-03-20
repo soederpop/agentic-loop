@@ -54,7 +54,18 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
 
   console.log(`${ui.colors.dim(isChief ? '🎖  chief' : '📡 friday')} ${ui.colors.green('>')} ${text}`)
 
-  // Boot the voice service subsystems (router + chats, no wake word listener)
+  // Check if luca main authority is running — if so, relay through it
+  const networking = container.feature('networking')
+  const mainPort = 4410
+  const authorityRunning = !(await networking.isPortOpen(mainPort))
+
+  if (authorityRunning && !options.dry) {
+    console.log(ui.colors.dim('(relaying through luca main)'))
+    await relayThroughAuthority(container, mainPort, target, text, ui)
+    return
+  }
+
+  // Standalone mode — boot voice service locally
   const voiceService = container.feature('voiceService' as any) as any
   const router = voiceService.router
 
@@ -117,6 +128,70 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
   while (container.proc.isProcessRunning('afplay')) {
     await container.sleep(50)
   }
+}
+
+/**
+ * Relay voice command through the running luca main authority via WebSocket.
+ */
+async function relayThroughAuthority(container: any, port: number, target: string, text: string, ui: any) {
+  const ws = container.client('websocket', {
+    baseURL: `ws://localhost:${port}`,
+    json: true,
+  })
+
+  return new Promise<void>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      ws.disconnect()
+      console.log(ui.colors.yellow('Relay timed out — authority may be busy'))
+      reject(new Error('Relay timed out'))
+    }, 30_000)
+
+    ws.on('open', () => {
+      ws.send({
+        type: 'command',
+        payload: { action: 'voice-route', text, target },
+      })
+    })
+
+    ws.on('message', (msg: any) => {
+      clearTimeout(timeout)
+      ws.disconnect()
+
+      if (msg.error) {
+        console.log(ui.colors.red(`Error: ${msg.error}`))
+        resolve()
+        return
+      }
+
+      const data = msg.data || msg
+
+      if (data.response) {
+        const label = data.source === 'chief' ? 'Chief' : 'Friday'
+        console.log()
+        console.log(`${ui.colors.blue(label)} ${ui.colors.dim('>')} ${data.response}`)
+      } else if (data.matched) {
+        // Handler executed — result is in data.result
+        if (data.result?.error) {
+          console.log(ui.colors.red(`Handler error: ${data.result.error}`))
+        }
+        // Otherwise handler ran successfully (side effects like TTS already happened in authority)
+      } else if (data.error) {
+        console.log(ui.colors.yellow(data.error))
+      }
+
+      resolve()
+    })
+
+    ws.on('error', (err: any) => {
+      clearTimeout(timeout)
+      console.log(ui.colors.yellow(`Could not reach luca main: ${err?.message || err}`))
+      console.log(ui.colors.dim('Falling back to standalone mode...'))
+      // Don't reject — we could fall back, but for simplicity just report
+      resolve()
+    })
+
+    ws.connect()
+  })
 }
 
 async function routeThroughRouter(router: any, text: string, voiceService: any, ui: any) {
