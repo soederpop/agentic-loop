@@ -4,9 +4,10 @@ tags:
   - chat
   - assistant
   - luca-web
-status: exploring
+status: promoted
 goal: ''
 ---
+
 
 # web based assistant chat application
 
