@@ -1,16 +1,18 @@
 # Vision Statement
 
-This is an important document.  It is empty which means you haven't taken the time to write it.
+My main goal is to evangelize the super powers the Agentic Loop system can provide to people who learn to use it.
 
-Everything starts here.
+## The Edge
 
-The process is:
+The [Luca Framework](https://github.com/soederpop/luca) is a massively powerful, batteries include CLI tool that can be used to build, and serve, full stack web applications, and everything that is required to power them: servers: rest, websocket, ipc, commands with help and options, API endpoints with free openapi.json specs.  The real power of this tool is that it is designed for Agentic collaboration and using the CLI the agent can learn everything it needs to know.
 
-1) Define your VISION.  Your north star.  What does success look like? What does it not look like? 
-2) Break the VISION down into Goals (one document per goal in the [goals](./goals/) folder. )  You can do that with `cnotes create goal --title "Whatever your goal is"`.  The goal document is where you explain what a measurable success outcome looks like.  Give us your motivation for this goal.  This is mainly for you, and for your chief of staff, to help drive the direction of your project development.
-3) Record ideas whenever you have them in [the ideas folder](./ideas/).  One document per idea.  You should reference which goal it belongs to in the metadata
+The [Contentbase Tool](https://github.com/soederpop/contentbase) provides a system of structure and automation for large collections of markdown files.  Markdown is the lingua franca of Agentic AI and powers nearly every aspect of it.  This tool lets us extract structured data from the mass of chaotic writing produced by LLMs.
 
-## Example Documents
+Combined, these two tools can interface with, and orchestrate all types of coding assistants and synthesize their results into meaningful, executive summaries.
 
-- See the [GOAL Template](./templates/goal.md)
-- See the [IDEA Template](./templates/idea.md)
+## The Northstar System
+
+The concept of having a well defined `NorthStar` and enumerating all of the things that contribute to it, as well as the things that don't, is something that increases the odds of success that a group of autonomous actors will converge on something agreeable to all.
+
+By aligning all of the writing we do to drive Agentic Software production to this system, we will better be able to ensure that the output is what we hoped it would be.
+

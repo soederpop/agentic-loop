@@ -752,12 +752,17 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     voiceService = container.feature('voiceService')
     voiceService.getStatusSnapshot = getStatusSnapshot
 
+    let voiceConnectedOnce = false
     voiceService.on('client:connected', () => {
-      log('voice', 'native app connected')
+      if (!voiceConnectedOnce) {
+        log('voice', 'native app connected')
+        voiceConnectedOnce = true
+      }
       recordEvent('voice', 'client:connected')
     })
     voiceService.on('client:disconnected', () => {
       log('voice', 'native app disconnected')
+      voiceConnectedOnce = false
       recordEvent('voice', 'client:disconnected')
     })
     voiceService.on('command', (d: any) => {
@@ -798,12 +803,17 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     windowManager = container.feature('windowManager')
     windowManager.listen()
 
+    let wmConnectedOnce = false
     windowManager.on('clientConnected', () => {
-      log('windowManager', 'native app connected')
+      if (!wmConnectedOnce) {
+        log('windowManager', 'native app connected')
+        wmConnectedOnce = true
+      }
       recordEvent('windowManager', 'clientConnected')
     })
     windowManager.on('clientDisconnected', () => {
       log('windowManager', 'native app disconnected')
+      wmConnectedOnce = false
       recordEvent('windowManager', 'clientDisconnected')
     })
     windowManager.on('error', (err: any) => {

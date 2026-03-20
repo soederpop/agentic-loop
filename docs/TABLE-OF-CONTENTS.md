@@ -10,6 +10,7 @@
 ## Plays
 
 - [Begin Exploring on of my ideas](./plays/begin-exploring-one-of-the-spark-ideas.md)
+- [example-play](./plays/example-play.md)
 - [Turn one of my ideas into a Project Plan](./plays/turn-one-of-my-ideas-into-a-project-plan.md)
 
 ## Reports
@@ -26,6 +27,7 @@
 ## Other
 
 - [Creating New Voice Command Handlers](./guides/creating-new-voice-command-handlers.md)
+- [Creating Your Own Assistant](./guides/creating-your-own-assistant.md)
 - [Extending the Agentic Loop](./guides/extending-the-agentic-loop.md)
 - [Non Voice Workflows](./guides/non-voice-workflows.md)
 - [Window Manager Layouts](./guides/window-manager-layouts.md)

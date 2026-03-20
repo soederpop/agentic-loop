@@ -69,7 +69,7 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
   // Sliding window for soft detection confirmation
   private detectionWindow: Map<string, { score: number; time: number }[]> = new Map()
   private static WINDOW_MS = 5000
-  private static IMMEDIATE_THRESHOLD = 0.5
+  private static IMMEDIATE_THRESHOLD = 0.45
   private static CONFIRM_THRESHOLD = 0.35
   private static CONFIRM_COUNT = 2
 
@@ -83,14 +83,14 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 	  Feature.register(this, 'voiceListener')
   }
 
-  constructor(options: VoiceListenerOptions, context: ContainerContext) {
-    super(options, context)
-  }
-
   get isLocked() {
     return this.state.get('locked') === true
   }
-
+	
+	/**
+	 * Lock the listener, preventing it from reacting to wakewords until it is unlocked
+	 * @returns {VoiceListener}
+	 */
   lock() {
     this.state.set('locked', true)
     this.state.set('lockedAt', Date.now())
@@ -105,6 +105,10 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
     return this
   }
 
+	/**
+	 * Unlock the listener, allowing it to react to wakewords
+	 * @returns {VoiceListener}
+	 */
   unlock() {
     if (this.lockTimeout) {
       clearTimeout(this.lockTimeout)
@@ -117,6 +121,30 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 
     return this
   }
+	/**
+	 * Get the current input volume
+	* @returns {number}
+	*/
+	get currentInputVolume() : number {
+		try {
+			const cmd = `osascript -e "input volume of (get volume settings)"`  
+			const value = this.container.proc.exec(cmd).trim()
+			return parseInt(value, 10)
+		} catch (error) {
+			console.error('Error getting input volume', error)
+			return 0
+		}
+	}
+	
+	set currentInputVolume(val: number) {
+		const cmd = `osascript -e "set volume input volume ${val}"`
+
+		try {
+			this.container.proc.exec(cmd)
+		} catch (error) {
+			console.error('Error setting input volume', error)
+		}
+	}
 
   async checkCapabilities(): Promise<CapabilityResult> {
     if (this._capabilitiesChecked) {
@@ -191,8 +219,6 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 	}
 
 	this.state.set('triggerProcessPids', [])
-
-	console.log('stopped listener wakeword')
 
 	return this
   }

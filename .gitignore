@@ -29,3 +29,9 @@ assistants/*/generated
 
 # logs
 logs/prompt-outputs
+
+# docs/README.md and docs/TOC
+# these change a lot when interacting with the chief, so we're git ignoring them for now.  
+# I can manually update what is in git now if it changes a bunch
+docs/README.md
+docs/TABLE-OF-CONTENTS.md

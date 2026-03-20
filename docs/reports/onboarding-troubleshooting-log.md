@@ -1,3 +1,7 @@
+---
+tags: []
+---
+
 # Onboarding Troubleshooting Log
 
 1) It attempts to build rustpotter cli from rust, causing some issues.  In the `setup.sh` prompts to claude code we just told it to download the compiled binary for macs and that solved the issue

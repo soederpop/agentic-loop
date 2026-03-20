@@ -17,23 +17,6 @@ luca scaffold command --tutorial
 luca scaffold feature --tutorial
 ```
 
-Feature are composable like legos and can be shared across multiple commands / or servers
+Feature are composable like legos and can be shared across multiple commands / or servers.  You can check the [Features Folder](../../features/) for some examples, or view the Luca frameworks own internal [source code](https://github.com/soederpop/luca/tree/main/src/node/features) to see what they look like.
 
-## Creating a new assistant
-
-An assistant lives in the [assistants folder](../../assistants/) and is made up of a few parts:
-
-- [CORE.md](../../assistants/chiefOfStaff/CORE.md) is the core system prompt
-- [tools.ts](../../assistants/chiefOfStaff/tools.ts) are tools that the assistant can run
-- [voice.yaml](../../assistants/chiefOfStaff/voice.yaml) a config file that governs its voice personality
-
-The assistant's `tools.ts` file has access to the `container` in its scope, so it can use any of the features available to do things.
-
-Use `luca console` to open up a REPL and explore what can be done.
-
-Use `luca eval "code"` to test snippets yourself.
-
-Tell your agent to do the above.
-
-
-
+Commands live in the `commands/` folder and can be called with the `luca` CLI. 

@@ -9,9 +9,9 @@ Every subfolder (e.g. `goals`, `ideas`, `tasks`) tells you what structure the do
 ## Summary
 
 ```
-Collection: /Users/jonathansoeder/Desktop/agentic-loop/docs
-Root: /Users/jonathansoeder/Desktop/agentic-loop/docs
-Items: 15
+Collection: /Users/jonathansoeder/@agentic-loop/docs
+Root: /Users/jonathansoeder/@agentic-loop/docs
+Items: 17
 
   Model: Goal
     Description: A Goal has metadata (horizon) and sections (Success Criteria, Motivation).
