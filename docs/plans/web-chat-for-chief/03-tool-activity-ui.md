@@ -1,5 +1,5 @@
 ---
-status: approved
+status: completed
 project: web-chat-for-chief
 costUsd: 0
 tools: 0
@@ -75,3 +75,10 @@ Key changes from the persistence + assistant picker work:
 - **The client HTML is now ~280 lines** with the picker and session logic. The JS section is getting dense — plan 03 may be the right time to extract it if the tool panel adds significant complexity.
 - **`isProcessing` flag** is per-WS-connection, scoped inside the `wss.on('connection')` handler. Tool events fire during processing, so they'll naturally be scoped to the active turn.
 
+## Retrospective
+
+The assistant's event system made this straightforward. The `toolCall`, `toolResult`, and `toolError` events are already emitted by the conversation layer during the agentic tool-call loop, so no wrapper or monkey-patching was needed — just subscribing to three more events alongside the existing `chunk` listener and forwarding them as `tool_start` / `tool_end` WebSocket messages.
+
+On the server side, the main subtlety was tracking per-tool start times to compute durations. A simple `Map<string, number>` keyed by tool name works because tools execute sequentially within a single turn (the conversation loops through tool calls one at a time). The listeners are scoped to each `user_message` handler and cleaned up in the `finally` block, matching the existing `chunk` pattern.
+
+On the client side, the tool activity panel is rendered as a collapsible container inserted just above the streaming assistant message. Each tool gets a status icon (blinking amber while running, green on success, red on error) plus a duration badge. Tool result summaries are truncated to 120 chars server-side and expandable on click, keeping the default payload small. The single-file HTML approach was kept — extracting JS/CSS wasn't needed since the tool activity code is self-contained and doesn't entangle with existing logic.

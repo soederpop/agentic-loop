@@ -20,6 +20,11 @@
     --user-bg: #1a1a2e;
     --input-bg: #0e0e16;
     --error: #ff003c;
+    --tool-bg: #0d0d14;
+    --tool-border: #1a1a2a;
+    --tool-accent: #f59e0b;
+    --tool-ok: #39ff14;
+    --tool-err: #ff003c;
   }
 
   html, body {
@@ -167,6 +172,131 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* ── Tool Activity ───────────────────────── */
+  .tool-activity {
+    align-self: flex-start;
+    max-width: 80%;
+    margin: 2px 0;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .tool-activity-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--tool-bg);
+    border: 1px solid var(--tool-border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    color: var(--text-dim);
+    transition: border-color 0.15s;
+    width: 100%;
+    text-align: left;
+  }
+
+  .tool-activity-toggle:hover {
+    border-color: var(--tool-accent);
+  }
+
+  .tool-activity-toggle .arrow {
+    transition: transform 0.15s;
+    font-size: 9px;
+  }
+
+  .tool-activity.expanded .tool-activity-toggle .arrow {
+    transform: rotate(90deg);
+  }
+
+  .tool-activity-toggle .tool-label {
+    color: var(--tool-accent);
+    font-weight: 600;
+  }
+
+  .tool-activity-toggle .tool-count {
+    margin-left: auto;
+    color: var(--text-dim);
+  }
+
+  .tool-activity-list {
+    display: none;
+    padding: 4px 0 0 0;
+  }
+
+  .tool-activity.expanded .tool-activity-list {
+    display: block;
+  }
+
+  .tool-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--tool-border);
+    margin-left: 8px;
+  }
+
+  .tool-item .tool-status-icon {
+    flex-shrink: 0;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .tool-item .tool-status-icon.running {
+    background: var(--tool-accent);
+    box-shadow: 0 0 4px var(--tool-accent);
+    animation: blink 0.8s step-end infinite;
+  }
+
+  .tool-item .tool-status-icon.ok {
+    background: var(--tool-ok);
+    box-shadow: 0 0 4px rgba(57, 255, 20, 0.4);
+  }
+
+  .tool-item .tool-status-icon.err {
+    background: var(--tool-err);
+    box-shadow: 0 0 4px rgba(255, 0, 60, 0.4);
+  }
+
+  .tool-item .tool-name {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .tool-item .tool-duration {
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 10px;
+  }
+
+  .tool-item .tool-error-msg {
+    color: var(--tool-err);
+    font-size: 10px;
+    margin-left: 14px;
+    display: block;
+    padding: 2px 0;
+  }
+
+  .tool-item .tool-summary {
+    color: var(--text-dim);
+    font-size: 10px;
+    margin-left: 14px;
+    display: block;
+    padding: 2px 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s;
+  }
+
+  .tool-item.show-detail .tool-summary {
+    max-height: 60px;
+  }
+
   /* ── Input ──────────────────────────────── */
   #input-area {
     padding: 12px 20px;
@@ -259,6 +389,11 @@
   let initialized = false
   let streaming = false
   let streamingEl = null
+
+  // ── Tool activity state ────────────────
+  let toolActivityEl = null   // current .tool-activity container
+  let toolItems = {}          // name → DOM element for the current response
+  let toolCount = 0           // tools seen in current response
 
   // ── Session identity ───────────────────
   function getSessionId() {
@@ -381,6 +516,10 @@
 
       case 'assistant_message_start':
         streaming = true
+        // Reset tool activity for new response
+        toolActivityEl = null
+        toolItems = {}
+        toolCount = 0
         streamingEl = appendMessage('assistant', '')
         streamingEl.classList.add('streaming')
         addCursor(streamingEl)
@@ -394,6 +533,14 @@
           addCursor(streamingEl)
           scrollToBottom()
         }
+        break
+
+      case 'tool_start':
+        handleToolStart(msg)
+        break
+
+      case 'tool_end':
+        handleToolEnd(msg)
         break
 
       case 'assistant_message_complete':
@@ -415,6 +562,108 @@
         sendBtn.disabled = false
         break
     }
+  }
+
+  // ── Tool activity UI ───────────────────
+  function ensureToolActivityContainer() {
+    if (toolActivityEl) return toolActivityEl
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'tool-activity expanded'
+
+    const toggle = document.createElement('button')
+    toggle.className = 'tool-activity-toggle'
+    toggle.innerHTML = '<span class="arrow">&#9654;</span> <span class="tool-label">Tools</span> <span class="tool-count"></span>'
+    toggle.addEventListener('click', () => {
+      wrapper.classList.toggle('expanded')
+    })
+
+    const list = document.createElement('div')
+    list.className = 'tool-activity-list'
+
+    wrapper.appendChild(toggle)
+    wrapper.appendChild(list)
+
+    // Insert before the streaming assistant message (or at the end)
+    if (streamingEl) {
+      messagesEl.insertBefore(wrapper, streamingEl)
+    } else {
+      messagesEl.appendChild(wrapper)
+    }
+
+    toolActivityEl = wrapper
+    return wrapper
+  }
+
+  function updateToolCount() {
+    if (!toolActivityEl) return
+    const countEl = toolActivityEl.querySelector('.tool-count')
+    if (countEl) {
+      const running = Object.values(toolItems).filter(el => el.querySelector('.running')).length
+      if (running > 0) {
+        countEl.textContent = `${running} running`
+      } else {
+        countEl.textContent = `${toolCount} completed`
+      }
+    }
+  }
+
+  function handleToolStart(msg) {
+    const container = ensureToolActivityContainer()
+    const list = container.querySelector('.tool-activity-list')
+
+    const item = document.createElement('div')
+    item.className = 'tool-item'
+    item.innerHTML = `<span class="tool-status-icon running"></span><span class="tool-name">${escapeHtml(msg.name)}</span><span class="tool-duration">running…</span>`
+
+    list.appendChild(item)
+    toolItems[msg.name] = item
+    toolCount++
+    updateToolCount()
+    scrollToBottom()
+  }
+
+  function handleToolEnd(msg) {
+    const item = toolItems[msg.name]
+    if (!item) return
+
+    const icon = item.querySelector('.tool-status-icon')
+    const duration = item.querySelector('.tool-duration')
+
+    icon.classList.remove('running')
+    icon.classList.add(msg.ok ? 'ok' : 'err')
+
+    const durText = msg.durationMs < 1000
+      ? `${msg.durationMs}ms`
+      : `${(msg.durationMs / 1000).toFixed(1)}s`
+    duration.textContent = durText
+
+    if (!msg.ok && msg.error) {
+      const errSpan = document.createElement('span')
+      errSpan.className = 'tool-error-msg'
+      errSpan.textContent = msg.error
+      item.appendChild(errSpan)
+    }
+
+    if (msg.ok && msg.summary && msg.summary.length <= 120) {
+      const summarySpan = document.createElement('span')
+      summarySpan.className = 'tool-summary'
+      summarySpan.textContent = msg.summary
+      item.addEventListener('click', () => {
+        item.classList.toggle('show-detail')
+      })
+      item.style.cursor = 'pointer'
+      item.appendChild(summarySpan)
+    }
+
+    updateToolCount()
+    scrollToBottom()
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div')
+    div.textContent = str
+    return div.innerHTML
   }
 
   // ── DOM helpers ────────────────────────

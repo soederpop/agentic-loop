@@ -61,3 +61,4 @@
 - [Running the Agentic Loop](./guides/running-the-agentic-loop.md)
 - [Window Manager Layouts](./guides/window-manager-layouts.md)
 - [Plan: MVP LAN Streaming Web Chat (WebSocket) — Build Report](./project-builds/web-chat-for-chief/01-mvp-lan-streaming-chat.md)
+- [Plan: Persistence + Assistant Picker — Build Report](./project-builds/web-chat-for-chief/02-persistence-and-assistant-picker.md)

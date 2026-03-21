@@ -163,7 +163,58 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 				const onChunk = (chunk: string) => {
 					send(ws, { type: 'chunk', messageId, textDelta: chunk })
 				}
+
+				// Tool activity tracking
+				const toolTimers = new Map<string, number>()
+				let toolCallCounter = 0
+
+				const onToolCall = (toolName: string, _args: any) => {
+					const callId = `${messageId}:tool:${toolCallCounter++}`
+					toolTimers.set(toolName, Date.now())
+					send(ws, {
+						type: 'tool_start',
+						id: callId,
+						name: toolName,
+						startedAt: Date.now(),
+					})
+				}
+
+				const onToolResult = (toolName: string, result: string) => {
+					const startedAt = toolTimers.get(toolName) || Date.now()
+					const endedAt = Date.now()
+					toolTimers.delete(toolName)
+					send(ws, {
+						type: 'tool_end',
+						id: toolName,
+						name: toolName,
+						ok: true,
+						endedAt,
+						durationMs: endedAt - startedAt,
+						summary: typeof result === 'string' && result.length > 120
+							? result.slice(0, 120) + '…'
+							: result,
+					})
+				}
+
+				const onToolError = (toolName: string, error: any) => {
+					const startedAt = toolTimers.get(toolName) || Date.now()
+					const endedAt = Date.now()
+					toolTimers.delete(toolName)
+					send(ws, {
+						type: 'tool_end',
+						id: toolName,
+						name: toolName,
+						ok: false,
+						endedAt,
+						durationMs: endedAt - startedAt,
+						error: error?.message || String(error),
+					})
+				}
+
 				session.assistant.on('chunk', onChunk)
+				session.assistant.on('toolCall', onToolCall)
+				session.assistant.on('toolResult', onToolResult)
+				session.assistant.on('toolError', onToolError)
 
 				try {
 					const response = await session.assistant.ask(text)
@@ -172,6 +223,9 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 					send(ws, { type: 'error', message: err.message || 'Assistant error' })
 				} finally {
 					session.assistant.off('chunk', onChunk)
+					session.assistant.off('toolCall', onToolCall)
+					session.assistant.off('toolResult', onToolResult)
+					session.assistant.off('toolError', onToolError)
 					isProcessing = false
 				}
 			}

@@ -20,7 +20,7 @@ Every subfolder (e.g. `goals`, `ideas`, `tasks`) tells you what structure the do
 ```
 Collection: /Users/jonathansoeder/@agentic-loop/docs
 Root: /Users/jonathansoeder/@agentic-loop/docs
-Items: 32
+Items: 33
 
   Model: Goal
     Description: A Goal has metadata (horizon) and sections (Success Criteria, Motivation).
@@ -46,7 +46,7 @@ Items: 32
   Model: Plan
     Description: Plans are literal claude code generated /plan documents with testing criteria, resources, etc.  They need to be approved to be picked up by the project builder
     Path prefix: plans/:project/:slug, plans/:slug
-    Meta: status(enum(`approved`, `pending`, `rejected`, `completed`, `building`, `in_progress`)), project(string), costUsd(number), turns(number), toolCalls(number), completedAt(string)
+    Meta: status(enum(`approved`, `pending`, `rejected`, `completed`, `building`, `in_progress`)), project(string), costUsd(number), turns(number), toolCalls(number), completedAt(string), agentOptions(record<string, unknown>)
     Sections: references, verification
     Relationships: project
 
