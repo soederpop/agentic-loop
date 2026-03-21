@@ -1,11 +1,13 @@
 ---
 status: completed
 project: web-chat-for-chief
-costUsd: 0
+costUsd: 1.4495577000000002
 tools: 0
-toolCalls: 0
-turns: 0
+toolCalls: 43
+turns: 27
+completedAt: '2026-03-21T03:41:26.355Z'
 ---
+
 
 # Plan: Tool Activity UI (Must-have)
 
@@ -55,30 +57,3 @@ Server → Client:
 - Confirm UI shows tool start immediately, then end with duration.
 - Confirm multiple tools in a single assistant response are displayed in order.
 
-## Handoff from Plan 01
-
-Key implementation details relevant to tool activity:
-
-- **Assistant events already exist**: The assistant emits `toolCall(name, args)`, `toolResult(name, result)`, and `toolError(name, error)` events. See `features/voice-chat.ts` lines 159–175 for the pattern — you can wire up the same listeners in `commands/web-chat.ts` inside the WS connection handler, right next to the `chunk` listener.
-- **Per-turn listener pattern**: The MVP uses `assistant.on('chunk', onChunk)` / `assistant.off('chunk', onChunk)` scoped to each user message turn. Tool events should follow the same pattern to avoid leaking listeners across turns.
-- **UI complexity**: The single-file HTML is already ~200 lines. Adding a collapsible tool panel will push it further. Consider extracting JS and CSS into separate files at this stage if it gets unwieldy.
-- **WS send helper**: There's a `send(ws, data)` function that checks `readyState` before writing. Use it for tool events too.
-
-## Handoff from Plan 02
-
-Key changes from the persistence + assistant picker work:
-
-- **Session-based architecture**: Each WS connection now goes through an `init` handshake (`{ type: 'init', sessionId, assistantId }` → `init_ok`). The assistant instance lives in a `sessions` Map keyed by `sessionId:assistantId`. You'll wire up tool event listeners on `session.assistant`, not a bare `assistant` variable.
-- **The assistant instance is now reused across reconnects** — it's created once and cached in the `sessions` Map. Tool event listeners should be scoped per-WS-connection (on connect, wire up; on close, tear down), not per-session, to avoid sending tool events to stale/closed sockets.
-- **`historyMode: 'session'`** is how assistants are created. This means conversation history (including tool calls/results) persists across reconnects.
-- **`/api/assistants` endpoint** exists and returns `{ assistants: [{id, name}], default }`. The client fetches it on load to populate the picker.
-- **The client HTML is now ~280 lines** with the picker and session logic. The JS section is getting dense — plan 03 may be the right time to extract it if the tool panel adds significant complexity.
-- **`isProcessing` flag** is per-WS-connection, scoped inside the `wss.on('connection')` handler. Tool events fire during processing, so they'll naturally be scoped to the active turn.
-
-## Retrospective
-
-The assistant's event system made this straightforward. The `toolCall`, `toolResult`, and `toolError` events are already emitted by the conversation layer during the agentic tool-call loop, so no wrapper or monkey-patching was needed — just subscribing to three more events alongside the existing `chunk` listener and forwarding them as `tool_start` / `tool_end` WebSocket messages.
-
-On the server side, the main subtlety was tracking per-tool start times to compute durations. A simple `Map<string, number>` keyed by tool name works because tools execute sequentially within a single turn (the conversation loops through tool calls one at a time). The listeners are scoped to each `user_message` handler and cleaned up in the `finally` block, matching the existing `chunk` pattern.
-
-On the client side, the tool activity panel is rendered as a collapsible container inserted just above the streaming assistant message. Each tool gets a status icon (blinking amber while running, green on success, red on error) plus a duration badge. Tool result summaries are truncated to 120 chars server-side and expandable on click, keeping the default payload small. The single-file HTML approach was kept — extracting JS/CSS wasn't needed since the tool activity code is self-contained and doesn't entangle with existing logic.

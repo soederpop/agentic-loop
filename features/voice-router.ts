@@ -344,8 +344,6 @@ export class VoiceRouter extends Feature<VoiceRouterState, VoiceRouterOptions> {
 				await this.reloadHandlers()
 			}, 300)
 		})
-
-		console.log(`[voice] watching handlers for changes`)
 	}
 
 	/** Stops watching the handlers directory. */

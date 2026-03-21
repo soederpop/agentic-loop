@@ -6,6 +6,7 @@ import { resolve } from 'path'
 export const argsSchema = CommandOptionsSchema.extend({
   docsPath: z.string().default('./docs').describe('Path to the docs folder containing contentbase models'),
   ui: z.boolean().default(false).describe('Launch interactive terminal UI instead of log output'),
+  dryRun: z.boolean().default(false).describe('Load and report the build plan without executing anything'),
 })
 
 async function projectBuilder(options: z.infer<typeof argsSchema>, context: ContainerContext) {
@@ -29,11 +30,78 @@ async function projectBuilder(options: z.infer<typeof argsSchema>, context: Cont
     process.exit(1)
   }
 
+  if (options.dryRun) {
+    return runDryRun(container, slug, options, ui)
+  }
+
   if (options.ui) {
     return runInteractiveUI(container, slug, options)
   }
 
   return runHeadless(container, slug, options, ui)
+}
+
+async function runDryRun(container: any, slug: string, options: z.infer<typeof argsSchema>, ui: any) {
+  const { colors } = ui
+  const log = (msg: string) => ui.print(msg)
+  const dim = (msg: string) => colors.gray(msg)
+  const bold = (msg: string) => colors.bold(msg)
+
+  const builder = container.feature('projectBuilder', {
+    projectSlug: slug,
+    docsPath: options.docsPath,
+  })
+
+  await builder.load()
+
+  if (!builder.project) {
+    log(colors.red(`Project "${slug}" not found`))
+    process.exit(1)
+  }
+
+  log('')
+  log(bold(`${builder.project.title}`) + dim(` (${slug})`))
+  log(dim(`Status: ${builder.project.status}`))
+  log(dim(`Plans: ${builder.plans.length} total`))
+  log('')
+
+  const pending = builder.plans.filter((p: any) => p.status !== 'completed')
+  const completed = builder.plans.filter((p: any) => p.status === 'completed')
+
+  if (completed.length > 0) {
+    log(dim(`── Completed (${completed.length}) ──`))
+    for (const plan of completed) {
+      const stats = [
+        plan.costUsd != null ? `$${plan.costUsd.toFixed(4)}` : null,
+        plan.turns != null ? `${plan.turns} turns` : null,
+        plan.toolCalls != null ? `${plan.toolCalls} tool calls` : null,
+      ].filter(Boolean).join(' | ')
+      log(`  ${colors.green('✓')} ${plan.title}` + (stats ? dim(` (${stats})`) : ''))
+    }
+    log('')
+  }
+
+  if (pending.length === 0) {
+    log(colors.green('All plans already completed — nothing to build.'))
+    return
+  }
+
+  log(dim(`── Pending (${pending.length}) ──`))
+  for (const plan of pending) {
+    const statusColor = plan.status === 'approved' ? colors.cyan : colors.yellow
+    log(`  ${statusColor('○')} ${plan.title}` + dim(` [${plan.status}]`))
+
+    if (plan.agentOptions && Object.keys(plan.agentOptions).length > 0) {
+      log(dim(`    agentOptions:`))
+      for (const [key, value] of Object.entries(plan.agentOptions)) {
+        const display = Array.isArray(value) ? value.join(', ') : String(value)
+        log(dim(`      ${key}: `) + display)
+      }
+    }
+  }
+
+  log('')
+  log(dim(`Run without --dryRun to execute.`))
 }
 
 async function runInteractiveUI(container: any, slug: string, options: z.infer<typeof argsSchema>) {

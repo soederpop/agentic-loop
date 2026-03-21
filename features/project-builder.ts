@@ -46,6 +46,7 @@ export interface PlanInfo {
   turns?: number
   toolCalls?: number
   completedAt?: string
+  agentOptions?: Record<string, any>
 }
 
 export interface PlanCacheData {
@@ -511,8 +512,6 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
     try {
       const snapshot = await this.cache.get(DISK_CACHE_KEY, true)
 
-      console.log('Snapshot', DISK_CACHE_KEY)
-
       if (snapshot && typeof snapshot === 'object') {
         if (snapshot.buildStatus) this.setState({ buildStatus: snapshot.buildStatus })
         if (snapshot.currentPlanId !== undefined) this.setState({ currentPlanId: snapshot.currentPlanId })
@@ -593,6 +592,7 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
             turns: doc.meta?.turns,
             toolCalls: doc.meta?.toolCalls,
             completedAt: doc.meta?.completedAt,
+            agentOptions: doc.meta?.agentOptions,
           })
         } catch (err) {
           plans.push({
@@ -768,6 +768,7 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
           cwd: process.cwd(),
           streaming: true,
           dangerouslySkipPermissions: this.options.dangerouslySkipPermissions,
+          ...plan.agentOptions,
         })
 
         this.planSessionMap.set(plan.id, sessionId)

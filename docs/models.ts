@@ -177,6 +177,7 @@ export const Plan = defineModel("Plan", {
 		turns: z.number().optional().describe("Number of turns in the Claude Code session"),
 		toolCalls: z.number().optional().describe("Number of tool calls made during execution"),
 		completedAt: z.string().optional().describe("ISO timestamp of when this plan was completed"),
+		agentOptions: z.record(z.any()).optional().describe("Options passed through to the Claude Code session (model, effort, maxBudgetUsd, chrome, allowedTools, systemPrompt, etc.)"),
 	}),
 	sections: {
 		references: section("References", {
