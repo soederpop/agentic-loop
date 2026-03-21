@@ -6,6 +6,7 @@
 
 ## Ideas
 
+- [Calendar Voice Commands](./ideas/calendar-voice-commands-2.md)
 - [Customize The Voice Assistant Personality](./ideas/customize-assistant-voice-personality.md)
 - [Web Based Streaming Chat Experience](./ideas/develop-a-web-based-streaming-chat-experience.md)
 - [Develop Voice Commands for Working with Docs](./ideas/develop-voice-commands-for-working-with-docs.md)
