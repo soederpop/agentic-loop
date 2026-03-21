@@ -1,3 +1,7 @@
+---
+repeatable: true
+---
+
 # Analyze The Project Build 
 
 Analyze the project build that ran recently for the following project:

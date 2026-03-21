@@ -12,6 +12,7 @@
 - [Develop Voice Commands for Working with Docs](./ideas/develop-voice-commands-for-working-with-docs.md)
 - [Draw Command Screenshotting](./ideas/draw-command-screenshotting.md)
 - [imsg Wrapper](./ideas/imsg-wrapper.md)
+- [Web Chat Interface Improvements](./ideas/web-chat-interface-improvements.md)
 
 ## Memories
 
