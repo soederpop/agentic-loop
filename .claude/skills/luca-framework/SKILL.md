@@ -21,9 +21,10 @@ This is your primary tool. Before reading source files, searching for APIs, or w
 ### See what's available
 
 ```shell
-luca describe features     # index of all available features
-luca describe clients      # index of all available clients
-luca describe servers      # index of all available servers
+luca describe features                  # index of all available features
+luca describe features --platform=web   # index of features available to the WebContainer ( browser side )
+luca describe clients                   # index of all available clients
+luca describe servers                   # index of all available servers
 ```
 
 ### Learn about specific helpers

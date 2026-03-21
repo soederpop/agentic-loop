@@ -153,7 +153,7 @@ export const Project = defineModel("Project", {
 		goal: belongsTo(() => Goal, {
 			foreignKey: (doc: any) => doc.meta.goal as string,
 		}),
-		plans: hasMany(() => Plan, {}),
+		plans: hasMany(() => Plan, { }),
 	},
 	computed: {
 		executionOrder: (self: any) => {

@@ -19,10 +19,20 @@
 - [Chief of Staff Todo List](./memories/TODO.md)
 - [USER Notes](./memories/USER.md)
 
+## Plans
+
+- [Plan: MVP LAN Streaming Web Chat (WebSocket)](./plans/web-chat-for-chief/01-mvp-lan-streaming-chat.md)
+- [Plan: Persistence + Assistant Picker](./plans/web-chat-for-chief/02-persistence-and-assistant-picker.md)
+- [Plan: Tool Activity UI (Must-have)](./plans/web-chat-for-chief/03-tool-activity-ui.md)
+
 ## Plays
 
 - [Begin Exploring on of my ideas](./plays/begin-exploring-one-of-the-spark-ideas.md)
 - [Turn one of my ideas into a Project Plan](./plays/turn-one-of-my-ideas-into-a-project-plan.md)
+
+## Projects
+
+- [Web Chat for Chief (LAN Streaming)](./projects/web-chat-for-chief.md)
 
 ## Prompts
 
