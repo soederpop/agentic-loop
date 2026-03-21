@@ -73,6 +73,27 @@
     font-size: 12px;
   }
 
+  header .spacer {
+    flex: 1;
+  }
+
+  /* ── Assistant Picker ───────────────────── */
+  #assistant-picker {
+    background: var(--input-bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 4px 8px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  #assistant-picker:focus {
+    border-color: var(--accent);
+  }
+
   /* ── Messages ───────────────────────────── */
   #messages {
     flex: 1;
@@ -116,6 +137,15 @@
     color: var(--error);
     font-size: 12px;
     padding: 4px 8px;
+  }
+
+  .message.system {
+    align-self: center;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 4px 8px;
+    font-style: italic;
   }
 
   .cursor {
@@ -203,6 +233,8 @@
   <span class="logo">CHIEF</span>
   <span id="dot" class="dot disconnected"></span>
   <span id="status" class="status">connecting…</span>
+  <span class="spacer"></span>
+  <select id="assistant-picker" title="Switch assistant"></select>
 </header>
 
 <div id="messages"></div>
@@ -219,27 +251,99 @@
   const sendBtn = document.getElementById('send')
   const dotEl = document.getElementById('dot')
   const statusEl = document.getElementById('status')
+  const pickerEl = document.getElementById('assistant-picker')
+  const logoEl = document.querySelector('header .logo')
 
   let ws = null
   let connected = false
-  let streaming = false // true while an assistant response is in-flight
-  let streamingEl = null // the DOM element being streamed into
+  let initialized = false
+  let streaming = false
+  let streamingEl = null
 
-  // ── WebSocket ────────────────────────────
+  // ── Session identity ───────────────────
+  function getSessionId() {
+    let id = localStorage.getItem('web-chat-session-id')
+    if (!id) {
+      id = crypto.randomUUID()
+      localStorage.setItem('web-chat-session-id', id)
+    }
+    return id
+  }
+
+  function getAssistantId() {
+    return localStorage.getItem('web-chat-assistant-id') || null
+  }
+
+  function setAssistantId(id) {
+    localStorage.setItem('web-chat-assistant-id', id)
+  }
+
+  const sessionId = getSessionId()
+
+  // ── Assistant picker ───────────────────
+  let assistantList = []
+  let defaultAssistant = 'chiefOfStaff'
+
+  async function loadAssistants() {
+    try {
+      const res = await fetch('/api/assistants')
+      const data = await res.json()
+      assistantList = data.assistants || []
+      defaultAssistant = data.default || 'chiefOfStaff'
+
+      pickerEl.innerHTML = ''
+      for (const a of assistantList) {
+        const opt = document.createElement('option')
+        opt.value = a.id
+        opt.textContent = a.name
+        pickerEl.appendChild(opt)
+      }
+
+      // Restore saved selection or use default
+      const saved = getAssistantId()
+      const valid = assistantList.some(a => a.id === saved)
+      pickerEl.value = valid ? saved : defaultAssistant
+    } catch (e) {
+      console.error('Failed to load assistants', e)
+    }
+  }
+
+  pickerEl.addEventListener('change', () => {
+    const newAssistant = pickerEl.value
+    setAssistantId(newAssistant)
+    updateLogo(newAssistant)
+    // Clear messages and reconnect with new assistant
+    messagesEl.innerHTML = ''
+    if (ws) ws.close()
+  })
+
+  function updateLogo(assistantId) {
+    logoEl.textContent = assistantId.toUpperCase()
+  }
+
+  // ── WebSocket ──────────────────────────
   function connect() {
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     ws = new WebSocket(`${proto}://${location.host}`)
 
     ws.onopen = () => {
       connected = true
+      initialized = false
       dotEl.classList.remove('disconnected')
       statusEl.textContent = 'connected'
-      sendBtn.disabled = false
-      inputEl.focus()
+
+      // Send init with session and assistant
+      const assistantId = pickerEl.value || getAssistantId() || defaultAssistant
+      ws.send(JSON.stringify({
+        type: 'init',
+        sessionId,
+        assistantId,
+      }))
     }
 
     ws.onclose = () => {
       connected = false
+      initialized = false
       dotEl.classList.add('disconnected')
       statusEl.textContent = 'disconnected — reconnecting…'
       sendBtn.disabled = true
@@ -259,6 +363,22 @@
 
   function handleServerMessage(msg) {
     switch (msg.type) {
+      case 'init_ok':
+        initialized = true
+        sendBtn.disabled = false
+        inputEl.focus()
+        updateLogo(msg.assistantId)
+        setAssistantId(msg.assistantId)
+        pickerEl.value = msg.assistantId
+        if (msg.historyLength > 1) {
+          appendMessage('system', `Session resumed (${msg.historyLength - 1} messages in history)`)
+        }
+        break
+
+      case 'init_error':
+        appendMessage('error', msg.message || 'Init failed')
+        break
+
       case 'assistant_message_start':
         streaming = true
         streamingEl = appendMessage('assistant', '')
@@ -280,7 +400,6 @@
         if (streamingEl) {
           removeCursor(streamingEl)
           streamingEl.classList.remove('streaming')
-          // Use the full text from server to correct any drift
           if (msg.text) streamingEl.textContent = msg.text
         }
         streaming = false
@@ -298,7 +417,7 @@
     }
   }
 
-  // ── DOM helpers ──────────────────────────
+  // ── DOM helpers ────────────────────────
   function appendMessage(role, text) {
     const el = document.createElement('div')
     el.className = `message ${role}`
@@ -323,10 +442,10 @@
     messagesEl.scrollTop = messagesEl.scrollHeight
   }
 
-  // ── Input handling ───────────────────────
+  // ── Input handling ─────────────────────
   function sendMessage() {
     const text = inputEl.value.trim()
-    if (!text || !connected || streaming) return
+    if (!text || !connected || !initialized || streaming) return
 
     appendMessage('user', text)
     ws.send(JSON.stringify({ type: 'user_message', text }))
@@ -350,8 +469,8 @@
   }
   inputEl.addEventListener('input', autoResize)
 
-  // ── Start ────────────────────────────────
-  connect()
+  // ── Start ──────────────────────────────
+  loadAssistants().then(connect)
 })()
 </script>
 </body>

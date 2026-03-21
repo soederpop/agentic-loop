@@ -64,3 +64,14 @@ Key implementation details relevant to tool activity:
 - **UI complexity**: The single-file HTML is already ~200 lines. Adding a collapsible tool panel will push it further. Consider extracting JS and CSS into separate files at this stage if it gets unwieldy.
 - **WS send helper**: There's a `send(ws, data)` function that checks `readyState` before writing. Use it for tool events too.
 
+## Handoff from Plan 02
+
+Key changes from the persistence + assistant picker work:
+
+- **Session-based architecture**: Each WS connection now goes through an `init` handshake (`{ type: 'init', sessionId, assistantId }` → `init_ok`). The assistant instance lives in a `sessions` Map keyed by `sessionId:assistantId`. You'll wire up tool event listeners on `session.assistant`, not a bare `assistant` variable.
+- **The assistant instance is now reused across reconnects** — it's created once and cached in the `sessions` Map. Tool event listeners should be scoped per-WS-connection (on connect, wire up; on close, tear down), not per-session, to avoid sending tool events to stale/closed sockets.
+- **`historyMode: 'session'`** is how assistants are created. This means conversation history (including tool calls/results) persists across reconnects.
+- **`/api/assistants` endpoint** exists and returns `{ assistants: [{id, name}], default }`. The client fetches it on load to populate the picker.
+- **The client HTML is now ~280 lines** with the picker and session logic. The JS section is getting dense — plan 03 may be the right time to extract it if the tool panel adds significant complexity.
+- **`isProcessing` flag** is per-WS-connection, scoped inside the `wss.on('connection')` handler. Tool events fire during processing, so they'll naturally be scoped to the active turn.
+

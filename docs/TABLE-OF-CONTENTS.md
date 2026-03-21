@@ -11,7 +11,7 @@
 - [Web Based Streaming Chat Experience](./ideas/develop-a-web-based-streaming-chat-experience.md)
 - [Develop Voice Commands for Working with Docs](./ideas/develop-voice-commands-for-working-with-docs.md)
 - [Draw Command Screenshotting](./ideas/draw-command-screenshotting.md)
-- [ideas/imsg-wrapper](./ideas/imsg-wrapper.md)
+- [imsg Wrapper](./ideas/imsg-wrapper.md)
 
 ## Memories
 
@@ -60,3 +60,4 @@
 - [Non Voice Workflows](./guides/non-voice-workflows.md)
 - [Running the Agentic Loop](./guides/running-the-agentic-loop.md)
 - [Window Manager Layouts](./guides/window-manager-layouts.md)
+- [Plan: MVP LAN Streaming Web Chat (WebSocket) — Build Report](./project-builds/web-chat-for-chief/01-mvp-lan-streaming-chat.md)

@@ -1,9 +1,13 @@
 ---
-status: draft
+status: building
 goal: user-experience-improvements
 ---
 
-# Web Chat for Chief (LAN Streaming)
+
+
+
+
+# Web Chat for Chief
 
 ## Overview
 
@@ -23,34 +27,33 @@ This is primarily a UX/progressive-enhancement on-ramp: users who haven’t set 
 
 ## Execution
 
-### [Phase 1 (MVP): LAN streaming text chat](../plans/web-chat-for-chief/01-mvp-lan-streaming-chat.md)
+- [Phase 1 (MVP): LAN streaming text chat](../plans/web-chat-for-chief/01-mvp-lan-streaming-chat.md)
+    **Requirements**
+    - LAN-accessible server bind (e.g. `0.0.0.0`) with a clearly printed URL.
+    - Web UI:
+      - message list
+      - text input + send
+      - streaming assistant output (incremental chunks)
+      - basic markdown rendering (nice-to-have; can be plain text if needed for first pass)
+    - Server:
+      - WebSocket (or SSE) transport for streaming
+      - bridges messages into the existing conversation/assistant stack
+      - targets the **Chief** assistant by default
+    - Progressive enhancement:
+      - must work with **text-only** and no audio setup
 
-**Requirements**
-- LAN-accessible server bind (e.g. `0.0.0.0`) with a clearly printed URL.
-- Web UI:
-  - message list
-  - text input + send
-  - streaming assistant output (incremental chunks)
-  - basic markdown rendering (nice-to-have; can be plain text if needed for first pass)
-- Server:
-  - WebSocket (or SSE) transport for streaming
-  - bridges messages into the existing conversation/assistant stack
-  - targets the **Chief** assistant by default
-- Progressive enhancement:
-  - must work with **text-only** and no audio setup
+    **Success criteria (observable)**
+    - From another device on the same network, loading `http://<host>:<port>/...` works.
+    - Sending a message yields a response that streams token-by-token / chunk-by-chunk.
+    - No attempt is made to “present” rich cards inside the chat UI; the Presenter tool remains the mechanism for that.
 
-**Success criteria (observable)**
-- From another device on the same network, loading `http://<host>:<port>/...` works.
-- Sending a message yields a response that streams token-by-token / chunk-by-chunk.
-- No attempt is made to “present” rich cards inside the chat UI; the Presenter tool remains the mechanism for that.
+- [Phase 2: basic session ergonomics](../plans/web-chat-for-chief/02-persistence-and-assistant-picker.md)
+    - Conversation/session persistence (reconnect keeps thread)
+    - Assistant picker (optional; default remains Chief)
+    - Minimal visibility into tool usage (only if it’s essentially free; otherwise defer)
 
-### [Phase 2: basic session ergonomics](../plans/web-chat-for-chief/02-persistence-and-assistant-picker.md)
-- Conversation/session persistence (reconnect keeps thread)
-- Assistant picker (optional; default remains Chief)
-- Minimal visibility into tool usage (only if it’s essentially free; otherwise defer)
-
-### [Phase 3+: voice (optional)](../plans/web-chat-for-chief/03-tool-activity-ui.md)
-The original idea includes browser voice in/out, but this project’s approved MVP is text streaming only. Voice can be a later plan if desired.
+- [Phase 3+: voice (optional)](../plans/web-chat-for-chief/03-tool-activity-ui.md)
+    - The original idea includes browser voice in/out, but this project’s approved MVP is text streaming only. Voice can be a later plan if desired.
 
 ## Notes / alignment
 

@@ -67,3 +67,23 @@ Key implementation details from the MVP:
 - **Assistant list**: `assistantsManager.discover()` is already called at startup. `assistantsManager.list()` should give you the available assistants for the picker dropdown. You may want to add an `/api/assistants` endpoint to expose this to the UI.
 - **The `historyMode` option** on assistant creation controls persistence. The voice-chat feature uses `'lifecycle'` mode. Investigate what modes are available and pick the right one for session-based persistence.
 
+## Retrospective
+
+### What was built
+
+Session persistence and assistant switching for the web chat. The browser generates a `sessionId` (stored in `localStorage`), sends it on every WebSocket connect via an `init` message, and the server maps each `sessionId:assistantId` pair to a persistent assistant instance. On reconnect or page reload, the same conversation thread resumes with full history. An assistant picker dropdown lets users switch between available assistants; each gets its own conversation thread per session.
+
+### Key decisions
+
+- **`historyMode: 'session'`** was the right choice. The assistant framework supports `lifecycle` (no persistence), `daily` (one thread per day), `persistent` (single long-running thread), and `session` (thread scoped to a specific ID). Using `session` with `resumeThread('web-chat:${sessionKey}')` gives exactly per-session persistence with no day-boundary weirdness.
+
+- **Session key is `sessionId:assistantId`**, not just `sessionId`. This means switching assistants gives you a separate conversation per assistant, which is the natural UX. Going back to a previous assistant resumes that conversation.
+
+- **Sessions are held in a server-side `Map`** — they survive WebSocket disconnects/reconnects but not server restarts. The `resumeThread` call rehydrates conversation history from disk on server restart, so history survives even if the process restarts. The in-memory map just caches the assistant instance.
+
+- **The `init` → `init_ok` handshake** blocks message sending until the session is established. The client disables the send button until `init_ok` arrives. This prevents race conditions where a message arrives before the session is wired up.
+
+### What I learned
+
+The assistant framework's `resumeThread(threadId)` must be called before `start()`. The thread ID can be any string — it doesn't need to match the framework's auto-generated format. The framework handles loading existing history from disk transparently. The `historyMode` enum options weren't documented in the `luca describe` output — I had to discover them from the validation error message (`"lifecycle"|"daily"|"persistent"|"session"`).
+

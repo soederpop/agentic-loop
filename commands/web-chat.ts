@@ -8,7 +8,7 @@ import type { Assistant, AssistantsManager } from '@soederpop/luca/agi'
 export const argsSchema = CommandOptionsSchema.extend({
 	port: z.number().default(3100).describe('Port to listen on'),
 	host: z.string().default('0.0.0.0').describe('Host to bind to (0.0.0.0 for LAN)'),
-	assistant: z.string().default('chiefOfStaff').describe('Which assistant to use'),
+	assistant: z.string().default('chiefOfStaff').describe('Default assistant to use'),
 	open: z.boolean().default(false).describe('Open browser on start'),
 })
 
@@ -24,13 +24,29 @@ function getLanAddress(): string | null {
 	return null
 }
 
+// Session state: maps sessionId → { assistant instance, assistantId }
+interface Session {
+	assistant: Assistant
+	assistantId: string
+}
+
+const sessions = new Map<string, Session>()
+
+function resolveAssistantName(assistantsManager: AssistantsManager, shortName: string): string | null {
+	// Try exact match first, then prefixed with "assistants/"
+	const entries = assistantsManager.list()
+	const match = entries.find(
+		(e) => e.name === shortName || e.name === `assistants/${shortName}`,
+	)
+	return match ? match.name : null
+}
+
 async function handler(options: z.infer<typeof argsSchema>, context: ContainerContext) {
 	const { container } = context
 	const { port, host } = options
 
 	await container.helpers.discover('features')
 
-	// Set up the assistant
 	const assistantsManager = container.feature('assistantsManager') as AssistantsManager
 	await assistantsManager.discover()
 
@@ -48,6 +64,16 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 		res.json({ ok: true, assistant: options.assistant })
 	})
 
+	// List available assistants for the picker
+	app.get('/api/assistants', (_req: any, res: any) => {
+		const entries = assistantsManager.list()
+		const assistants = entries.map((e) => {
+			const shortName = e.name.replace(/^assistants\//, '')
+			return { id: shortName, name: shortName }
+		})
+		res.json({ assistants, default: options.assistant })
+	})
+
 	await expressServer.start({ port, host })
 
 	// Attach WebSocket server to the underlying HTTP server
@@ -57,9 +83,7 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	wss.on('connection', (ws: WebSocket) => {
 		console.log('[web-chat] client connected')
 
-		// Create a fresh assistant instance per connection
-		const assistant: Assistant = assistantsManager.create(options.assistant) as Assistant
-
+		let session: Session | null = null
 		let isProcessing = false
 
 		ws.on('message', async (raw: Buffer) => {
@@ -67,13 +91,64 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 			try {
 				parsed = JSON.parse(raw.toString())
 			} catch {
-				ws.send(JSON.stringify({ type: 'error', message: 'Invalid JSON' }))
+				send(ws, { type: 'error', message: 'Invalid JSON' })
 				return
 			}
 
+			// ── Init: bind this connection to a session ──
+			if (parsed.type === 'init') {
+				const sessionId = parsed.sessionId
+				if (!sessionId || typeof sessionId !== 'string') {
+					send(ws, { type: 'init_error', message: 'Missing sessionId' })
+					return
+				}
+
+				const requestedAssistant = parsed.assistantId || options.assistant
+				const fullName = resolveAssistantName(assistantsManager, requestedAssistant)
+
+				if (!fullName) {
+					send(ws, { type: 'init_error', message: `Unknown assistant: ${requestedAssistant}` })
+					return
+				}
+
+				const shortName = fullName.replace(/^assistants\//, '')
+				const sessionKey = `${sessionId}:${shortName}`
+
+				// Reuse existing session or create a new one
+				if (sessions.has(sessionKey)) {
+					session = sessions.get(sessionKey)!
+					console.log(`[web-chat] resumed session ${sessionKey}`)
+				} else {
+					const assistant: Assistant = assistantsManager.create(fullName, {
+						historyMode: 'session',
+					}) as Assistant
+					// Use sessionKey as the thread ID for persistence
+					assistant.resumeThread(`web-chat:${sessionKey}`)
+					await assistant.start()
+
+					session = { assistant, assistantId: shortName }
+					sessions.set(sessionKey, session)
+					console.log(`[web-chat] new session ${sessionKey} (${session.assistant.messages?.length || 0} messages in history)`)
+				}
+
+				send(ws, {
+					type: 'init_ok',
+					sessionId,
+					assistantId: session.assistantId,
+					historyLength: session.assistant.messages?.length || 0,
+				})
+				return
+			}
+
+			// ── User message ──
 			if (parsed.type === 'user_message') {
+				if (!session) {
+					send(ws, { type: 'error', message: 'Send init first' })
+					return
+				}
+
 				if (isProcessing) {
-					ws.send(JSON.stringify({ type: 'error', message: 'Already processing a message' }))
+					send(ws, { type: 'error', message: 'Already processing a message' })
 					return
 				}
 
@@ -83,22 +158,20 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 				isProcessing = true
 				const messageId = crypto.randomUUID()
 
-				// Send start marker
 				send(ws, { type: 'assistant_message_start', messageId })
 
-				// Wire up chunk streaming for this turn
 				const onChunk = (chunk: string) => {
 					send(ws, { type: 'chunk', messageId, textDelta: chunk })
 				}
-				assistant.on('chunk', onChunk)
+				session.assistant.on('chunk', onChunk)
 
 				try {
-					const response = await assistant.ask(text)
+					const response = await session.assistant.ask(text)
 					send(ws, { type: 'assistant_message_complete', messageId, text: response })
 				} catch (err: any) {
 					send(ws, { type: 'error', message: err.message || 'Assistant error' })
 				} finally {
-					assistant.off('chunk', onChunk)
+					session.assistant.off('chunk', onChunk)
 					isProcessing = false
 				}
 			}
@@ -106,6 +179,7 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 
 		ws.on('close', () => {
 			console.log('[web-chat] client disconnected')
+			// Session stays in the map for reconnection
 		})
 	})
 
@@ -117,7 +191,7 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	if (lanIp) {
 		console.log(`    LAN:     http://${lanIp}:${port}`)
 	}
-	console.log(`    Assistant: ${options.assistant}`)
+	console.log(`    Default assistant: ${options.assistant}`)
 	console.log('')
 
 	if (options.open) {
