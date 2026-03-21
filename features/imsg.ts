@@ -55,8 +55,6 @@ export type WatchOptions = {
   attachments?: boolean
   reactions?: boolean
   debounce?: string
-  onMessage?: (msg: Message) => void
-  onError?: (err: string) => void
 }
 
 /**
@@ -162,43 +160,55 @@ export class Imsg extends Feature<ImsgState, ImsgOptions> {
     return { success: true }
   }
 
-  /** Watch for incoming messages. Returns an abort function to stop watching. */
-  async watch(opts?: WatchOptions): Promise<{ stop: () => void }> {
-    const parts = ['watch']
-    if (opts?.chatId) parts.push(`--chat-id ${opts.chatId}`)
-    if (opts?.participants) parts.push(`--participants ${opts.participants}`)
-    if (opts?.sinceRowid) parts.push(`--since-rowid ${opts.sinceRowid}`)
-    if (opts?.attachments) parts.push('--attachments')
-    if (opts?.reactions) parts.push('--reactions')
-    if (opts?.debounce) parts.push(`--debounce ${opts.debounce}`)
-    parts.push('--json')
+  /**
+   * Watch for incoming messages. Emits events:
+   *   'message' — new message received (payload: Message)
+   *   'error'   — stderr output from imsg watch
+   *   'stop'    — watcher was stopped
+   *
+   * Returns { stop() } to kill the watcher process.
+   */
+  watch(opts?: WatchOptions): { stop: () => void } {
+    const args = ['watch']
+    if (opts?.chatId) args.push('--chat-id', String(opts.chatId))
+    if (opts?.participants) args.push('--participants', opts.participants)
+    if (opts?.sinceRowid) args.push('--since-rowid', String(opts.sinceRowid))
+    if (opts?.attachments) args.push('--attachments')
+    if (opts?.reactions) args.push('--reactions')
+    if (opts?.debounce) args.push('--debounce', opts.debounce)
+    args.push('--json')
 
-    let childProcess: any = null
+    let watchPid: number | null = null
 
-    await this.proc.spawnAndCapture('imsg', parts.slice(1), {
+    // fire-and-forget — don't await so we can return the stop handle
+    this.proc.spawnAndCapture('imsg', args, {
       onStart: (cp: any) => {
-        childProcess = cp
+        watchPid = cp.pid ?? null
       },
       onOutput: (data: string) => {
-        if (!opts?.onMessage) return
         const lines = data.trim().split('\n').filter((l) => l.length > 0)
         for (const line of lines) {
           try {
-            opts.onMessage(JSON.parse(line))
+            this.emit('message', JSON.parse(line))
           } catch {
-            // not JSON yet (partial line), skip
+            // partial line, skip
           }
         }
       },
       onError: (data: string) => {
-        opts?.onError?.(data)
+        this.emit('error', data)
+      },
+      onExit: () => {
+        watchPid = null
+        this.emit('stop')
       },
     })
 
     return {
       stop: () => {
-        if (childProcess) {
-          childProcess.kill?.()
+        if (watchPid) {
+          this.proc.kill(watchPid)
+          watchPid = null
         }
       },
     }

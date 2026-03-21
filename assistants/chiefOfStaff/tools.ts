@@ -85,12 +85,9 @@ export const schemas = {
 
 	listCodeDirectories: z.object({}).describe('The list code directories commands shows the portfolio directory structure. Your only interest in these paths is for asking questions of our coding assistant and knowing where to direct them to look. Consult memories/USER for some common references so you can translate when i am asking.'),
 
-	/*
-	askClaude: z.object({
-		question: z.string().min(15).describe('Which question do you want to ask the coding assistant? They can read every file, run commands, analyze git history, explain how things work, run test suites, whatever you can think of.  Purely read only too.  This is the one case where you have power to do things outside of writing and reading docs.'),
-		project: z.string().optional().default("").describe('Which project folder should the assistant constrain their research to? Check the output of listCodeDirectories for possible answers. Defaults to the root.')
-	}),
-*/
+	askCodingAssistant: z.object({
+		question: z.string().min(15).describe('The question you want to ask the coding assistant.  The coding assistant has grep, ls, cat, sed, awk, cat, and can read all of the code on this system and answer specific questions based on it.'),
+	}).describe('Ask the coding assistant a question.  The coding assistant has grep, ls, cat, sed, awk, cat, and can read all of the code on this system and answer specific questions based on it.'),
 
 	getOverallStatusSummary: z.object({
 		commitCount: z.number().optional().default(5).describe('Number of recent commits to fetch per repo'),
@@ -155,24 +152,17 @@ export async function listCodeDirectories() : Promise<string> {
 	return result
 }
 
-/*
-export async function askClaude(options: z.infer<typeof schemas.askClaude>) : Promise<string> {
-	const cc = assistant.container.feature('claudeCode')
-	if (!cc.options.claudePath) cc.options.claudePath = '/Users/jon/.local/bin/claude'
-	const { question, project } = options
+let codingAssistant : Assistant | undefined 
 
-	const baseCwd = assistant.container.cwd
-	const cwd = project ? `${baseCwd}/${project}` : baseCwd
+export async function askCodingAssistant(options: z.infer<typeof schemas.askCodingAssistant>) : Promise<string> {
+	const { question } = options
+	
+	if (!codingAssistant) {
+		await container.feature('assistantsManager').discover()
+		codingAssistant = container.feature('assistantsManager').create('codingAssistant')
+	}
 
-	const session = await cc.run(question, {
-		cwd,
-		appendSystemPrompt: 'You are a read-only research assistant. Do NOT create, edit, write, or delete any files. Do NOT run any destructive commands. Only read files, search code, and analyze what exists. Answer concisely.',
-		disallowedTools: ['Edit', 'Write', 'NotebookEdit'],
-		model: 'sonnet',
-		maxBudgetUsd: 0.50,
-	})
-
-	return session.result || 'No response received.'
+	return codingAssistant.ask(question)
 }
 /*
 /*

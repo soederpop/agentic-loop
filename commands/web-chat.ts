@@ -45,12 +45,21 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	const { container } = context
 	const { port, host } = options
 
+	const isPortTaken = await container.networking.isPortOpen(port).then(r => !r)
+
+	if (isPortTaken) {
+		const pids = container.proc.findPidsByPort(port)
+		if (pids.length) {
+			container.proc.kill(pids[0])
+		}
+	}
+
 	await container.helpers.discover('features')
 
 	const assistantsManager = container.feature('assistantsManager') as AssistantsManager
 	await assistantsManager.discover()
 
-	const publicDir = container.paths.resolve(import.meta.dir, '..', 'public', 'web-chat')
+	const publicDir = container.paths.resolve('public', 'web-chat')
 
 	const expressServer = container.server('express', {
 		port,

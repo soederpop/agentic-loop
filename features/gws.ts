@@ -43,7 +43,9 @@ export const GwsStateSchema = FeatureStateSchema.extend({
 })
 export type GwsState = z.infer<typeof GwsStateSchema>
 
-export const GwsOptionsSchema = FeatureOptionsSchema.extend({})
+export const GwsOptionsSchema = FeatureOptionsSchema.extend({
+  configDir: z.string().optional().describe('Path to GWS CLI config directory. Defaults to ~/.config/gws'),
+})
 export type GwsOptions = z.infer<typeof GwsOptionsSchema>
 
 // Interfaces
@@ -54,8 +56,6 @@ interface GwsExecOptions {
   ndjson?: boolean
   profile?: string
 }
-
-const PROFILES_DIR_BASE = '.luca/gws-profiles'
 
 function extractVerdict(authResults: string, mechanism: string): string {
   // Matches patterns like "spf=pass", "dkim=fail", "dmarc=none"
@@ -94,9 +94,8 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     return this.container.feature('fs')
   }
 
-  private get profilesDir(): string {
-    const home = process.env.HOME || process.env.USERPROFILE || ''
-    return `${home}/${PROFILES_DIR_BASE}`
+  get configDir(): string {
+    return this.options.configDir || this.container.paths.resolve(this.container.os.homedir, '.config', 'gws')
   }
 
   private async resolveBinary(): Promise<string | null> {
@@ -144,28 +143,31 @@ export class Gws extends Feature<GwsState, GwsOptions> {
   }
 
   private buildEnv(profile?: string): Record<string, string> {
+    const env: Record<string, string> = {
+      GOOGLE_WORKSPACE_CLI_CONFIG_DIR: this.configDir,
+    }
+
     const targetProfile = profile || this.currentProfile
-    if (!targetProfile) return {}
+    if (!targetProfile) return env
 
     // Handle inline credentials path (from useCredentials)
     if (targetProfile.startsWith('__inline:')) {
       const path = targetProfile.slice('__inline:'.length)
-      return { GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: path }
+      return { ...env, GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: path }
     }
 
-    const dir = `${this.profilesDir}/${targetProfile}`
+    const dir = `${this.configDir}/${targetProfile}`
 
     // Check for profile.json first (oauth login reference)
     const profileJsonPath = `${dir}/profile.json`
     if (this.fs.exists(profileJsonPath)) {
       try {
         const cfg = JSON.parse(this.fs.readFile(profileJsonPath))
-        const env: Record<string, string> = {}
-        if (cfg.credentialsFile) {
-          env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = cfg.credentialsFile
-        }
         if (cfg.account) {
           env.GOOGLE_WORKSPACE_CLI_ACCOUNT = cfg.account
+        }
+        if (cfg.credentialsFile) {
+          env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = cfg.credentialsFile
         }
         return env
       } catch {}
@@ -176,13 +178,13 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     const credPath = `${dir}/credentials.json`
 
     if (this.fs.exists(saPath)) {
-      return { GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: saPath }
+      return { ...env, GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: saPath }
     }
     if (this.fs.exists(credPath)) {
-      return { GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: credPath }
+      return { ...env, GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: credPath }
     }
 
-    return {}
+    return env
   }
 
   private buildArgs(
@@ -250,6 +252,8 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     const args = this.buildArgs(path, options)
     const env = this.buildEnv(options?.profile)
     const commandStr = `gws ${args.join(' ')}`
+    
+    console.log('gws exec', { args, env })
 
     const result = await this.proc.spawnAndCapture('gws', args, {
       env: { ...process.env, ...env },
@@ -287,6 +291,8 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     const env = this.buildEnv(options?.profile)
     const commandStr = `gws ${args.join(' ')}`
 
+    console.log('gws helper', { args, env })
+
     const result = await this.proc.spawnAndCapture('gws', args, {
       env: { ...process.env, ...env },
     })
@@ -305,16 +311,16 @@ export class Gws extends Feature<GwsState, GwsOptions> {
 
   /** Activates a named credential profile. Throws if the profile directory does not exist. */
   useProfile(name: string): void {
-    const dir = `${this.profilesDir}/${name}`
+    const dir = `${this.configDir}/${name}`
     if (!this.fs.exists(dir)) {
-      throw new Error(`GWS profile '${name}' not found in ${this.profilesDir}`)
+      throw new Error(`GWS profile '${name}' not found in ${this.configDir}`)
     }
-    this.state.set('activeProfile', name)
+    this.state.setState({ activeProfile: name })
   }
 
   /** Clears the active credential profile so subsequent commands use default credentials. */
   clearProfile(): void {
-    this.state.set('activeProfile', null)
+    this.state.setState({ activeProfile: null })
   }
 
   /** Points all subsequent commands at a specific credentials file path, bypassing the profile system. */
@@ -328,11 +334,11 @@ export class Gws extends Feature<GwsState, GwsOptions> {
 
   /** Lists all available credential profile names found in the profiles directory. */
   profiles(): string[] {
-    if (!this.fs.exists(this.profilesDir)) return []
+    if (!this.fs.exists(this.configDir)) return []
     try {
-      const entries = this.fs.readdirSync(this.profilesDir)
+      const entries = this.fs.readdirSync(this.configDir)
       return entries.filter((name: string) => {
-        const dir = `${this.profilesDir}/${name}`
+        const dir = `${this.configDir}/${name}`
         return this.fs.exists(`${dir}/profile.json`) || this.fs.exists(`${dir}/credentials.json`) || this.fs.exists(`${dir}/service-account.json`)
       })
     } catch {

@@ -1,0 +1,23 @@
+# This is the Agentic Loop Config File
+# Currently experimental.  Looking into it as a way of saving global preferences
+# None of these have any effect currently, but looking into it as a way to control
+# certain behaviors
+taskScheduler:
+  # the number of seconds between ticks
+  interval: 10
+  # the default assistant to use when running plays
+  defaultAssistant: claude
+
+# This section can be used to control the communications service which allows you
+# to communicate with an assistant over chat  
+communications:
+  telegram:
+    enabled: false
+    # add the telegram user ids you want to be able to react to here
+    trustedSenders:
+      - 1234567890
+  imsg:
+    enabled: true
+    # add the numbers you want to be able to react to here
+    trustedSenders:
+      - +13125551212
