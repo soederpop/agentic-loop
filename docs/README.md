@@ -6,12 +6,21 @@ These models are used to define structure to various documents which are used as
 
 Every subfolder (e.g. `goals`, `ideas`, `tasks`) tells you what structure the documents inside of it will need to follow in terms of the YAML frontmatter (e.g. for tags, status tracking ) and section headings.  ( Certain ## H2 Headings the document expects you to use )
 
+
+### Common Gotcha's When Writing Plans / Projects
+
+- project H1 Titles should be title cased matching the kebab-case naming of the project file. e.g. "Web Chat For Chief" -> web-chat-for-chief.md
+- plans should go in docs/plans/:projectSlug/whatever.md
+- plans should reference the project in the meta as well
+- the "## Execution" section of a plan should include list items with links to the plans markdown documents
+- Each list item of the execution section is a stage, a list item with multiple plan links will execute those in parallel
+
 ## Summary
 
 ```
 Collection: /Users/jonathansoeder/@agentic-loop/docs
 Root: /Users/jonathansoeder/@agentic-loop/docs
-Items: 30
+Items: 31
 
   Model: Goal
     Description: A Goal has metadata (horizon) and sections (Success Criteria, Motivation).

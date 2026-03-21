@@ -87,3 +87,15 @@ Server → Client:
   - response **streams** (multiple incremental updates)
   - server stays stable across multiple messages
 
+## Retrospective
+
+The MVP came together quickly because the existing patterns in the repo — the Express server setup from `commands/voice/train/server.ts` and the assistant streaming from `features/voice-chat.ts` — mapped almost 1:1 onto what was needed. The assistant's `chunk` event is the core primitive; everything else is plumbing to get those chunks into a browser.
+
+The `ws` library (already a dependency of luca) attaches cleanly to Express's underlying `http.Server` via `expressServer._listener`. This is an internal property — if the luca framework ever exposes a public `httpServer` getter on `ExpressServer`, Plan 02 should migrate to it.
+
+One assistant instance is created per WebSocket connection. This gives each browser tab its own conversation thread with no cross-talk. For Plan 02's persistence work, this means the session-to-assistant mapping is already naturally scoped — the question is just how to rehydrate conversation history on reconnect.
+
+The HTML is a single file with inline CSS and JS, no build step. This makes iteration fast but will get unwieldy if Plan 03 adds significant UI. Consider extracting CSS and JS into separate files at that point.
+
+Default port is 3100, default host is `0.0.0.0`. LAN IP detection uses `os.networkInterfaces()` and picks the first non-internal IPv4 address.
+

@@ -11,6 +11,7 @@
 - [Web Based Streaming Chat Experience](./ideas/develop-a-web-based-streaming-chat-experience.md)
 - [Develop Voice Commands for Working with Docs](./ideas/develop-voice-commands-for-working-with-docs.md)
 - [Draw Command Screenshotting](./ideas/draw-command-screenshotting.md)
+- [ideas/imsg-wrapper](./ideas/imsg-wrapper.md)
 
 ## Memories
 
@@ -32,7 +33,7 @@
 
 ## Projects
 
-- [Web Chat for Chief (LAN Streaming)](./projects/web-chat-for-chief.md)
+- [Web Chat for Chief](./projects/web-chat-for-chief.md)
 
 ## Prompts
 
