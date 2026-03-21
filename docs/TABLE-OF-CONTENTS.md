@@ -29,6 +29,7 @@
 
 ## Reports
 
+- [Friction Report #2 — Prompt Output Analysis](./reports/friction/2026-03-20-20.md)
 - [Friction Report — Agentic Loop Prompt Outputs](./reports/friction/2026-03-20-22.md)
 - [Onboarding Troubleshooting Log](./reports/onboarding-troubleshooting-log.md)
 
