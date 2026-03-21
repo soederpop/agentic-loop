@@ -22,8 +22,6 @@
 export async function main(container: any) {
   // Discover project-level helpers (commands/, features/, endpoints/)
   await container.helpers.discoverAll()
-  
-
 
   const assistantsManager = container.feature('assistantsManager')
 
@@ -38,4 +36,9 @@ export async function main(container: any) {
 
    await container.docs.load()
 
+   container.onMissingCommand(async ({ phrase }) => {
+	// This actually gives us a pretty good opportunity to hook into an assistant to help correct the problem
+	// and do the right thing, right now we'll just display help like the luca cli usually would
+	container.command('help').dispatch()
+   })
 }
