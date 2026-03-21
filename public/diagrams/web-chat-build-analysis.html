@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Web Chat for Chief — Build Analysis</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0c1222;
+      --bg-gradient: linear-gradient(145deg, #0c1222 0%, #111a2e 40%, #0e1628 100%);
+      --surface: #141e33;
+      --surface-elevated: #1a2640;
+      --surface-recessed: #0a0f1c;
+      --border: rgba(255,255,255,0.06);
+      --border-accent: rgba(212,167,58,0.2);
+      --text: #e8e4dc;
+      --text-dim: #8a9ab5;
+      --text-muted: #556280;
+      --accent-gold: #d4a73a;
+      --accent-gold-dim: rgba(212,167,58,0.12);
+      --accent-blue: #3b82c4;
+      --accent-blue-dim: rgba(59,130,196,0.12);
+      --accent-teal: #2dd4a8;
+      --accent-teal-dim: rgba(45,212,168,0.1);
+      --accent-rose: #e06060;
+      --accent-rose-dim: rgba(224,96,96,0.1);
+      --accent-amber: #e5a33a;
+      --accent-amber-dim: rgba(229,163,58,0.1);
+      --font-display: 'Instrument Serif', Georgia, serif;
+      --font-body: 'DM Sans', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f1eb;
+        --bg-gradient: linear-gradient(145deg, #f4f1eb 0%, #ebe7df 40%, #f0ece4 100%);
+        --surface: #ffffff;
+        --surface-elevated: #ffffff;
+        --surface-recessed: #e8e4dc;
+        --border: rgba(0,0,0,0.08);
+        --border-accent: rgba(180,130,30,0.2);
+        --text: #1a1a2e;
+        --text-dim: #5a6070;
+        --text-muted: #8a8e98;
+        --accent-gold: #b07d20;
+        --accent-gold-dim: rgba(176,125,32,0.08);
+        --accent-blue: #2a6aaa;
+        --accent-blue-dim: rgba(42,106,170,0.08);
+        --accent-teal: #1a9a78;
+        --accent-teal-dim: rgba(26,154,120,0.06);
+        --accent-rose: #c04040;
+        --accent-rose-dim: rgba(192,64,64,0.06);
+        --accent-amber: #c08020;
+        --accent-amber-dim: rgba(192,128,32,0.06);
+        --surface: #fff;
+        --surface-elevated: #fff;
+      }
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font-body);
+      background: var(--bg-gradient);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ─── NAV ─── */
+    .nav-bar {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--surface-recessed);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+      padding: 0 2rem;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .nav-bar::-webkit-scrollbar { display: none; }
+    .nav-bar ul {
+      display: flex; gap: 0.25rem; list-style: none;
+      max-width: 1200px; margin: 0 auto;
+    }
+    .nav-bar a {
+      display: block; padding: 0.75rem 1rem;
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 500;
+      color: var(--text-dim); text-decoration: none;
+      letter-spacing: 0.04em; text-transform: uppercase;
+      white-space: nowrap;
+      border-bottom: 2px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+    }
+    .nav-bar a:hover { color: var(--accent-gold); border-bottom-color: var(--accent-gold); }
+
+    /* ─── LAYOUT ─── */
+    .page { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+
+    /* ─── HERO ─── */
+    .hero {
+      padding: 3rem 0 2rem;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2.5rem;
+    }
+    .hero-label {
+      font-family: var(--font-mono); font-size: 0.7rem; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase;
+      color: var(--accent-gold);
+      margin-bottom: 0.75rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .hero-label::before {
+      content: ''; display: inline-block;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent-teal);
+      box-shadow: 0 0 6px var(--accent-teal);
+    }
+    .hero h1 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      line-height: 1.15; color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+    .hero h1 em { font-style: italic; color: var(--accent-gold); }
+    .hero-sub {
+      font-size: 1.05rem; color: var(--text-dim);
+      max-width: 640px; line-height: 1.7;
+    }
+
+    /* ─── KPI ROW ─── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2.5rem;
+    }
+    .kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .kpi::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: var(--kpi-accent, var(--accent-gold));
+    }
+    .kpi-value {
+      font-family: var(--font-mono); font-weight: 600;
+      font-size: 1.8rem; line-height: 1.2;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+    }
+    .kpi-label {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 500;
+      letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--text-muted); margin-top: 0.35rem;
+    }
+    .kpi-sub {
+      font-size: 0.78rem; color: var(--text-dim); margin-top: 0.25rem;
+    }
+
+    /* ─── SECTIONS ─── */
+    section { margin-bottom: 3rem; scroll-margin-top: 4rem; }
+    .section-label {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 0.5rem;
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .section-label .dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      display: inline-block;
+    }
+    .section-label .dot--gold { background: var(--accent-gold); }
+    .section-label .dot--blue { background: var(--accent-blue); }
+    .section-label .dot--teal { background: var(--accent-teal); }
+    .section-label .dot--rose { background: var(--accent-rose); }
+    .section-label .dot--amber { background: var(--accent-amber); }
+    section h2 {
+      font-family: var(--font-display); font-weight: 400;
+      font-size: 1.6rem; margin-bottom: 1.25rem;
+      color: var(--text);
+    }
+
+    /* ─── CARDS ─── */
+    .ve-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      min-width: 0;
+    }
+    .ve-card--hero {
+      background: var(--surface-elevated);
+      border-color: var(--border-accent);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    }
+    .ve-card--recessed {
+      background: var(--surface-recessed);
+      border-color: var(--border);
+    }
+
+    /* ─── TIMELINE ─── */
+    .timeline {
+      display: flex; gap: 0; position: relative;
+      padding: 2rem 0;
+    }
+    .timeline::before {
+      content: '';
+      position: absolute; top: 50%; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, var(--accent-gold), var(--accent-blue), var(--accent-teal));
+      transform: translateY(-50%);
+    }
+    .timeline-phase {
+      flex: 1; position: relative; text-align: center;
+      padding: 0 0.5rem;
+    }
+    .timeline-dot {
+      width: 16px; height: 16px; border-radius: 50%;
+      border: 3px solid var(--bg);
+      margin: 0 auto 1rem;
+      position: relative; z-index: 2;
+    }
+    .timeline-phase:nth-child(1) .timeline-dot { background: var(--accent-gold); box-shadow: 0 0 10px var(--accent-gold-dim); }
+    .timeline-phase:nth-child(2) .timeline-dot { background: var(--accent-blue); box-shadow: 0 0 10px var(--accent-blue-dim); }
+    .timeline-phase:nth-child(3) .timeline-dot { background: var(--accent-teal); box-shadow: 0 0 10px var(--accent-teal-dim); }
+    .timeline-time {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--text-muted); margin-bottom: 0.5rem;
+    }
+    .timeline-title {
+      font-family: var(--font-body); font-weight: 600;
+      font-size: 0.85rem; color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .timeline-cost {
+      font-family: var(--font-mono); font-size: 0.78rem;
+      color: var(--accent-gold);
+    }
+    .timeline-duration {
+      font-family: var(--font-mono); font-size: 0.68rem;
+      color: var(--text-dim); margin-top: 0.15rem;
+    }
+
+    /* ─── CHART CONTAINERS ─── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+    .chart-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+    }
+    .chart-box h3 {
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-dim); margin-bottom: 1rem;
+    }
+    .chart-box canvas { max-height: 280px; }
+
+    /* ─── PHASE DETAILS ─── */
+    .phase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; }
+    .phase-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .phase-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    }
+    .phase-card:nth-child(1)::before { background: var(--accent-gold); }
+    .phase-card:nth-child(2)::before { background: var(--accent-blue); }
+    .phase-card:nth-child(3)::before { background: var(--accent-teal); }
+    .phase-card h3 {
+      font-family: var(--font-body); font-weight: 700;
+      font-size: 1rem; margin-bottom: 0.75rem;
+    }
+    .phase-card h4 {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); margin: 1rem 0 0.5rem;
+    }
+    .phase-card ul {
+      list-style: none; padding: 0;
+    }
+    .phase-card li {
+      font-size: 0.85rem; color: var(--text-dim);
+      padding: 0.3rem 0; padding-left: 1.2rem;
+      position: relative; line-height: 1.5;
+      overflow-wrap: break-word;
+    }
+    .phase-card li::before {
+      content: ''; position: absolute; left: 0; top: 0.65rem;
+      width: 5px; height: 5px; border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .phase-card li code {
+      font-family: var(--font-mono); font-size: 0.78rem;
+      background: var(--surface-recessed); padding: 0.1rem 0.35rem;
+      border-radius: 3px; color: var(--accent-gold);
+    }
+
+    /* ─── ISSUES TABLE ─── */
+    .issues-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border); }
+    .issues-table {
+      width: 100%; border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .issues-table th {
+      font-family: var(--font-mono); font-size: 0.68rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      background: var(--surface-recessed);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0;
+    }
+    .issues-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+    .issues-table tr:last-child td { border-bottom: none; }
+    .issues-table tr:nth-child(even) td { background: rgba(255,255,255,0.015); }
+    .issues-table code {
+      font-family: var(--font-mono); font-size: 0.78rem;
+      background: var(--surface-recessed); padding: 0.1rem 0.35rem;
+      border-radius: 3px; color: var(--accent-gold);
+    }
+    .badge {
+      display: inline-block; padding: 0.15rem 0.5rem;
+      border-radius: 3px; font-family: var(--font-mono);
+      font-size: 0.68rem; font-weight: 600;
+    }
+    .badge--gold { background: var(--accent-gold-dim); color: var(--accent-gold); }
+    .badge--blue { background: var(--accent-blue-dim); color: var(--accent-blue); }
+    .badge--teal { background: var(--accent-teal-dim); color: var(--accent-teal); }
+    .badge--rose { background: var(--accent-rose-dim); color: var(--accent-rose); }
+    .badge--ok { background: var(--accent-teal-dim); color: var(--accent-teal); }
+
+    /* ─── ARCHITECTURE ─── */
+    .arch-flow {
+      display: flex; align-items: stretch; gap: 0;
+      padding: 2rem 0; overflow-x: auto;
+    }
+    .arch-node {
+      flex: 0 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.5rem;
+      text-align: center;
+      min-width: 140px;
+      position: relative;
+    }
+    .arch-node-title {
+      font-family: var(--font-mono); font-size: 0.78rem; font-weight: 600;
+      color: var(--text); margin-bottom: 0.35rem;
+    }
+    .arch-node-detail {
+      font-size: 0.72rem; color: var(--text-dim); line-height: 1.4;
+    }
+    .arch-arrow {
+      flex: 0 0 auto;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 0.5rem;
+      color: var(--text-muted); font-size: 1.2rem;
+    }
+    .arch-arrow-label {
+      font-family: var(--font-mono); font-size: 0.62rem;
+      color: var(--text-muted);
+      position: absolute; top: -1rem; left: 50%;
+      transform: translateX(-50%); white-space: nowrap;
+    }
+    .arch-node--highlight { border-color: var(--accent-gold); }
+    .arch-node--highlight .arch-node-title { color: var(--accent-gold); }
+
+    /* ─── DELIVERY TRACK ─── */
+    .delivery-track {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) { .delivery-track { grid-template-columns: 1fr; } }
+    .delivery-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      position: relative;
+    }
+    .delivery-step::before {
+      content: attr(data-step);
+      font-family: var(--font-display); font-size: 3rem;
+      color: var(--border);
+      position: absolute; top: 0.5rem; right: 1rem;
+      line-height: 1;
+    }
+    .delivery-step h3 {
+      font-family: var(--font-body); font-weight: 700; font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+    }
+    .delivery-analogy {
+      font-family: var(--font-display); font-style: italic;
+      font-size: 1rem; color: var(--accent-gold);
+      margin-bottom: 0.5rem;
+    }
+    .delivery-desc {
+      font-size: 0.82rem; color: var(--text-dim); line-height: 1.6;
+    }
+    .delivery-files {
+      margin-top: 0.75rem; padding-top: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    .delivery-files code {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      background: var(--surface-recessed); padding: 0.15rem 0.4rem;
+      border-radius: 3px; color: var(--accent-gold);
+      display: inline-block; margin: 0.15rem 0.15rem 0.15rem 0;
+    }
+
+    /* ─── PLAN ADHERENCE ─── */
+    .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    @media (max-width: 768px) { .plan-grid { grid-template-columns: 1fr; } }
+    .plan-col h3 {
+      font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 1rem;
+      padding-bottom: 0.5rem; border-bottom: 1px solid var(--border);
+    }
+    .plan-item {
+      padding: 0.6rem 0; border-bottom: 1px solid var(--border);
+      font-size: 0.85rem; color: var(--text-dim);
+      display: flex; align-items: flex-start; gap: 0.5rem;
+    }
+    .plan-item:last-child { border-bottom: none; }
+    .plan-check {
+      width: 16px; height: 16px; flex-shrink: 0; margin-top: 0.15rem;
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 0.6rem; font-weight: 700;
+    }
+    .plan-check--yes { background: var(--accent-teal-dim); color: var(--accent-teal); }
+    .plan-check--deviation { background: var(--accent-amber-dim); color: var(--accent-amber); }
+
+    /* ─── ANIMATIONS ─── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeScale {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .animate { animation: fadeUp 0.5s ease-out both; }
+    .animate-scale { animation: fadeScale 0.4s ease-out both; }
+    @media (prefers-reduced-motion: reduce) {
+      .animate, .animate-scale { animation: none; opacity: 1; transform: none; }
+    }
+
+    /* ─── FOOTER ─── */
+    .footer {
+      margin-top: 3rem; padding: 1.5rem 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-family: var(--font-mono); font-size: 0.68rem;
+      color: var(--text-muted); letter-spacing: 0.04em;
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav-bar">
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#timeline">Timeline</a></li>
+    <li><a href="#efficiency">Efficiency</a></li>
+    <li><a href="#phases">Phase Details</a></li>
+    <li><a href="#issues">Issues &amp; Recovery</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#adherence">Plan Adherence</a></li>
+    <li><a href="#delivery">Incremental Delivery</a></li>
+  </ul>
+</nav>
+
+<div class="page">
+
+  <!-- HERO -->
+  <header class="hero animate" style="animation-delay: 0.05s;">
+    <div class="hero-label">Build Analysis — completed 2026-03-21</div>
+    <h1>Web Chat for <em>Chief</em></h1>
+    <p class="hero-sub">
+      A LAN-accessible streaming web chat UI built autonomously across 3 phases in ~12 minutes.
+      Express + WebSocket server with session persistence, assistant switching, and real-time tool activity.
+    </p>
+  </header>
+
+  <!-- KPIs -->
+  <section id="overview">
+    <div class="kpi-row">
+      <div class="kpi animate-scale" style="animation-delay: 0.1s; --kpi-accent: var(--accent-gold);">
+        <div class="kpi-value">$5.47</div>
+        <div class="kpi-label">Total Cost</div>
+        <div class="kpi-sub">across 3 phases</div>
+      </div>
+      <div class="kpi animate-scale" style="animation-delay: 0.15s; --kpi-accent: var(--accent-blue);">
+        <div class="kpi-value">133</div>
+        <div class="kpi-label">Total Turns</div>
+        <div class="kpi-sub">agent interactions</div>
+      </div>
+      <div class="kpi animate-scale" style="animation-delay: 0.2s; --kpi-accent: var(--accent-teal);">
+        <div class="kpi-value">217</div>
+        <div class="kpi-label">Tool Calls</div>
+        <div class="kpi-sub">$0.025 per call</div>
+      </div>
+      <div class="kpi animate-scale" style="animation-delay: 0.25s; --kpi-accent: var(--accent-amber);">
+        <div class="kpi-value">~12m</div>
+        <div class="kpi-label">Wall Time</div>
+        <div class="kpi-sub">03:29 → 03:41</div>
+      </div>
+      <div class="kpi animate-scale" style="animation-delay: 0.3s; --kpi-accent: var(--accent-rose);">
+        <div class="kpi-value">2</div>
+        <div class="kpi-label">Files Created</div>
+        <div class="kpi-sub">+ 5 modified</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TIMELINE -->
+  <section id="timeline" class="animate" style="animation-delay: 0.2s;">
+    <div class="section-label"><span class="dot dot--gold"></span>Build Timeline</div>
+    <h2>Three phases, twelve minutes</h2>
+    <div class="timeline">
+      <div class="timeline-phase">
+        <div class="timeline-time">03:29:50 UTC</div>
+        <div class="timeline-dot"></div>
+        <div class="timeline-title">Phase 1: MVP</div>
+        <div class="timeline-cost">$2.07 · 50 turns</div>
+        <div class="timeline-duration">94 tool calls</div>
+      </div>
+      <div class="timeline-phase">
+        <div class="timeline-time">03:36:31 UTC</div>
+        <div class="timeline-dot"></div>
+        <div class="timeline-title">Phase 2: Sessions</div>
+        <div class="timeline-cost">$1.96 · 56 turns</div>
+        <div class="timeline-duration">80 tool calls</div>
+      </div>
+      <div class="timeline-phase">
+        <div class="timeline-time">03:41:26 UTC</div>
+        <div class="timeline-dot"></div>
+        <div class="timeline-title">Phase 3: Tools UI</div>
+        <div class="timeline-cost">$1.45 · 27 turns</div>
+        <div class="timeline-duration">43 tool calls</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EFFICIENCY CHARTS -->
+  <section id="efficiency" class="animate" style="animation-delay: 0.25s;">
+    <div class="section-label"><span class="dot dot--blue"></span>Cost &amp; Efficiency</div>
+    <h2>Resource utilization per phase</h2>
+    <div class="chart-grid">
+      <div class="chart-box">
+        <h3>Cost &amp; Turns by Phase</h3>
+        <canvas id="costTurnsChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Tool Calls by Phase</h3>
+        <canvas id="toolCallsChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Efficiency: Cost per Tool Call</h3>
+        <canvas id="efficiencyChart"></canvas>
+      </div>
+      <div class="chart-box">
+        <h3>Tool Type Distribution (All Phases)</h3>
+        <canvas id="toolTypesChart"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- PHASE DETAILS -->
+  <section id="phases" class="animate" style="animation-delay: 0.3s;">
+    <div class="section-label"><span class="dot dot--teal"></span>Phase Details</div>
+    <h2>What each phase delivered</h2>
+    <div class="phase-grid">
+      <div class="phase-card">
+        <h3>Phase 1: MVP LAN Streaming Chat</h3>
+        <h4>Deliverables</h4>
+        <ul>
+          <li><code>commands/web-chat.ts</code> — Express + WS server on <code>0.0.0.0</code></li>
+          <li><code>public/web-chat/index.html</code> — dark-themed single-file chat UI</li>
+        </ul>
+        <h4>Key Decisions</h4>
+        <ul>
+          <li>Used <code>expressServer._listener</code> for HTTP server access (not <code>.server</code>)</li>
+          <li>Removed <code>path</code> import in favor of <code>container.paths</code></li>
+          <li>Frameworkless single-file HTML — no build step</li>
+        </ul>
+        <h4>Verification</h4>
+        <ul>
+          <li>Server starts, prints local + LAN URLs</li>
+          <li>Health endpoint responds at <code>/api/health</code></li>
+          <li>WebSocket streams chunks, fires <code>assistant_message_complete</code></li>
+        </ul>
+      </div>
+      <div class="phase-card">
+        <h3>Phase 2: Session Persistence &amp; Picker</h3>
+        <h4>Deliverables</h4>
+        <ul>
+          <li>Session management via <code>localStorage</code> sessionId</li>
+          <li><code>init</code>/<code>init_ok</code> WS handshake protocol</li>
+          <li><code>GET /api/assistants</code> endpoint</li>
+          <li>Assistant picker dropdown in UI header</li>
+        </ul>
+        <h4>Key Decisions</h4>
+        <ul>
+          <li><code>historyMode: 'session'</code> with <code>resumeThread()</code></li>
+          <li>Session key = <code>sessionId:assistantId</code> — each assistant gets own thread</li>
+          <li>Assistants discovered dynamically from <code>assistantsManager</code></li>
+        </ul>
+        <h4>Verification</h4>
+        <ul>
+          <li>Fresh session → <code>historyLength: 1</code></li>
+          <li>Reconnect preserves history — assistant remembers context</li>
+          <li>Switch assistant → separate conversation thread</li>
+          <li>Invalid assistant → clean error message</li>
+        </ul>
+      </div>
+      <div class="phase-card">
+        <h3>Phase 3: Tool Activity UI</h3>
+        <h4>Deliverables</h4>
+        <ul>
+          <li>Server subscribes to <code>toolCall</code>/<code>toolResult</code>/<code>toolError</code> events</li>
+          <li>Collapsible "Tools" panel in chat UI</li>
+          <li><code>tool_start</code> / <code>tool_end</code> protocol messages</li>
+        </ul>
+        <h4>Key Decisions</h4>
+        <ul>
+          <li>Listeners scoped per-turn, cleaned up in <code>finally</code> block</li>
+          <li>Truncated summaries to keep payloads small</li>
+          <li>Status icons: blinking amber (running), green (success), red (error)</li>
+        </ul>
+        <h4>Verification</h4>
+        <ul>
+          <li>Build transpilation check passed via <code>bun build</code></li>
+          <li>Panel auto-expands during streaming, collapsible by header click</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ISSUES & RECOVERY -->
+  <section id="issues" class="animate" style="animation-delay: 0.35s;">
+    <div class="section-label"><span class="dot dot--rose"></span>Issues &amp; Recovery</div>
+    <h2>Problems encountered and how they were resolved</h2>
+    <div class="issues-table-wrap">
+      <table class="issues-table">
+        <thead>
+          <tr>
+            <th>Phase</th>
+            <th>Issue</th>
+            <th>Root Cause</th>
+            <th>Resolution</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="badge badge--gold">Phase 1</span></td>
+            <td><code>expressServer.server</code> doesn't exist</td>
+            <td>Luca Express wrapper uses <code>_listener</code> for the raw <code>http.Server</code></td>
+            <td>Discovered via source reading, used <code>(expressServer as any)._listener</code></td>
+            <td><span class="badge badge--ok">Resolved</span></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--gold">Phase 1</span></td>
+            <td>Port 3100 already in use</td>
+            <td>Previous server instance still running</td>
+            <td>Tested on alternate port 3111, added <code>lsof</code> kill pattern</td>
+            <td><span class="badge badge--ok">Resolved</span></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--gold">Phase 1</span></td>
+            <td>Imported <code>path</code> (violates container rules)</td>
+            <td>CLAUDE.md forbids importing Node builtins directly</td>
+            <td>Refactored to <code>container.paths.resolve()</code></td>
+            <td><span class="badge badge--ok">Resolved</span></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--blue">Phase 2</span></td>
+            <td><code>historyMode: 'thread'</code> doesn't exist</td>
+            <td>Invalid mode — valid options are <code>lifecycle|daily|persistent|session</code></td>
+            <td>Discovered via runtime error, switched to <code>'session'</code></td>
+            <td><span class="badge badge--ok">Resolved</span></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--blue">Phase 2</span></td>
+            <td>Port 3100 conflict (again)</td>
+            <td>Lingering process from Phase 1 testing</td>
+            <td><code>lsof -ti:3100 | xargs kill -9</code> before restart</td>
+            <td><span class="badge badge--ok">Resolved</span></td>
+          </tr>
+          <tr>
+            <td><span class="badge badge--teal">Phase 3</span></td>
+            <td>Edit tool failed on tab-indented file</td>
+            <td>Indentation mismatch between Edit's <code>old_string</code> and actual file content</td>
+            <td>Abandoned incremental edit, rewrote full file via Write tool</td>
+            <td><span class="badge badge--ok">Resolved</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="architecture" class="animate" style="animation-delay: 0.4s;">
+    <div class="section-label"><span class="dot dot--amber"></span>System Architecture</div>
+    <h2>Final system — after all three phases</h2>
+    <div class="ve-card--hero ve-card" style="overflow-x: auto;">
+      <div class="arch-flow">
+        <div class="arch-node">
+          <div class="arch-node-title">Browser</div>
+          <div class="arch-node-detail">
+            Single-file HTML<br>
+            localStorage sessionId<br>
+            Assistant picker
+          </div>
+        </div>
+        <div class="arch-arrow" style="position: relative;">
+          <span class="arch-arrow-label">WebSocket</span>
+          &#x2192;
+        </div>
+        <div class="arch-node arch-node--highlight">
+          <div class="arch-node-title">web-chat.ts</div>
+          <div class="arch-node-detail">
+            Express server<br>
+            WS protocol handler<br>
+            Session map
+          </div>
+        </div>
+        <div class="arch-arrow" style="position: relative;">
+          <span class="arch-arrow-label">init / resume</span>
+          &#x2192;
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-title">AssistantsManager</div>
+          <div class="arch-node-detail">
+            create() + resumeThread()<br>
+            historyMode: 'session'<br>
+            Per-assistant threads
+          </div>
+        </div>
+        <div class="arch-arrow" style="position: relative;">
+          <span class="arch-arrow-label">ask()</span>
+          &#x2192;
+        </div>
+        <div class="arch-node">
+          <div class="arch-node-title">Assistant</div>
+          <div class="arch-node-detail">
+            Chief (default)<br>
+            Streaming chunks<br>
+            Tool lifecycle events
+          </div>
+        </div>
+      </div>
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+        <h3 style="font-family: var(--font-mono); font-size: 0.72rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.75rem;">WebSocket Protocol (v2)</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; font-size: 0.82rem;">
+          <div>
+            <div style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--accent-blue); margin-bottom: 0.5rem; font-weight: 600;">CLIENT → SERVER</div>
+            <div style="color: var(--text-dim); line-height: 1.8;">
+              <code>init</code> { sessionId, assistantId? }<br>
+              <code>user_message</code> { text }
+            </div>
+          </div>
+          <div>
+            <div style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--accent-teal); margin-bottom: 0.5rem; font-weight: 600;">SERVER → CLIENT</div>
+            <div style="color: var(--text-dim); line-height: 1.8;">
+              <code>init_ok</code> / <code>init_error</code><br>
+              <code>assistant_message_start</code> / <code>chunk</code> / <code>assistant_message_complete</code><br>
+              <code>tool_start</code> { id, name, startedAt }<br>
+              <code>tool_end</code> { id, name, ok, durationMs, summary? }
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PLAN ADHERENCE -->
+  <section id="adherence" class="animate" style="animation-delay: 0.45s;">
+    <div class="section-label"><span class="dot dot--gold"></span>Plan Adherence</div>
+    <h2>Planned vs. actual delivery</h2>
+    <div class="plan-grid">
+      <div class="plan-col">
+        <h3>Planned Requirements</h3>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>LAN-accessible server on <code>0.0.0.0</code></span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>Single-page frameworkless UI (no build step)</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>WebSocket streaming transport</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>Targets Chief assistant by default</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>Session persistence via <code>localStorage</code></span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>Assistant picker dropdown</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>Tool activity UI (collapsible panel)</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>No "presenter inside chat" — stays out of scope</span>
+        </div>
+      </div>
+      <div class="plan-col">
+        <h3>Deviations &amp; Adaptations</h3>
+        <div class="plan-item">
+          <span class="plan-check plan-check--deviation">&#x21C4;</span>
+          <span>Plan spec'd <code>expressServer.server</code> — actual API is <code>._listener</code> (undocumented)</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--deviation">&#x21C4;</span>
+          <span>Plan spec'd <code>historyMode: 'thread'</code> — switched to <code>'session'</code> at runtime</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--deviation">&#x21C4;</span>
+          <span>Phase 3 used full file rewrite instead of incremental edits (tab indentation issue)</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>All 3 plan verification criteria met or exceeded</span>
+        </div>
+        <div class="plan-item">
+          <span class="plan-check plan-check--yes">&#10003;</span>
+          <span>Project status correctly updated through building → completed</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- INCREMENTAL DELIVERY -->
+  <section id="delivery" class="animate" style="animation-delay: 0.5s;">
+    <div class="section-label"><span class="dot dot--teal"></span>Incremental Delivery</div>
+    <h2>Skateboard → Bicycle → Motorcycle</h2>
+    <div class="delivery-track">
+      <div class="delivery-step" data-step="1">
+        <div class="delivery-analogy">Skateboard</div>
+        <h3>MVP Streaming Chat</h3>
+        <div class="delivery-desc">
+          A fully working chat UI. Type a message, get a streaming response from Chief.
+          LAN-accessible from any device. Functional enough to use and give feedback on immediately.
+        </div>
+        <div class="delivery-files">
+          <code>commands/web-chat.ts</code>
+          <code>public/web-chat/index.html</code>
+        </div>
+      </div>
+      <div class="delivery-step" data-step="2">
+        <div class="delivery-analogy">Bicycle</div>
+        <h3>Sessions &amp; Switching</h3>
+        <div class="delivery-desc">
+          Page reload no longer loses context. Switch between assistants without losing separate threads.
+          Feels like a real chat app with persistent conversations.
+        </div>
+        <div class="delivery-files">
+          <code>init/init_ok</code> protocol
+          <code>/api/assistants</code>
+          <code>localStorage</code> sessions
+        </div>
+      </div>
+      <div class="delivery-step" data-step="3">
+        <div class="delivery-analogy">Motorcycle</div>
+        <h3>Tool Transparency</h3>
+        <div class="delivery-desc">
+          See what Chief is doing in real-time. Tool calls appear with live status indicators,
+          durations, and summaries. The chat is no longer a black box.
+        </div>
+        <div class="delivery-files">
+          <code>tool_start</code>/<code>tool_end</code> events
+          Collapsible tools panel
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    Generated 2026-03-20 · Web Chat for Chief Build Analysis · Agentic Loop
+  </footer>
+
+</div>
+
+<script>
+  // Chart.js global config
+  Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--text-dim').trim() || '#8a9ab5';
+  Chart.defaults.borderColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || 'rgba(255,255,255,0.06)';
+  Chart.defaults.font.family = "'JetBrains Mono', 'Fira Code', monospace";
+  Chart.defaults.font.size = 11;
+
+  const gold = '#d4a73a';
+  const blue = '#3b82c4';
+  const teal = '#2dd4a8';
+  const rose = '#e06060';
+  const amber = '#e5a33a';
+  const goldDim = 'rgba(212,167,58,0.25)';
+  const blueDim = 'rgba(59,130,196,0.25)';
+  const tealDim = 'rgba(45,212,168,0.25)';
+
+  // Cost & Turns Chart
+  new Chart(document.getElementById('costTurnsChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Phase 1: MVP', 'Phase 2: Sessions', 'Phase 3: Tools UI'],
+      datasets: [
+        {
+          label: 'Cost ($)',
+          data: [2.07, 1.96, 1.45],
+          backgroundColor: [goldDim, blueDim, tealDim],
+          borderColor: [gold, blue, teal],
+          borderWidth: 1.5,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Turns',
+          data: [50, 56, 27],
+          backgroundColor: 'rgba(255,255,255,0.04)',
+          borderColor: 'rgba(255,255,255,0.2)',
+          borderWidth: 1,
+          borderDash: [4, 2],
+          yAxisID: 'y1',
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'rect', padding: 16 } } },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: 'Cost ($)' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+        y1: { beginAtZero: true, position: 'right', title: { display: true, text: 'Turns' }, grid: { display: false } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+
+  // Tool Calls Chart
+  new Chart(document.getElementById('toolCallsChart'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Phase 1: MVP (94)', 'Phase 2: Sessions (80)', 'Phase 3: Tools UI (43)'],
+      datasets: [{
+        data: [94, 80, 43],
+        backgroundColor: [goldDim, blueDim, tealDim],
+        borderColor: [gold, blue, teal],
+        borderWidth: 2,
+        hoverOffset: 8,
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: '55%',
+      plugins: {
+        legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'circle', padding: 12, font: { size: 10 } } }
+      }
+    }
+  });
+
+  // Efficiency Chart
+  new Chart(document.getElementById('efficiencyChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Phase 1', 'Phase 2', 'Phase 3'],
+      datasets: [{
+        label: '$ per Tool Call',
+        data: [
+          (2.07 / 94).toFixed(4),
+          (1.96 / 80).toFixed(4),
+          (1.45 / 43).toFixed(4)
+        ],
+        backgroundColor: [goldDim, blueDim, tealDim],
+        borderColor: [gold, blue, teal],
+        borderWidth: 1.5,
+      }]
+    },
+    options: {
+      responsive: true,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { label: (ctx) => `$${parseFloat(ctx.raw).toFixed(4)} per tool call` }
+        }
+      },
+      scales: {
+        x: { beginAtZero: true, title: { display: true, text: '$ per tool call' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+
+  // Tool Types Distribution
+  // Counts extracted from the build reports
+  new Chart(document.getElementById('toolTypesChart'), {
+    type: 'bar',
+    data: {
+      labels: ['Bash', 'Read', 'Glob', 'Edit', 'Write', 'Agent', 'Grep', 'TodoWrite'],
+      datasets: [
+        {
+          label: 'Phase 1',
+          data: [22, 18, 1, 4, 2, 1, 3, 4],
+          backgroundColor: goldDim,
+          borderColor: gold,
+          borderWidth: 1,
+        },
+        {
+          label: 'Phase 2',
+          data: [16, 12, 5, 3, 2, 1, 1, 4],
+          backgroundColor: blueDim,
+          borderColor: blue,
+          borderWidth: 1,
+        },
+        {
+          label: 'Phase 3',
+          data: [5, 6, 6, 2, 2, 1, 0, 0],
+          backgroundColor: tealDim,
+          borderColor: teal,
+          borderWidth: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, pointStyle: 'rect', padding: 12 } } },
+      scales: {
+        x: { stacked: true, grid: { display: false } },
+        y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Count' }, grid: { color: 'rgba(255,255,255,0.03)' } }
+      }
+    }
+  });
+
+  // Staggered animation via IntersectionObserver
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.opacity = '1';
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.animate, .animate-scale').forEach(el => {
+    observer.observe(el);
+  });
+</script>
+
+</body>
+</html>

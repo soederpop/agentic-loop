@@ -45,6 +45,12 @@ To verify what works / what might still need attention:
 luca get-started
 ```
 
+One of multiple ways you can chat with your "chief of staff " is by running:
+
+```shell
+luca web-chat
+```
+
 ## A Visual Explainer
 
 Run the following to view a visual explainer:
@@ -216,6 +222,8 @@ luca prompt claude docs/prompts/analyze-prompt-outputs
 luca prompt codex docs/prompts/analyze-prompt-outputs
 ```
 
-Since `luca` can run markdown documents, these prompt documents can run your code blocks and include their output
+Since `luca` can run markdown documents, these prompt documents can run your code blocks and include their output.
+
+
 
 

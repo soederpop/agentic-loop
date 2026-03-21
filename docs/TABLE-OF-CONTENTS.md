@@ -37,6 +37,7 @@
 
 ## Prompts
 
+- [Analyze The Project Build](./prompts/analyze-project-build.md)
 - [Analyze Prompt Outputs](./prompts/analyze-prompt-outputs.md)
 
 ## Reports
@@ -62,3 +63,4 @@
 - [Window Manager Layouts](./guides/window-manager-layouts.md)
 - [Plan: MVP LAN Streaming Web Chat (WebSocket) — Build Report](./project-builds/web-chat-for-chief/01-mvp-lan-streaming-chat.md)
 - [Plan: Persistence + Assistant Picker — Build Report](./project-builds/web-chat-for-chief/02-persistence-and-assistant-picker.md)
+- [Plan: Tool Activity UI (Must-have) — Build Report](./project-builds/web-chat-for-chief/03-tool-activity-ui.md)
