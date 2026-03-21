@@ -91,7 +91,7 @@ export function rg({ pattern, paths, flags }: z.infer<typeof schemas.rg>): strin
 	if (paths.length) {
 		args.push(...paths)
 	}
-	return execFileSync('rg', args, { stdio: 'ignore', cwd: container.cwd }).toString().trim()
+	return execFileSync('rg', args, { cwd: container.cwd }).toString().trim()
 }
 
 export function ls({ args }: z.infer<typeof schemas.ls>): string {
