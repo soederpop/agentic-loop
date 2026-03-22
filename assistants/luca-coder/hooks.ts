@@ -1,7 +1,9 @@
 export function created(assistant) {
-	assistant.setState({ shit: 'bro' })
+	assistant.use(
+		container.feature('skillsLibrary'),
+	)
 }
 
-export function started() {
-
+export async function started() {
+	await container.feature('skillsLibrary').start()
 }

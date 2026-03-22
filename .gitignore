@@ -24,6 +24,9 @@ voice/wakeword/samples/*.wav
 
 # Claude Stuff
 .claude/settings.local.json
+.claude/skills/luca-framework/references/examples
+.claude/skills/luca-framework/references/tutorials
+.claude/skills/luca-framework/references/apis
 
 assistants/*/generated
 

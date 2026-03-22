@@ -1,17 +1,19 @@
 ---
 name: Using the luca framework
-description: Learn the luca container — discover what's available with luca describe, build new helpers with luca scaffold, and prototype with luca eval
+description: The @soederpop/luca framework, when you see a project with docs/ commands/ features/ luca.cli.ts endpoints/ folders, or @soederpop/luca is in the package.json, or the user is asking you to develop a new Luca feature, use this skill to learn about the APIs and how to learn the framework at runtime.  The luca cli bundles all of the documentation in a searchable, progressively learnable interface designed for students and AI assistants alike
 ---
 # Luca: Learning the Container
 
 The Luca framework `@soederpop/luca` ships a `luca` binary — a bun-based CLI for a dependency injection container. This project is based on it if this skill is present. The container auto-discovers modules in `commands/`, `clients/`, `servers/`, `features/`, and `endpoints/` folders.
+
+The `luca` cli loads typescript modules in through its VM which injects a `container` global that is a singleton object from which you can learn about, and access all different kinds of utils and Helpers (features, clients, servers, commands, and compositions thereof)
 
 There are three things to learn, in this order:
 
 1. **Discover** what the container can do — `luca describe`
 2. **Build** new helpers when your project needs them — `luca scaffold`
 3. **Prototype** and debug with live code — `luca eval`
-
+4. **Write Runnable Markdown** a great usecase is `luca run markdown.md` where the markdown codeblocks are executed inside the Luca VM.
 ---
 
 ## Phase 1: Discover with `luca describe`
@@ -21,10 +23,16 @@ This is your primary tool. Before reading source files, searching for APIs, or w
 ### See what's available
 
 ```shell
-luca describe features                  # index of all available features
-luca describe features --platform=web   # index of features available to the WebContainer ( browser side )
-luca describe clients                   # index of all available clients
-luca describe servers                   # index of all available servers
+luca describe features     # index of all available features
+luca describe clients      # index of all available clients
+luca describe servers      # index of all available servers
+```
+
+You can even learn about features in the browser container, or a specific platform (server, node are the same, browser,web are the same)
+
+```shell
+luca describe features --platform=web 
+luca describe features --platform=server
 ```
 
 ### Learn about specific helpers
@@ -36,6 +44,19 @@ luca describe rest         # full docs for the rest client
 luca describe express      # full docs for the express server
 luca describe git fs proc  # multiple helpers in one shot
 ```
+
+### Drill into a specific method or getter
+
+Use dot notation to get docs for a single method or getter on any helper:
+
+```shell
+luca describe ui.banner            # docs for the banner() method on ui
+luca describe fs.readFile          # docs for readFile() on fs
+luca describe ui.colors            # docs for the colors getter on ui
+luca describe git.branch           # docs for the branch getter on git
+```
+
+This shows the description, parameters, return type, and examples for just that member. If the member doesn't exist, it lists all available methods and getters on the helper.
 
 ### Get targeted documentation
 
@@ -64,7 +85,7 @@ luca describe --help       # full flag reference for describe
 luca help scaffold         # help for any command
 ```
 
-**Use `luca describe` liberally.** It is the fastest, safest way to understand what the container provides. Every feature, client, and server is self-describing — if you know a name, describe will tell you everything about it.
+**Use `luca describe` liberally.** It is the fastest, safest way to understand what the container provides. Every feature, client, and server is self-describing — if you know a name, describe will tell you everything about it. Use dot notation (`ui.banner`, `fs.readFile`) when you need docs on just one method or getter.
 
 ---
 
@@ -218,6 +239,17 @@ This is useful inside commands and scripts where you need introspection data pro
 
 ---
 
+## Server development troubleshooting
+
+- You can use `container.proc.findPidsByPort(3000)` which will return an array of numbers.
+- You can use `container.proc.kill(pid)` to kill that process
+- You can combine these two functions in `luca eval` if a server you're developing won't start because a previous instance is running (common inside e.g. claude code sessions )
+- `luca serve --force` will also replace the running process with the current one
+- `luca serve --any-port` will open on any port
+
+
 ## Reference
 
-See `references/api-docs/` for the full pre-generated API reference for every built-in feature, client, and server.
+- `references/api-docs/` — full pre-generated API reference for every built-in feature, client, and server
+- `references/examples/` — runnable example docs for each feature (e.g. `fs.md`, `git.md`, `proc.md`)
+- `references/tutorials/` — step-by-step tutorials covering the container, helpers, commands, endpoints, and more
