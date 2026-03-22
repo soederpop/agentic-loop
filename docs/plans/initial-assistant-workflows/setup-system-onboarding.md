@@ -1,5 +1,5 @@
 ---
-status: approved
+status: completed
 project: initial-assistant-workflows
 ---
 
@@ -87,3 +87,13 @@ Runs as a standalone workflow at `workflows/setup/` on port 9304. Single scrolla
 - **The workflow command (`commands/workflow.ts`)** auto-discovers workflows in the `workflows/` directory. Your workflow at `workflows/setup/` on port 9304 will be picked up automatically — no registration needed.
 - **CSS/design patterns are fully stable** across all 4 prior workflows. The `:root` variables, card styles, status badges, progress bars, and scrollbar styles are all reusable. The review workflow added a progress bar component (`.progress-bar-track` / `.progress-bar-fill`) that maps directly to your "3 of 7 capabilities ready" summary bar.
 - **POST endpoints for env vars** — the capture workflow has the pattern for writing files via `container.feature('fs').writeFile()`. For your `.env` writing, the same approach works. Remember `writeFile` is synchronous, and you'll want to validate the allowlist server-side before writing.
+
+## Retrospective
+
+The setup workflow came together cleanly — the prior workflows left a solid pattern to follow, and the handoff notes were genuinely useful (especially the warning about `proc.exec()` return format).
+
+The main discovery was that the luca `fs` feature doesn't have `statSync`, only `existsSync`, `readFileSync`, `writeFile`, and `readdirSync`. This meant directory detection couldn't use the conventional `statSync().isDirectory()` check. The workaround was to identify directories by the presence of known marker files (e.g., `CORE.md` for assistants). This is a pattern worth knowing for future workflows that need to distinguish files from directories.
+
+The `proc.exec()` return value is inconsistent — sometimes it returns the stdout string directly, sometimes an object with `.stdout`. Both patterns need to be handled. When a command fails (non-zero exit), it throws rather than returning an error object, so the error message or stdout of the failed command must be captured from the catch block.
+
+The capability check approach (an array of async functions run in `Promise.all`) scales well. Adding new checks is just adding another function and including it in the array. The UI groups them by category automatically based on the `group` field, so new groups can be introduced without UI changes.
