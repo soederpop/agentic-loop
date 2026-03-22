@@ -1,5 +1,4 @@
 import { z } from 'zod'
-import { execFileSync } from 'child_process'
 import type { Assistant, AGIContainer } from '@soederpop/luca/agi'
 
 declare global {
@@ -52,10 +51,8 @@ function sanitizeArgs(args: string, command: string, mode: 'strict' | 'permissiv
 
 export const schemas = {
 	rg: z.object({
-		pattern: z.string().describe('The regex pattern to search for, e.g. "TODO|FIXME", "function\\s+\\w+"'),
-		paths: z.array(z.string()).default([]).describe('Paths to search in, e.g. ["src", "commands"]. Defaults to current directory.'),
-		flags: z.string().default('').describe('Additional ripgrep flags, e.g. "--type ts -n --hidden -l"'),
-	}).describe('Search file contents using ripgrep (rg). Fast, recursive, respects .gitignore. Pattern is passed safely — use any regex syntax without worrying about escaping.'),
+		args: z.string().describe('Arguments to pass to ripgrep, e.g. "TODO" --type ts -n'),
+	}).describe('Search file contents using ripgrep (rg). Fast, recursive, respects .gitignore.'),
 
 	ls: z.object({
 		args: z.string().default('.').describe('Arguments to pass to ls, e.g. -la src/'),
@@ -81,17 +78,8 @@ export const schemas = {
 	pwd: z.object({}).describe('Print the current working directory.'),
 }
 
-export function rg({ pattern, paths, flags }: z.infer<typeof schemas.rg>): string {
-	const args: string[] = []
-	if (flags) {
-		// Split flags string on whitespace, preserving quoted segments
-		args.push(...flags.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [])
-	}
-	args.push('--', pattern)
-	if (paths.length) {
-		args.push(...paths)
-	}
-	return execFileSync('rg', args, { cwd: container.cwd }).toString().trim()
+export function rg({ args }: z.infer<typeof schemas.rg>): string {
+	return proc().exec(`rg ${sanitizeArgs(args, 'rg', 'permissive')}`)
 }
 
 export function ls({ args }: z.infer<typeof schemas.ls>): string {
