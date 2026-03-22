@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Status Briefing</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #0e0e16;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  body {
+    padding: 16px 20px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ──────────────────────────── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .header h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+
+  .header-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 16px;
+  }
+
+  .header-meta .count {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .refresh-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--success);
+    margin-right: 4px;
+    vertical-align: middle;
+    opacity: 0.6;
+    transition: opacity 0.3s;
+  }
+
+  .refresh-dot.loading {
+    opacity: 1;
+    animation: pulse 0.6s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ── Section titles ──────────────────── */
+  .section-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title .section-count {
+    color: var(--text-faint);
+    font-weight: 400;
+  }
+
+  /* ── Goals strip ─────────────────────── */
+  .goals-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    margin-bottom: 20px;
+  }
+
+  .goals-strip::-webkit-scrollbar { height: 3px; }
+  .goals-strip::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .goal-card {
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    min-width: 180px;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .goal-card .goal-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .goal-card .goal-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .horizon-badge {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .horizon-badge.short { background: #39ff1418; color: var(--success); }
+  .horizon-badge.medium { background: #f59e0b18; color: var(--warning); }
+  .horizon-badge.long { background: #c084fc18; color: var(--assistant); }
+
+  .idea-count-badge {
+    color: var(--text-dim);
+  }
+
+  .idea-count-badge .num {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── Idea funnel ─────────────────────── */
+  .idea-funnel {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 800px) {
+    .idea-funnel {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .funnel-col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .funnel-col-header {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .funnel-col-name {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .funnel-col.spark .funnel-col-name { color: var(--text-dim); }
+  .funnel-col.exploring .funnel-col-name { color: var(--accent); }
+  .funnel-col.ready .funnel-col-name { color: var(--success); }
+  .funnel-col.parked .funnel-col-name { color: var(--warning); }
+  .funnel-col.promoted .funnel-col-name { color: var(--assistant); }
+
+  .funnel-count {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-weight: 600;
+  }
+
+  .funnel-col-body {
+    padding: 6px;
+    max-height: 240px;
+    overflow-y: auto;
+  }
+
+  .funnel-col-body::-webkit-scrollbar { width: 3px; }
+  .funnel-col-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .idea-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 9px;
+    margin-bottom: 4px;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .idea-card:last-child { margin-bottom: 0; }
+
+  .idea-card .idea-title {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 500;
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .idea-card .idea-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .goal-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--assistant);
+    flex-shrink: 0;
+  }
+
+  .goal-dot.none {
+    background: var(--text-faint);
+    opacity: 0.4;
+  }
+
+  .idea-tag {
+    font-size: 10px;
+    color: var(--text-faint);
+    background: var(--bg);
+    padding: 0 4px;
+    border-radius: 2px;
+  }
+
+  .idea-time {
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-left: auto;
+  }
+
+  /* ── Projects ────────────────────────── */
+  .projects-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .project-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .project-card-header {
+    padding: 12px 14px 10px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .project-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+  }
+
+  .status-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .status-badge.draft { background: #6a6a8020; color: var(--text-dim); }
+  .status-badge.approved { background: #00fff718; color: var(--accent); }
+  .status-badge.building,
+  .status-badge.in_progress,
+  .status-badge.running { background: #f59e0b18; color: var(--warning); }
+  .status-badge.completed { background: #39ff1418; color: var(--success); }
+  .status-badge.failed { background: #ff003c18; color: var(--error); }
+  .status-badge.reviewing { background: #c084fc18; color: var(--assistant); }
+
+  .project-progress {
+    padding: 0 14px 10px;
+  }
+
+  .progress-bar-track {
+    height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar-fill {
+    height: 100%;
+    background: var(--success);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+  }
+
+  .progress-label {
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-top: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .project-plans {
+    border-top: 1px solid var(--border);
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease;
+  }
+
+  .project-card.expanded .project-plans {
+    max-height: 500px;
+  }
+
+  .project-plans-toggle {
+    display: block;
+    width: 100%;
+    padding: 6px 14px;
+    border: none;
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    text-align: center;
+  }
+
+  .project-plans-toggle:hover {
+    color: var(--text);
+    background: var(--border);
+  }
+
+  .plan-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+
+  .plan-row:last-child { border-bottom: none; }
+
+  .plan-status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .plan-status-dot.completed { background: var(--success); }
+  .plan-status-dot.approved { background: var(--accent); }
+  .plan-status-dot.pending { background: var(--text-dim); }
+  .plan-status-dot.building,
+  .plan-status-dot.in_progress { background: var(--warning); }
+  .plan-status-dot.rejected { background: var(--error); }
+
+  .plan-title {
+    flex: 1;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .plan-cost {
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  /* ── Activity ────────────────────────── */
+  .activity-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  @media (max-width: 700px) {
+    .activity-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .activity-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .activity-panel-header {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .activity-panel-body {
+    max-height: 280px;
+    overflow-y: auto;
+  }
+
+  .activity-panel-body::-webkit-scrollbar { width: 3px; }
+  .activity-panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .commit-row {
+    display: flex;
+    gap: 8px;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    align-items: baseline;
+  }
+
+  .commit-row:last-child { border-bottom: none; }
+
+  .commit-hash {
+    color: var(--accent);
+    font-weight: 600;
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+
+  .commit-msg {
+    color: var(--text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .commit-time {
+    color: var(--text-faint);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .doc-row {
+    display: flex;
+    gap: 8px;
+    padding: 5px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    align-items: baseline;
+  }
+
+  .doc-row:last-child { border-bottom: none; }
+
+  .doc-id {
+    color: var(--text-dim);
+    font-size: 10px;
+    flex-shrink: 0;
+  }
+
+  .doc-title {
+    color: var(--text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Empty states ────────────────────── */
+  .empty-state {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  .empty-state .hint {
+    margin-top: 4px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  /* ── Loading ─────────────────────────── */
+  .loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  /* ── Animations ──────────────────────── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>STATUS BRIEFING</h1>
+  <div class="header-meta">
+    <span id="date-display"></span>
+    <span><span class="refresh-dot" id="refresh-dot"></span><span class="count" id="total-count">-</span> docs</span>
+  </div>
+</div>
+
+<div id="content">
+  <div class="loading-state">Loading briefing data...</div>
+</div>
+
+<script type="module">
+  const API = window.location.origin
+  let refreshTimer = null
+  let data = null
+
+  // ── Date display ────────────────────────
+  const dateEl = document.getElementById('date-display')
+  dateEl.textContent = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  })
+
+  // ── Fetch & render ──────────────────────
+  async function loadBriefing() {
+    const dot = document.getElementById('refresh-dot')
+    dot.classList.add('loading')
+
+    try {
+      const res = await fetch(`${API}/api/status`)
+      data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to load')
+      render(data)
+    } catch (err) {
+      console.error('Briefing load failed:', err)
+    } finally {
+      dot.classList.remove('loading')
+    }
+  }
+
+  function render(d) {
+    document.getElementById('total-count').textContent = d.counts.total
+
+    const content = document.getElementById('content')
+    content.innerHTML = ''
+
+    // Goals
+    content.appendChild(renderGoals(d.goals))
+
+    // Idea funnel
+    content.appendChild(renderIdeaFunnel(d.ideasByStatus, d.counts.ideas))
+
+    // Projects
+    content.appendChild(renderProjects(d.projects))
+
+    // Activity
+    content.appendChild(renderActivity(d.recentCommits, d.recentDocs))
+  }
+
+  // ── Goals strip ─────────────────────────
+  function renderGoals(goals) {
+    const wrap = document.createElement('div')
+
+    const title = document.createElement('div')
+    title.className = 'section-title'
+    title.innerHTML = `Goals <span class="section-count">${goals.length}</span>`
+    wrap.appendChild(title)
+
+    if (goals.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'empty-state'
+      empty.innerHTML = `No goals defined<div class="hint">Run the onboarding workflow to set your first goal</div>`
+      wrap.appendChild(empty)
+      wrap.style.marginBottom = '20px'
+      return wrap
+    }
+
+    const strip = document.createElement('div')
+    strip.className = 'goals-strip'
+
+    for (const g of goals) {
+      const card = document.createElement('div')
+      card.className = 'goal-card'
+      card.innerHTML = `
+        <div class="goal-title">${esc(g.title)}</div>
+        <div class="goal-meta">
+          <span class="horizon-badge ${g.horizon}">${g.horizon}</span>
+          <span class="idea-count-badge"><span class="num">${g.ideaCount}</span> idea${g.ideaCount !== 1 ? 's' : ''}</span>
+        </div>
+      `
+      strip.appendChild(card)
+    }
+
+    wrap.appendChild(strip)
+    return wrap
+  }
+
+  // ── Idea funnel ─────────────────────────
+  function renderIdeaFunnel(ideasByStatus, totalIdeas) {
+    const wrap = document.createElement('div')
+
+    const title = document.createElement('div')
+    title.className = 'section-title'
+    title.innerHTML = `Idea Funnel <span class="section-count">${totalIdeas}</span>`
+    wrap.appendChild(title)
+
+    if (totalIdeas === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'empty-state'
+      empty.innerHTML = `No ideas yet<div class="hint">Use the capture workflow to record your first idea</div>`
+      wrap.appendChild(empty)
+      wrap.style.marginBottom = '20px'
+      return wrap
+    }
+
+    const funnel = document.createElement('div')
+    funnel.className = 'idea-funnel'
+
+    const statuses = ['spark', 'exploring', 'ready', 'parked', 'promoted']
+    for (const status of statuses) {
+      const ideas = ideasByStatus[status] || []
+      const col = document.createElement('div')
+      col.className = `funnel-col ${status}`
+      col.innerHTML = `
+        <div class="funnel-col-header">
+          <span class="funnel-col-name">${status}</span>
+          <span class="funnel-count">${ideas.length}</span>
+        </div>
+        <div class="funnel-col-body">
+          ${ideas.length === 0 ? '<div class="empty-state" style="padding:12px 4px;">—</div>' : ideas.map(idea => `
+            <div class="idea-card">
+              <div class="idea-title">${esc(idea.title)}</div>
+              <div class="idea-footer">
+                <span class="goal-dot ${idea.goal ? '' : 'none'}" title="${idea.goal ? esc(idea.goal) : 'No goal'}"></span>
+                ${(idea.tags || []).slice(0, 2).map(t => `<span class="idea-tag">${esc(t)}</span>`).join('')}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `
+      funnel.appendChild(col)
+    }
+
+    wrap.appendChild(funnel)
+    return wrap
+  }
+
+  // ── Projects ────────────────────────────
+  function renderProjects(projects) {
+    const wrap = document.createElement('div')
+
+    const title = document.createElement('div')
+    title.className = 'section-title'
+    title.innerHTML = `Projects <span class="section-count">${projects.length}</span>`
+    wrap.appendChild(title)
+
+    if (projects.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'empty-state'
+      empty.innerHTML = `No projects yet<div class="hint">Promote an idea to ready, then create a project from it</div>`
+      wrap.appendChild(empty)
+      wrap.style.marginBottom = '20px'
+      return wrap
+    }
+
+    const grid = document.createElement('div')
+    grid.className = 'projects-grid'
+
+    for (const p of projects) {
+      const pct = p.totalPlans > 0 ? Math.round((p.completedPlans / p.totalPlans) * 100) : 0
+      const card = document.createElement('div')
+      card.className = 'project-card'
+      card.innerHTML = `
+        <div class="project-card-header">
+          <div class="project-title">${esc(p.title)}</div>
+          <span class="status-badge ${p.status.replace(/_/g, '_')}">${p.status.replace(/_/g, ' ')}</span>
+        </div>
+        <div class="project-progress">
+          <div class="progress-bar-track">
+            <div class="progress-bar-fill" style="width:${pct}%"></div>
+          </div>
+          <div class="progress-label">
+            <span>${p.completedPlans}/${p.totalPlans} plans</span>
+            <span>${pct}%</span>
+          </div>
+        </div>
+        ${p.plans.length > 0 ? `
+          <div class="project-plans">
+            ${p.plans.map(pl => `
+              <div class="plan-row">
+                <span class="plan-status-dot ${pl.status}"></span>
+                <span class="plan-title">${esc(pl.title)}</span>
+                ${pl.costUsd ? `<span class="plan-cost">$${pl.costUsd.toFixed(2)}</span>` : ''}
+              </div>
+            `).join('')}
+          </div>
+          <button class="project-plans-toggle" onclick="this.parentElement.classList.toggle('expanded')">
+            ${p.plans.length} plan${p.plans.length !== 1 ? 's' : ''} — click to expand
+          </button>
+        ` : ''}
+      `
+      grid.appendChild(card)
+    }
+
+    wrap.appendChild(grid)
+    return wrap
+  }
+
+  // ── Activity ────────────────────────────
+  function renderActivity(commits, docs) {
+    const wrap = document.createElement('div')
+
+    const title = document.createElement('div')
+    title.className = 'section-title'
+    title.textContent = 'Recent Activity'
+    wrap.appendChild(title)
+
+    const grid = document.createElement('div')
+    grid.className = 'activity-grid'
+
+    // Commits panel
+    const commitsPanel = document.createElement('div')
+    commitsPanel.className = 'activity-panel'
+    commitsPanel.innerHTML = `
+      <div class="activity-panel-header">Git Commits</div>
+      <div class="activity-panel-body">
+        ${commits.length === 0 ? '<div class="empty-state">No recent commits</div>' : commits.map(c => `
+          <div class="commit-row">
+            <span class="commit-hash">${esc(c.hash)}</span>
+            <span class="commit-msg">${esc(c.message)}</span>
+            <span class="commit-time">${esc(c.timeAgo)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `
+    grid.appendChild(commitsPanel)
+
+    // Docs panel
+    const docsPanel = document.createElement('div')
+    docsPanel.className = 'activity-panel'
+    docsPanel.innerHTML = `
+      <div class="activity-panel-header">Recently Modified Docs</div>
+      <div class="activity-panel-body">
+        ${docs.length === 0 ? '<div class="empty-state">No recently modified docs</div>' : docs.map(d => `
+          <div class="doc-row">
+            <span class="doc-id">${esc(d.id.split('/')[0])}/</span>
+            <span class="doc-title">${esc(d.title)}</span>
+          </div>
+        `).join('')}
+      </div>
+    `
+    grid.appendChild(docsPanel)
+
+    wrap.appendChild(grid)
+    return wrap
+  }
+
+  // ── Utilities ───────────────────────────
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
+  }
+
+  // ── Auto-refresh ────────────────────────
+  // Refresh every 30 seconds
+  refreshTimer = setInterval(loadBriefing, 30000)
+
+  // Refresh on window focus
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) loadBriefing()
+  })
+
+  window.addEventListener('focus', loadBriefing)
+
+  // Listen for containerLink stateChange events
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'stateChange') {
+      loadBriefing()
+    }
+  })
+
+  // ── Boot ────────────────────────────────
+  loadBriefing()
+</script>
+</body>
+</html>
