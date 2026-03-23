@@ -1,0 +1,342 @@
+import { z } from 'zod'
+import { Feature } from '@soederpop/luca'
+import { FeatureOptionsSchema, FeatureStateSchema } from '@soederpop/luca/schemas'
+import { WebSocketServer, WebSocket } from 'ws'
+import type { Assistant, AssistantsManager } from '@soederpop/luca/agi'
+import type { Server as HttpServer } from 'http'
+
+// ── Protocol types ──
+
+export type ChatMessageOut =
+	| { type: 'init_ok'; sessionId: string; assistantId: string; historyLength: number }
+	| { type: 'init_error'; message: string }
+	| { type: 'assistant_message_start'; messageId: string }
+	| { type: 'chunk'; messageId: string; textDelta: string }
+	| { type: 'tool_start'; id: string; name: string; startedAt: number }
+	| { type: 'tool_end'; id: string; name: string; ok: boolean; endedAt: number; durationMs: number; summary?: string; error?: string }
+	| { type: 'assistant_message_complete'; messageId: string; text: string }
+	| { type: 'error'; message: string }
+
+export type ChatMessageIn =
+	| { type: 'init'; sessionId: string; assistantId?: string }
+	| { type: 'user_message'; text: string }
+
+// ── Session ──
+
+export interface ChatSession {
+	assistant: Assistant
+	assistantId: string
+	sessionKey: string
+}
+
+// ── Feature schemas ──
+
+export const ChatServiceOptionsSchema = FeatureOptionsSchema.extend({
+	defaultAssistant: z.string().default('chiefOfStaff').describe('Default assistant short name'),
+	threadPrefix: z.string().default('chat').describe('Prefix for thread IDs, e.g. "web-chat" or "workflow-foo"'),
+	historyMode: z.string().default('session').describe('History mode passed to assistant creation'),
+})
+
+export const ChatServiceStateSchema = FeatureStateSchema.extend({
+	sessionCount: z.number().default(0),
+	connectionCount: z.number().default(0),
+})
+
+export type ChatServiceOptions = z.infer<typeof ChatServiceOptionsSchema>
+export type ChatServiceState = z.infer<typeof ChatServiceStateSchema>
+
+/**
+ * Reusable real-time chat service.
+ *
+ * Manages WebSocket connections, assistant sessions, and the streaming
+ * protocol (init → user_message → chunks/tool events → complete).
+ *
+ * Usage:
+ *   const chatService = container.feature('chatService', { threadPrefix: 'my-workflow' })
+ *   chatService.attach(httpServer)
+ */
+export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
+	static override shortcut = 'features.chatService' as const
+	static override optionsSchema = ChatServiceOptionsSchema
+	static override stateSchema = ChatServiceStateSchema
+
+	static {
+		Feature.register(this as any, 'chatService')
+	}
+
+	private sessions = new Map<string, ChatSession>()
+	private wss: WebSocketServer | null = null
+
+	get assistantsManager(): AssistantsManager {
+		return this.container.feature('assistantsManager') as AssistantsManager
+	}
+
+	override get initialState(): ChatServiceState {
+		return {
+			...super.initialState,
+			sessionCount: 0,
+			connectionCount: 0,
+		}
+	}
+
+	// ── Public API ──
+
+	/**
+	 * Attach a WebSocket server to an existing HTTP server.
+	 * Call this after your express/HTTP server is listening.
+	 */
+	attach(httpServer: HttpServer): WebSocketServer {
+		if (this.wss) return this.wss
+
+		this.wss = new WebSocketServer({ server: httpServer })
+
+		this.wss.on('connection', (ws: WebSocket) => {
+			this.handleConnection(ws)
+		})
+
+		this.emit('attached')
+		return this.wss
+	}
+
+	/**
+	 * Create a standalone WebSocket server on a given port.
+	 */
+	listen(port: number, host = '0.0.0.0'): WebSocketServer {
+		if (this.wss) return this.wss
+
+		this.wss = new WebSocketServer({ port, host })
+
+		this.wss.on('connection', (ws: WebSocket) => {
+			this.handleConnection(ws)
+		})
+
+		this.emit('listening', { port, host })
+		return this.wss
+	}
+
+	/**
+	 * Resolve a short assistant name to its full registered name.
+	 */
+	resolveAssistantName(shortName: string): string | null {
+		const entries = this.assistantsManager.list()
+		const match = entries.find(
+			(e) => e.name === shortName || e.name === `assistants/${shortName}`,
+		)
+		return match ? match.name : null
+	}
+
+	/**
+	 * List available assistants as { id, name } pairs.
+	 */
+	listAssistants(): Array<{ id: string; name: string }> {
+		return this.assistantsManager.list().map((e) => {
+			const shortName = e.name.replace(/^assistants\//, '')
+			return { id: shortName, name: shortName }
+		})
+	}
+
+	/**
+	 * Get or create a session for the given sessionId + assistantId combo.
+	 */
+	async getOrCreateSession(sessionId: string, assistantId: string): Promise<ChatSession | null> {
+		const fullName = this.resolveAssistantName(assistantId)
+		if (!fullName) return null
+
+		const shortName = fullName.replace(/^assistants\//, '')
+		const sessionKey = `${sessionId}:${shortName}`
+
+		if (this.sessions.has(sessionKey)) {
+			return this.sessions.get(sessionKey)!
+		}
+
+		const assistant: Assistant = this.assistantsManager.create(fullName, {
+			historyMode: this.options.historyMode,
+		}) as Assistant
+
+		assistant.resumeThread(`${this.options.threadPrefix}:${sessionKey}`)
+		await assistant.start()
+
+		const session: ChatSession = { assistant, assistantId: shortName, sessionKey }
+		this.sessions.set(sessionKey, session)
+		this.state.set('sessionCount', this.sessions.size)
+
+		this.emit('sessionCreated', { sessionKey, assistantId: shortName })
+		return session
+	}
+
+	/**
+	 * Send a message to an assistant and stream the response over a WebSocket.
+	 * Can be used directly without WebSocket by passing event callbacks instead.
+	 */
+	async streamResponse(
+		session: ChatSession,
+		text: string,
+		callbacks: {
+			onStart: (messageId: string) => void
+			onChunk: (messageId: string, textDelta: string) => void
+			onToolStart: (id: string, name: string, startedAt: number) => void
+			onToolEnd: (id: string, name: string, ok: boolean, endedAt: number, durationMs: number, detail?: string) => void
+			onComplete: (messageId: string, text: string) => void
+			onError: (message: string) => void
+		},
+	): Promise<string> {
+		const messageId = crypto.randomUUID()
+		callbacks.onStart(messageId)
+
+		const toolTimers = new Map<string, number>()
+		let toolCallCounter = 0
+
+		const onChunk = (chunk: string) => {
+			callbacks.onChunk(messageId, chunk)
+		}
+
+		const onToolCall = (toolName: string, _args: any) => {
+			const callId = `${messageId}:tool:${toolCallCounter++}`
+			toolTimers.set(toolName, Date.now())
+			callbacks.onToolStart(callId, toolName, Date.now())
+		}
+
+		const onToolResult = (toolName: string, result: string) => {
+			const startedAt = toolTimers.get(toolName) || Date.now()
+			const endedAt = Date.now()
+			toolTimers.delete(toolName)
+			const summary = typeof result === 'string' && result.length > 120
+				? result.slice(0, 120) + '…'
+				: result
+			callbacks.onToolEnd(toolName, toolName, true, endedAt, endedAt - startedAt, summary)
+		}
+
+		const onToolError = (toolName: string, error: any) => {
+			const startedAt = toolTimers.get(toolName) || Date.now()
+			const endedAt = Date.now()
+			toolTimers.delete(toolName)
+			callbacks.onToolEnd(toolName, toolName, false, endedAt, endedAt - startedAt, error?.message || String(error))
+		}
+
+		session.assistant.on('chunk', onChunk)
+		session.assistant.on('toolCall', onToolCall)
+		session.assistant.on('toolResult', onToolResult)
+		session.assistant.on('toolError', onToolError)
+
+		try {
+			const response = await session.assistant.ask(text)
+			callbacks.onComplete(messageId, response)
+			return response
+		} catch (err: any) {
+			callbacks.onError(err.message || 'Assistant error')
+			return ''
+		} finally {
+			session.assistant.off('chunk', onChunk)
+			session.assistant.off('toolCall', onToolCall)
+			session.assistant.off('toolResult', onToolResult)
+			session.assistant.off('toolError', onToolError)
+		}
+	}
+
+	/**
+	 * Close all sessions and the WebSocket server.
+	 */
+	async shutdown() {
+		if (this.wss) {
+			this.wss.close()
+			this.wss = null
+		}
+		this.sessions.clear()
+		this.state.set('sessionCount', 0)
+		this.state.set('connectionCount', 0)
+		this.emit('shutdown')
+	}
+
+	// ── Private ──
+
+	private handleConnection(ws: WebSocket) {
+		this.state.set('connectionCount', (this.state.get('connectionCount') ?? 0) + 1)
+		this.emit('connection')
+
+		let session: ChatSession | null = null
+		let isProcessing = false
+
+		ws.on('message', async (raw: Buffer) => {
+			let parsed: any
+			try {
+				parsed = JSON.parse(raw.toString())
+			} catch {
+				this.send(ws, { type: 'error', message: 'Invalid JSON' })
+				return
+			}
+
+			// ── Init ──
+			if (parsed.type === 'init') {
+				const sessionId = parsed.sessionId
+				if (!sessionId || typeof sessionId !== 'string') {
+					this.send(ws, { type: 'init_error', message: 'Missing sessionId' })
+					return
+				}
+
+				const requestedAssistant = parsed.assistantId || this.options.defaultAssistant
+				session = await this.getOrCreateSession(sessionId, requestedAssistant)
+
+				if (!session) {
+					this.send(ws, { type: 'init_error', message: `Unknown assistant: ${requestedAssistant}` })
+					return
+				}
+
+				this.send(ws, {
+					type: 'init_ok',
+					sessionId,
+					assistantId: session.assistantId,
+					historyLength: session.assistant.messages?.length || 0,
+				})
+				return
+			}
+
+			// ── User message ──
+			if (parsed.type === 'user_message') {
+				if (!session) {
+					this.send(ws, { type: 'error', message: 'Send init first' })
+					return
+				}
+
+				if (isProcessing) {
+					this.send(ws, { type: 'error', message: 'Already processing a message' })
+					return
+				}
+
+				const text = parsed.text?.trim()
+				if (!text) return
+
+				isProcessing = true
+
+				await this.streamResponse(session, text, {
+					onStart: (messageId) => this.send(ws, { type: 'assistant_message_start', messageId }),
+					onChunk: (messageId, textDelta) => this.send(ws, { type: 'chunk', messageId, textDelta }),
+					onToolStart: (id, name, startedAt) => this.send(ws, { type: 'tool_start', id, name, startedAt }),
+					onToolEnd: (id, name, ok, endedAt, durationMs, detail) => {
+						const msg: any = { type: 'tool_end', id, name, ok, endedAt, durationMs }
+						if (ok) msg.summary = detail
+						else msg.error = detail
+						this.send(ws, msg)
+					},
+					onComplete: (messageId, text) => this.send(ws, { type: 'assistant_message_complete', messageId, text }),
+					onError: (message) => this.send(ws, { type: 'error', message }),
+				})
+
+				isProcessing = false
+			}
+		})
+
+		ws.on('close', () => {
+			this.state.set('connectionCount', Math.max(0, (this.state.get('connectionCount') ?? 1) - 1))
+			this.emit('disconnection')
+			// Session stays in the map for reconnection
+		})
+	}
+
+	private send(ws: WebSocket, data: any) {
+		if (ws.readyState === WebSocket.OPEN) {
+			ws.send(JSON.stringify(data))
+		}
+	}
+}
+
+export default ChatService
