@@ -98,8 +98,22 @@ public final class IPCClient {
         }
     }
 
+    public func sendWindowFocus(_ event: WindowFocusMessage) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            guard self.isConnected, self.socketFD >= 0 else {
+                self.scheduleReconnectLocked()
+                return
+            }
+            self.sendEncodedLocked(event, logContext: "windowFocus")
+        }
+    }
+
     private func connectLocked() {
         guard !isConnected else { return }
+
+        // Clear any leftover data from a previous connection
+        buffer.removeAll(keepingCapacity: true)
 
         socketFD = socket(AF_UNIX, SOCK_STREAM, 0)
         guard socketFD >= 0 else {
@@ -209,7 +223,8 @@ public final class IPCClient {
                     self.delegate?.ipcClient(self, didReceive: message)
                 }
             } catch {
-                AppLogger.error("ipc decode failed: \(error.localizedDescription)")
+                let preview = String(data: Data(line.prefix(200)), encoding: .utf8) ?? "<non-utf8>"
+                AppLogger.error("ipc decode failed: \(error) raw=\(preview)")
             }
         }
     }

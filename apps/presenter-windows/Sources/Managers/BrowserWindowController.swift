@@ -8,7 +8,8 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
     let windowId: UUID
     private let webView: WKWebView
     private let onClosed: (UUID) -> Void
-    private let onFocused: (UUID) -> Void
+    private let onFocused: (UUID, NSRect) -> Void
+    private let onBlurred: (UUID, NSRect) -> Void
     private(set) var lastKnownURL: String = "about:blank"
     private(set) var lastKnownTitle: String = "Untitled"
 
@@ -16,11 +17,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
         windowId: UUID,
         request: SpawnWindowRequest,
         onClosed: @escaping (UUID) -> Void,
-        onFocused: @escaping (UUID) -> Void
+        onFocused: @escaping (UUID, NSRect) -> Void,
+        onBlurred: @escaping (UUID, NSRect) -> Void
     ) throws {
         self.windowId = windowId
         self.onClosed = onClosed
         self.onFocused = onFocused
+        self.onBlurred = onBlurred
 
         let config = WKWebViewConfiguration()
         webView = WKWebView(frame: .zero, configuration: config)
@@ -166,7 +169,13 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        onFocused(windowId)
+        let frame = window?.frame ?? .zero
+        onFocused(windowId, frame)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        let frame = window?.frame ?? .zero
+        onBlurred(windowId, frame)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

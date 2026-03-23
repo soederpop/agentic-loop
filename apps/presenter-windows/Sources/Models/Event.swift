@@ -93,6 +93,37 @@ public struct ServerMessage: Codable, Equatable {
     public let speak: String?
     public let audioFile: String?
     public let window: WindowCommand?
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Tolerate missing or non-UUID id — generate a fallback so the message isn't lost
+        if let raw = try container.decodeIfPresent(String.self, forKey: .id),
+           let parsed = UUID(uuidString: raw) {
+            id = parsed
+        } else if let parsed = try? container.decode(UUID.self, forKey: .id) {
+            id = parsed
+        } else {
+            id = UUID()
+        }
+        status = try container.decodeIfPresent(String.self, forKey: .status) ?? "unknown"
+        worker = try container.decodeIfPresent(String.self, forKey: .worker)
+        pid = try container.decodeIfPresent(Int.self, forKey: .pid)
+        timestamp = try container.decodeIfPresent(String.self, forKey: .timestamp)
+        success = try container.decodeIfPresent(Bool.self, forKey: .success)
+        error = try container.decodeIfPresent(String.self, forKey: .error)
+        result = try container.decodeIfPresent([String: JSONValue].self, forKey: .result)
+        progress = try container.decodeIfPresent(Double.self, forKey: .progress)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+        speech = try container.decodeIfPresent(String.self, forKey: .speech)
+        speak = try container.decodeIfPresent(String.self, forKey: .speak)
+        audioFile = try container.decodeIfPresent(String.self, forKey: .audioFile)
+        window = try container.decodeIfPresent(WindowCommand.self, forKey: .window)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, status, worker, pid, timestamp, success, error, result
+        case progress, message, speech, speak, audioFile, window
+    }
 }
 
 public enum JSONValue: Codable, Equatable {
@@ -239,5 +270,37 @@ public struct TerminalExitedMessage: Encodable {
         self.pid = pid
         self.exitCode = exitCode
         self.timestamp = ISO8601DateFormatter().string(from: Date())
+    }
+}
+
+public struct WindowFocusMessage: Encodable {
+    public let type: String
+    public let windowId: String
+    public let kind: String
+    public let focused: Bool
+    public let frame: WindowFrame
+    public let timestamp: String
+
+    public init(windowId: UUID, kind: String, focused: Bool, frame: WindowFrame) {
+        self.type = "windowFocus"
+        self.windowId = windowId.uuidString
+        self.kind = kind
+        self.focused = focused
+        self.frame = frame
+        self.timestamp = ISO8601DateFormatter().string(from: Date())
+    }
+}
+
+public struct WindowFrame: Encodable {
+    public let x: Double
+    public let y: Double
+    public let width: Double
+    public let height: Double
+
+    public init(x: Double, y: Double, width: Double, height: Double) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
     }
 }

@@ -38,6 +38,18 @@ public final class AppController: ObservableObject {
                         exitCode: event.exitCode ?? 0
                     )
                 )
+            case .windowFocused:
+                if let frame = event.frame {
+                    self.windowIPCClient.sendWindowFocus(
+                        WindowFocusMessage(windowId: event.windowId, kind: event.kind.rawValue, focused: true, frame: frame)
+                    )
+                }
+            case .windowBlurred:
+                if let frame = event.frame {
+                    self.windowIPCClient.sendWindowFocus(
+                        WindowFocusMessage(windowId: event.windowId, kind: event.kind.rawValue, focused: false, frame: frame)
+                    )
+                }
             }
         }
         wireSettings()

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -6,6 +7,8 @@ public final class BrowserWindowManager {
         public enum EventType: String {
             case windowClosed
             case terminalExited
+            case windowFocused
+            case windowBlurred
         }
 
         public enum WindowKind: String {
@@ -18,13 +21,15 @@ public final class BrowserWindowManager {
         public let kind: WindowKind
         public let pid: Int?
         public let exitCode: Int?
+        public let frame: WindowFrame?
 
-        public init(type: EventType, windowId: UUID, kind: WindowKind, pid: Int? = nil, exitCode: Int? = nil) {
+        public init(type: EventType, windowId: UUID, kind: WindowKind, pid: Int? = nil, exitCode: Int? = nil, frame: WindowFrame? = nil) {
             self.type = type
             self.windowId = windowId
             self.kind = kind
             self.pid = pid
             self.exitCode = exitCode
+            self.frame = frame
         }
     }
 
@@ -88,8 +93,12 @@ public final class BrowserWindowManager {
                 onClosed: { [weak self] closedId in
                     self?.handleWindowClosed(id: closedId, kind: .browser)
                 },
-                onFocused: { [weak self] focusedId in
+                onFocused: { [weak self] focusedId, frame in
                     self?.mostRecentWindowId = focusedId
+                    self?.handleWindowFocusChanged(id: focusedId, kind: .browser, focused: true, frame: frame)
+                },
+                onBlurred: { [weak self] blurredId, frame in
+                    self?.handleWindowFocusChanged(id: blurredId, kind: .browser, focused: false, frame: frame)
                 }
             )
             windows[id] = controller
@@ -215,8 +224,12 @@ public final class BrowserWindowManager {
                 onClosed: { [weak self] closedId in
                     self?.handleWindowClosed(id: closedId, kind: .terminal)
                 },
-                onFocused: { [weak self] focusedId in
+                onFocused: { [weak self] focusedId, frame in
                     self?.mostRecentWindowId = focusedId
+                    self?.handleWindowFocusChanged(id: focusedId, kind: .terminal, focused: true, frame: frame)
+                },
+                onBlurred: { [weak self] blurredId, frame in
+                    self?.handleWindowFocusChanged(id: blurredId, kind: .terminal, focused: false, frame: frame)
                 },
                 onProcessExit: { [weak self] windowId, pid, exitCode in
                     self?.emitWindowLifecycleEvent(
@@ -379,6 +392,12 @@ public final class BrowserWindowManager {
     private func handleWindowClosed(id: UUID, kind: WindowLifecycleEvent.WindowKind) {
         removeWindow(id: id)
         emitWindowLifecycleEvent(WindowLifecycleEvent(type: .windowClosed, windowId: id, kind: kind))
+    }
+
+    private func handleWindowFocusChanged(id: UUID, kind: WindowLifecycleEvent.WindowKind, focused: Bool, frame: NSRect) {
+        let windowFrame = WindowFrame(x: frame.origin.x, y: frame.origin.y, width: frame.width, height: frame.height)
+        let eventType: WindowLifecycleEvent.EventType = focused ? .windowFocused : .windowBlurred
+        emitWindowLifecycleEvent(WindowLifecycleEvent(type: eventType, windowId: id, kind: kind, frame: windowFrame))
     }
 
     private func emitWindowLifecycleEvent(_ event: WindowLifecycleEvent) {

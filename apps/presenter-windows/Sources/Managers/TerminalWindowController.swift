@@ -8,7 +8,8 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
     let windowId: UUID
     private let terminalView: TerminalView
     private let onClosed: (UUID) -> Void
-    private let onFocused: (UUID) -> Void
+    private let onFocused: (UUID, NSRect) -> Void
+    private let onBlurred: (UUID, NSRect) -> Void
     private let onProcessExit: (UUID, Int, Int) -> Void
     private let ioQueue = DispatchQueue(label: "terminal.io.queue", qos: .userInitiated)
     private var readSource: DispatchSourceRead?
@@ -29,12 +30,14 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
         cols: Int?,
         rows: Int?,
         onClosed: @escaping (UUID) -> Void,
-        onFocused: @escaping (UUID) -> Void,
+        onFocused: @escaping (UUID, NSRect) -> Void,
+        onBlurred: @escaping (UUID, NSRect) -> Void,
         onProcessExit: @escaping (UUID, Int, Int) -> Void
     ) throws {
         self.windowId = windowId
         self.onClosed = onClosed
         self.onFocused = onFocused
+        self.onBlurred = onBlurred
         self.onProcessExit = onProcessExit
         self.lastKnownCommand = ([command] + args).joined(separator: " ")
         self.lastKnownTitle = request?.title ?? "Terminal"
@@ -139,7 +142,13 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        onFocused(windowId)
+        let frame = window?.frame ?? .zero
+        onFocused(windowId, frame)
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        let frame = window?.frame ?? .zero
+        onBlurred(windowId, frame)
     }
 
     private static func styleMask(for decorations: String) -> NSWindow.StyleMask {
