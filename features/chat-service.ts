@@ -46,6 +46,27 @@ export type ChatServiceOptions = z.infer<typeof ChatServiceOptionsSchema>
 export type ChatServiceState = z.infer<typeof ChatServiceStateSchema>
 
 /**
+ * Context passed to custom message handlers.
+ */
+export interface MessageHandlerContext {
+	ws: WebSocket
+	session: ChatSession | null
+	isProcessing: boolean
+	/** Mark the connection as processing (prevents concurrent messages). */
+	setProcessing: (v: boolean) => void
+	/** Send a JSON message to this client. */
+	send: (data: any) => void
+	/** Stream an assistant response with the standard protocol events. */
+	streamToSocket: (session: ChatSession, text: string) => Promise<string>
+}
+
+/**
+ * A handler for custom message types beyond init/user_message.
+ * Return true if the message was handled, false to ignore.
+ */
+export type CustomMessageHandler = (parsed: any, ctx: MessageHandlerContext) => Promise<boolean> | boolean
+
+/**
  * Reusable real-time chat service.
  *
  * Manages WebSocket connections, assistant sessions, and the streaming
@@ -66,6 +87,16 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 	private sessions = new Map<string, ChatSession>()
 	private wss: WebSocketServer | null = null
+	private customHandler: CustomMessageHandler | null = null
+
+	/**
+	 * Register a handler for custom message types (e.g. 'start_review').
+	 * Called for any message that isn't 'init' or 'user_message'.
+	 */
+	onMessage(handler: CustomMessageHandler) {
+		this.customHandler = handler
+		return this
+	}
 
 	get assistantsManager(): AssistantsManager {
 		return this.container.feature('assistantsManager') as AssistantsManager
@@ -249,12 +280,40 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 	// ── Private ──
 
+	/**
+	 * Build the standard streaming callbacks that send protocol messages over a WebSocket.
+	 */
+	private wsCallbacks(ws: WebSocket) {
+		return {
+			onStart: (messageId: string) => this.send(ws, { type: 'assistant_message_start', messageId }),
+			onChunk: (messageId: string, textDelta: string) => this.send(ws, { type: 'chunk', messageId, textDelta }),
+			onToolStart: (id: string, name: string, startedAt: number) => this.send(ws, { type: 'tool_start', id, name, startedAt }),
+			onToolEnd: (id: string, name: string, ok: boolean, endedAt: number, durationMs: number, detail?: string) => {
+				const msg: any = { type: 'tool_end', id, name, ok, endedAt, durationMs }
+				if (ok) msg.summary = detail
+				else msg.error = detail
+				this.send(ws, msg)
+			},
+			onComplete: (messageId: string, text: string) => this.send(ws, { type: 'assistant_message_complete', messageId, text }),
+			onError: (message: string) => this.send(ws, { type: 'error', message }),
+		}
+	}
+
 	private handleConnection(ws: WebSocket) {
 		this.state.set('connectionCount', (this.state.get('connectionCount') ?? 0) + 1)
 		this.emit('connection')
 
 		let session: ChatSession | null = null
 		let isProcessing = false
+
+		const ctx: MessageHandlerContext = {
+			ws,
+			get session() { return session },
+			get isProcessing() { return isProcessing },
+			setProcessing: (v: boolean) => { isProcessing = v },
+			send: (data: any) => this.send(ws, data),
+			streamToSocket: (s: ChatSession, text: string) => this.streamResponse(s, text, this.wsCallbacks(ws)),
+		}
 
 		ws.on('message', async (raw: Buffer) => {
 			let parsed: any
@@ -306,22 +365,14 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 				if (!text) return
 
 				isProcessing = true
-
-				await this.streamResponse(session, text, {
-					onStart: (messageId) => this.send(ws, { type: 'assistant_message_start', messageId }),
-					onChunk: (messageId, textDelta) => this.send(ws, { type: 'chunk', messageId, textDelta }),
-					onToolStart: (id, name, startedAt) => this.send(ws, { type: 'tool_start', id, name, startedAt }),
-					onToolEnd: (id, name, ok, endedAt, durationMs, detail) => {
-						const msg: any = { type: 'tool_end', id, name, ok, endedAt, durationMs }
-						if (ok) msg.summary = detail
-						else msg.error = detail
-						this.send(ws, msg)
-					},
-					onComplete: (messageId, text) => this.send(ws, { type: 'assistant_message_complete', messageId, text }),
-					onError: (message) => this.send(ws, { type: 'error', message }),
-				})
-
+				await this.streamResponse(session, text, this.wsCallbacks(ws))
 				isProcessing = false
+				return
+			}
+
+			// ── Custom message handler ──
+			if (this.customHandler) {
+				await this.customHandler(parsed, ctx)
 			}
 		})
 
