@@ -76,7 +76,7 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			turnCount: 0,
 		}
 	}
-	
+
 	get assistantsManager() : AssistantsManager {
 		return this.container.feature('assistantsManager') as AssistantsManager
 	}

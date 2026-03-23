@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ideas</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --surface-3: #1a1a26;
+    --border: #1e1e2e;
+    --border-hover: #2a2a3e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #0e0e16;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 16px 20px;
+    height: 100vh;
+  }
+
+  /* ── Header ──────────────────────────── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  .header h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+
+  .header-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .header-meta .count {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── Filters ─────────────────────────── */
+  .filters {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .search-input {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    width: 220px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-input:focus {
+    border-color: var(--accent);
+  }
+
+  .search-input::placeholder {
+    color: var(--text-faint);
+  }
+
+  .filter-group {
+    display: flex;
+    gap: 4px;
+  }
+
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .filter-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+  }
+
+  .filter-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .filter-btn.active.spark { border-color: var(--text-dim); color: var(--text-dim); background: #6a6a8020; }
+  .filter-btn.active.exploring { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .filter-btn.active.ready { border-color: var(--success); color: var(--success); background: #39ff1418; }
+  .filter-btn.active.parked { border-color: var(--warning); color: var(--warning); background: #f59e0b18; }
+  .filter-btn.active.promoted { border-color: var(--assistant); color: var(--assistant); background: #c084fc18; }
+
+  .filter-sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+
+  .goal-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 4px 8px;
+    cursor: pointer;
+    outline: none;
+    max-width: 200px;
+  }
+
+  .goal-select:focus { border-color: var(--accent); }
+
+  .tag-filter {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .tag-btn {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-faint);
+    font-family: inherit;
+    font-size: 10px;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .tag-btn:hover { color: var(--text-dim); border-color: var(--border-hover); }
+  .tag-btn.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+
+  .clear-filters {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    font-family: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    padding: 4px 6px;
+    text-decoration: underline;
+  }
+
+  .clear-filters:hover { color: var(--text-dim); }
+
+  /* ── Main layout ─────────────────────── */
+  .main {
+    display: flex;
+    gap: 12px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Ideas list ──────────────────────── */
+  .ideas-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-right: 4px;
+  }
+
+  .ideas-list::-webkit-scrollbar { width: 4px; }
+  .ideas-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .idea-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .idea-row:hover {
+    border-color: var(--border-hover);
+    background: var(--surface-2);
+  }
+
+  .idea-row.selected {
+    border-color: var(--accent);
+    background: var(--surface-2);
+  }
+
+  .idea-row-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .idea-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
+  .idea-status-dot.spark { background: var(--text-dim); }
+  .idea-status-dot.exploring { background: var(--accent); }
+  .idea-status-dot.ready { background: var(--success); }
+  .idea-status-dot.parked { background: var(--warning); }
+  .idea-status-dot.promoted { background: var(--assistant); }
+
+  .idea-row-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    flex: 1;
+    line-height: 1.3;
+  }
+
+  .idea-row-status {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  .idea-row-status.spark { background: #6a6a8020; color: var(--text-dim); }
+  .idea-row-status.exploring { background: var(--accent-dim); color: var(--accent); }
+  .idea-row-status.ready { background: #39ff1418; color: var(--success); }
+  .idea-row-status.parked { background: #f59e0b18; color: var(--warning); }
+  .idea-row-status.promoted { background: #c084fc18; color: var(--assistant); }
+
+  .idea-row-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    padding-left: 16px;
+  }
+
+  .idea-goal-label {
+    font-size: 10px;
+    color: var(--assistant);
+    background: #c084fc10;
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .idea-tag {
+    font-size: 10px;
+    color: var(--text-faint);
+    background: var(--bg);
+    padding: 1px 5px;
+    border-radius: 2px;
+  }
+
+  /* ── Detail panel ────────────────────── */
+  .detail-panel {
+    width: 420px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .detail-panel.empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .detail-header {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .detail-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  .detail-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .detail-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .detail-body::-webkit-scrollbar { width: 4px; }
+  .detail-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .detail-body h2 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    margin: 20px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .detail-body h2:first-child {
+    margin-top: 0;
+  }
+
+  .detail-body h3 {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    margin: 16px 0 6px;
+  }
+
+  .detail-body p {
+    margin-bottom: 10px;
+  }
+
+  .detail-body ul, .detail-body ol {
+    margin-bottom: 10px;
+    padding-left: 20px;
+  }
+
+  .detail-body li {
+    margin-bottom: 4px;
+  }
+
+  .detail-body code {
+    background: var(--bg);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .detail-body pre {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+    margin-bottom: 10px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .detail-body pre code {
+    background: none;
+    padding: 0;
+    color: var(--text);
+  }
+
+  .detail-body strong {
+    color: var(--text);
+    font-weight: 700;
+  }
+
+  .detail-body a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .detail-body a:hover {
+    text-decoration: underline;
+  }
+
+  .detail-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 10px;
+    font-size: 12px;
+  }
+
+  .detail-body table th,
+  .detail-body table td {
+    border: 1px solid var(--border);
+    padding: 4px 8px;
+    text-align: left;
+  }
+
+  .detail-body table th {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font-weight: 700;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .detail-body blockquote {
+    border-left: 3px solid var(--accent);
+    margin: 0 0 10px;
+    padding: 4px 12px;
+    color: var(--text-dim);
+  }
+
+  .detail-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+
+  /* ── Empty / loading states ──────────── */
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  .empty-state .hint {
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .loading-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  /* ── Summary bar ─────────────────────── */
+  .summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+
+  .summary-stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .summary-stat .num {
+    font-weight: 700;
+  }
+
+  .summary-stat.spark .num { color: var(--text-dim); }
+  .summary-stat.exploring .num { color: var(--accent); }
+  .summary-stat.ready .num { color: var(--success); }
+  .summary-stat.parked .num { color: var(--warning); }
+  .summary-stat.promoted .num { color: var(--assistant); }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 800px) {
+    .main { flex-direction: column; }
+    .detail-panel { width: 100%; max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>IDEAS</h1>
+  <div class="header-meta">
+    <span><span class="count" id="total-count">-</span> ideas</span>
+    <span id="filter-info"></span>
+  </div>
+</div>
+
+<div class="filters" id="filters">
+  <input type="text" class="search-input" id="search" placeholder="Search ideas...">
+  <div class="filter-sep"></div>
+  <div class="filter-group" id="status-filters"></div>
+  <div class="filter-sep"></div>
+  <select class="goal-select" id="goal-filter">
+    <option value="">All goals</option>
+  </select>
+  <div class="filter-sep"></div>
+  <div class="tag-filter" id="tag-filters"></div>
+  <button class="clear-filters" id="clear-filters" style="display:none">clear filters</button>
+</div>
+
+<div class="summary-bar" id="summary-bar"></div>
+
+<div class="main">
+  <div class="ideas-list" id="ideas-list">
+    <div class="loading-state">Loading ideas...</div>
+  </div>
+  <div class="detail-panel empty" id="detail-panel">
+    <div class="empty-state">Select an idea to view details</div>
+  </div>
+</div>
+
+<script type="module">
+  const API = window.location.origin
+  let allIdeas = []
+  let allGoals = []
+  let allTags = []
+  let selectedId = null
+  let filters = { search: '', statuses: new Set(), goal: '', tag: '' }
+
+  // ── Load data ─────────────────────────
+  async function load() {
+    try {
+      const res = await fetch(`${API}/api/ideas`)
+      const data = await res.json()
+      allIdeas = data.ideas
+      allGoals = data.goals
+
+      // Collect all unique tags
+      const tagSet = new Set()
+      for (const idea of allIdeas) {
+        for (const t of idea.tags) tagSet.add(t)
+      }
+      allTags = [...tagSet].sort()
+
+      document.getElementById('total-count').textContent = allIdeas.length
+      buildFilters()
+      renderSummary()
+      renderList()
+    } catch (err) {
+      console.error('Failed to load ideas:', err)
+      document.getElementById('ideas-list').innerHTML =
+        '<div class="empty-state">Failed to load ideas</div>'
+    }
+  }
+
+  // ── Build filter UI ───────────────────
+  function buildFilters() {
+    const statusContainer = document.getElementById('status-filters')
+    const statuses = ['spark', 'exploring', 'ready', 'parked', 'promoted']
+    statusContainer.innerHTML = statuses.map(s => `
+      <button class="filter-btn ${s}" data-status="${s}">${s}</button>
+    `).join('')
+
+    statusContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-status]')
+      if (!btn) return
+      const status = btn.dataset.status
+      if (filters.statuses.has(status)) {
+        filters.statuses.delete(status)
+        btn.classList.remove('active')
+      } else {
+        filters.statuses.add(status)
+        btn.classList.add('active')
+      }
+      applyFilters()
+    })
+
+    // Goal dropdown
+    const goalSelect = document.getElementById('goal-filter')
+    for (const g of allGoals) {
+      const opt = document.createElement('option')
+      opt.value = g.id
+      opt.textContent = g.title
+      goalSelect.appendChild(opt)
+    }
+    goalSelect.addEventListener('change', () => {
+      filters.goal = goalSelect.value
+      applyFilters()
+    })
+
+    // Tag buttons (show top 12)
+    const tagContainer = document.getElementById('tag-filters')
+    const displayTags = allTags.slice(0, 12)
+    tagContainer.innerHTML = displayTags.map(t => `
+      <button class="tag-btn" data-tag="${esc(t)}">${esc(t)}</button>
+    `).join('')
+
+    tagContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tag]')
+      if (!btn) return
+      const tag = btn.dataset.tag
+      if (filters.tag === tag) {
+        filters.tag = ''
+        btn.classList.remove('active')
+      } else {
+        // Deactivate previous
+        tagContainer.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'))
+        filters.tag = tag
+        btn.classList.add('active')
+      }
+      applyFilters()
+    })
+
+    // Search
+    document.getElementById('search').addEventListener('input', (e) => {
+      filters.search = e.target.value.toLowerCase()
+      applyFilters()
+    })
+
+    // Clear
+    document.getElementById('clear-filters').addEventListener('click', () => {
+      filters = { search: '', statuses: new Set(), goal: '', tag: '' }
+      document.getElementById('search').value = ''
+      document.getElementById('goal-filter').value = ''
+      document.querySelectorAll('.filter-btn, .tag-btn').forEach(b => b.classList.remove('active'))
+      applyFilters()
+    })
+  }
+
+  // ── Apply filters ─────────────────────
+  function getFiltered() {
+    return allIdeas.filter(idea => {
+      if (filters.search) {
+        const haystack = (idea.title + ' ' + idea.body + ' ' + (idea.tags || []).join(' ')).toLowerCase()
+        if (!haystack.includes(filters.search)) return false
+      }
+      if (filters.statuses.size > 0 && !filters.statuses.has(idea.status)) return false
+      if (filters.goal && idea.goal !== filters.goal) return false
+      if (filters.tag && !(idea.tags || []).includes(filters.tag)) return false
+      return true
+    })
+  }
+
+  function applyFilters() {
+    const hasFilters = filters.search || filters.statuses.size > 0 || filters.goal || filters.tag
+    document.getElementById('clear-filters').style.display = hasFilters ? '' : 'none'
+
+    const filtered = getFiltered()
+    document.getElementById('filter-info').textContent = hasFilters
+      ? `showing ${filtered.length} of ${allIdeas.length}`
+      : ''
+    renderList(filtered)
+  }
+
+  // ── Summary bar ───────────────────────
+  function renderSummary() {
+    const counts = {}
+    for (const idea of allIdeas) {
+      counts[idea.status] = (counts[idea.status] || 0) + 1
+    }
+
+    const bar = document.getElementById('summary-bar')
+    const statuses = ['spark', 'exploring', 'ready', 'parked', 'promoted']
+    bar.innerHTML = statuses.map(s => `
+      <div class="summary-stat ${s}">
+        <span class="num">${counts[s] || 0}</span>
+        <span>${s}</span>
+      </div>
+    `).join('')
+  }
+
+  // ── Render list ───────────────────────
+  function renderList(ideas) {
+    ideas = ideas || getFiltered()
+    const list = document.getElementById('ideas-list')
+
+    if (ideas.length === 0) {
+      list.innerHTML = '<div class="empty-state">No ideas match your filters<div class="hint">Try adjusting your search or filters</div></div>'
+      return
+    }
+
+    // Sort: exploring first, then spark, ready, parked, promoted
+    const order = { exploring: 0, spark: 1, ready: 2, parked: 3, promoted: 4 }
+    ideas.sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5))
+
+    list.innerHTML = ideas.map(idea => `
+      <div class="idea-row ${idea.id === selectedId ? 'selected' : ''}" data-id="${esc(idea.id)}">
+        <div class="idea-row-header">
+          <span class="idea-status-dot ${idea.status}"></span>
+          <span class="idea-row-title">${esc(idea.title)}</span>
+          <span class="idea-row-status ${idea.status}">${idea.status}</span>
+        </div>
+        <div class="idea-row-footer">
+          ${idea.goalTitle ? `<span class="idea-goal-label">${esc(idea.goalTitle)}</span>` : ''}
+          ${(idea.tags || []).slice(0, 4).map(t => `<span class="idea-tag">${esc(t)}</span>`).join('')}
+        </div>
+      </div>
+    `).join('')
+
+    // Click handlers
+    list.querySelectorAll('.idea-row').forEach(row => {
+      row.addEventListener('click', () => {
+        const id = row.dataset.id
+        selectedId = id
+        list.querySelectorAll('.idea-row').forEach(r => r.classList.remove('selected'))
+        row.classList.add('selected')
+        renderDetail(allIdeas.find(i => i.id === id))
+      })
+    })
+  }
+
+  // ── Render detail ─────────────────────
+  function renderDetail(idea) {
+    const panel = document.getElementById('detail-panel')
+    panel.classList.remove('empty')
+
+    const bodyHtml = renderMarkdown(idea.body)
+
+    panel.innerHTML = `
+      <div class="detail-header">
+        <div class="detail-title">${esc(idea.title)}</div>
+        <div class="detail-meta">
+          <span class="idea-row-status ${idea.status}">${idea.status}</span>
+          ${idea.goalTitle ? `<span class="idea-goal-label">${esc(idea.goalTitle)}</span>` : ''}
+          ${(idea.tags || []).map(t => `<span class="idea-tag">${esc(t)}</span>`).join('')}
+        </div>
+      </div>
+      <div class="detail-body">${bodyHtml || '<div class="empty-state">No content yet</div>'}</div>
+    `
+  }
+
+  // ── Simple markdown renderer ──────────
+  function renderMarkdown(text) {
+    if (!text) return ''
+
+    // Remove the H1 title line (it's already in the header)
+    text = text.replace(/^#\s+[^\n]+\n*/m, '')
+
+    let html = esc(text)
+
+    // Code blocks (must be before inline code)
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      return `<pre><code>${code.trim()}</code></pre>`
+    })
+
+    // Headers
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+
+    // Bold and italic
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+
+    // Inline code
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+    // Links
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+
+    // Horizontal rules
+    html = html.replace(/^---$/gm, '<hr>')
+
+    // Unordered lists
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+
+    // Tables
+    html = html.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/gm, (_, headerRow, bodyRows) => {
+      const headers = headerRow.split('|').map(h => h.trim()).filter(Boolean)
+      const rows = bodyRows.trim().split('\n').map(r =>
+        r.split('|').map(c => c.trim()).filter(Boolean)
+      )
+      return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+    })
+
+    // Blockquotes
+    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+
+    // Paragraphs (double newline)
+    html = html.replace(/\n\n+/g, '</p><p>')
+    html = '<p>' + html + '</p>'
+
+    // Clean up empty paragraphs and paragraphs wrapping block elements
+    html = html.replace(/<p>\s*<\/p>/g, '')
+    html = html.replace(/<p>\s*(<h[23]>)/g, '$1')
+    html = html.replace(/(<\/h[23]>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<pre>)/g, '$1')
+    html = html.replace(/(<\/pre>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<ul>)/g, '$1')
+    html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<table>)/g, '$1')
+    html = html.replace(/(<\/table>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<blockquote>)/g, '$1')
+    html = html.replace(/(<\/blockquote>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<hr>)/g, '$1')
+    html = html.replace(/(<hr>)\s*<\/p>/g, '$1')
+
+    return html
+  }
+
+  // ── Utilities ─────────────────────────
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
+  }
+
+  // ── Keyboard nav ──────────────────────
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
+
+    const filtered = getFiltered()
+    const order = { exploring: 0, spark: 1, ready: 2, parked: 3, promoted: 4 }
+    filtered.sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5))
+
+    if (e.key === 'ArrowDown' || e.key === 'j') {
+      e.preventDefault()
+      const idx = filtered.findIndex(i => i.id === selectedId)
+      const next = filtered[idx + 1] || filtered[0]
+      if (next) selectIdea(next.id)
+    } else if (e.key === 'ArrowUp' || e.key === 'k') {
+      e.preventDefault()
+      const idx = filtered.findIndex(i => i.id === selectedId)
+      const prev = filtered[idx - 1] || filtered[filtered.length - 1]
+      if (prev) selectIdea(prev.id)
+    } else if (e.key === '/') {
+      e.preventDefault()
+      document.getElementById('search').focus()
+    } else if (e.key === 'Escape') {
+      document.getElementById('search').blur()
+      filters.search = ''
+      document.getElementById('search').value = ''
+      applyFilters()
+    }
+  })
+
+  function selectIdea(id) {
+    selectedId = id
+    const list = document.getElementById('ideas-list')
+    list.querySelectorAll('.idea-row').forEach(r => {
+      r.classList.toggle('selected', r.dataset.id === id)
+      if (r.dataset.id === id) r.scrollIntoView({ block: 'nearest' })
+    })
+    renderDetail(allIdeas.find(i => i.id === id))
+  }
+
+  // ── Auto-refresh on focus ─────────────
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) load()
+  })
+
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'stateChange') load()
+  })
+
+  // ── Boot ──────────────────────────────
+  load()
+</script>
+</body>
+</html>

@@ -4,6 +4,11 @@ import { FeatureOptionsSchema, FeatureStateSchema } from '@soederpop/luca/schema
 import { WebSocketServer, WebSocket } from 'ws'
 import type { Assistant, AssistantsManager } from '@soederpop/luca/agi'
 import type { Server as HttpServer } from 'http'
+import type { VoiceChat } from './voice-chat'
+
+// ── Voice mode ──
+
+export type VoiceMode = 'off' | 'always'
 
 // ── Protocol types ──
 
@@ -15,11 +20,13 @@ export type ChatMessageOut =
 	| { type: 'tool_start'; id: string; name: string; startedAt: number }
 	| { type: 'tool_end'; id: string; name: string; ok: boolean; endedAt: number; durationMs: number; summary?: string; error?: string }
 	| { type: 'assistant_message_complete'; messageId: string; text: string }
+	| { type: 'voice_mode_changed'; mode: VoiceMode }
 	| { type: 'error'; message: string }
 
 export type ChatMessageIn =
 	| { type: 'init'; sessionId: string; assistantId?: string }
-	| { type: 'user_message'; text: string }
+	| { type: 'user_message'; text: string; voice?: boolean }
+	| { type: 'set_voice_mode'; mode: VoiceMode }
 
 // ── Session ──
 
@@ -88,6 +95,33 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 	private sessions = new Map<string, ChatSession>()
 	private wss: WebSocketServer | null = null
 	private customHandler: CustomMessageHandler | null = null
+	private _voiceChat: VoiceChat | null = null
+	private _voiceMode: VoiceMode = 'off'
+
+	// ── Voice ──
+
+	/**
+	 * Attach a VoiceChat instance for voice responses.
+	 * When set, the service can route messages through voice based on voiceMode.
+	 */
+	setVoiceChat(voiceChat: VoiceChat) {
+		this._voiceChat = voiceChat
+		return this
+	}
+
+	get voiceChat(): VoiceChat | null {
+		return this._voiceChat
+	}
+
+	get voiceMode(): VoiceMode {
+		return this._voiceMode
+	}
+
+	setVoiceMode(mode: VoiceMode) {
+		this._voiceMode = mode
+		this.emit('voiceModeChanged', { mode })
+		return this
+	}
 
 	/**
 	 * Register a handler for custom message types (e.g. 'start_review').
@@ -168,6 +202,7 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 	/**
 	 * Get or create a session for the given sessionId + assistantId combo.
+	 * When a voiceChat is attached, its assistant is used as the session assistant.
 	 */
 	async getOrCreateSession(sessionId: string, assistantId: string): Promise<ChatSession | null> {
 		const fullName = this.resolveAssistantName(assistantId)
@@ -180,12 +215,19 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 			return this.sessions.get(sessionKey)!
 		}
 
-		const assistant: Assistant = this.assistantsManager.create(fullName, {
-			historyMode: this.options.historyMode,
-		}) as Assistant
+		let assistant: Assistant
 
-		assistant.resumeThread(`${this.options.threadPrefix}:${sessionKey}`)
-		await assistant.start()
+		if (this._voiceChat) {
+			// VoiceChat owns the assistant — reuse it so TTS event wiring stays intact
+			assistant = this._voiceChat.assistant
+		} else {
+			assistant = this.assistantsManager.create(fullName, {
+				historyMode: this.options.historyMode,
+			}) as Assistant
+
+			assistant.resumeThread(`${this.options.threadPrefix}:${sessionKey}`)
+			await assistant.start()
+		}
 
 		const session: ChatSession = { assistant, assistantId: shortName, sessionKey }
 		this.sessions.set(sessionKey, session)
@@ -349,6 +391,18 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 				return
 			}
 
+			// ── Voice mode toggle ──
+			if (parsed.type === 'set_voice_mode') {
+				const mode = parsed.mode
+				if (mode !== 'off' && mode !== 'always') {
+					this.send(ws, { type: 'error', message: `Invalid voice mode: ${mode}. Use "off" or "always".` })
+					return
+				}
+				this.setVoiceMode(mode)
+				this.send(ws, { type: 'voice_mode_changed', mode })
+				return
+			}
+
 			// ── User message ──
 			if (parsed.type === 'user_message') {
 				if (!session) {
@@ -365,7 +419,18 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 				if (!text) return
 
 				isProcessing = true
+
+				// When voiceChat is attached, mute it unless voice is requested
+				const wantVoice = this._voiceChat && (this._voiceMode === 'always' || parsed.voice === true)
+
+				if (this._voiceChat && !wantVoice) this._voiceChat.mute()
+				if (this._voiceChat && wantVoice) this._voiceChat.unmute()
+
 				await this.streamResponse(session, text, this.wsCallbacks(ws))
+
+				// Restore unmuted state after text-only response
+				if (this._voiceChat && !wantVoice) this._voiceChat.unmute()
+
 				isProcessing = false
 				return
 			}

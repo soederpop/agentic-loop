@@ -33,6 +33,7 @@ export async function main(container: any) {
   	.addContext('luca', container)
 	.addContext('chief', chief)
 	.addContext('docs', await container.docs.load())
+	.addContext('wm', container.feature('windowManager', { autoListen: true }))
 
    await container.docs.load()
 

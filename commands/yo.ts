@@ -3,13 +3,13 @@ import type { ContainerContext } from '@soederpop/luca'
 
 export const description = 'simulate a wakeword driven voice command flow by typing instead'
 
-export const positionals = ['target']
+export const positionals = ['cmd', 'target']
 
 export const argsSchema = z.object({
   _: z.array(z.union([z.string(),z.number()])).describe('the words that come after'),
   target: z.string()
     .optional()
-    .describe('Which assistant to route to (friday, chief)'),
+    .describe('Which assistant to route to'),
   dry: z.boolean().default(false).describe('Dry run — show routing info without executing'),
 })
 
@@ -26,7 +26,10 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
   const { container } = context
   const ui = container.feature('ui')
 
-  const target = (options.target || 'friday').toLowerCase()
+  await container.helpers.discoverAll()
+
+  const target = (options._[1] || options.target).toLowerCase()
+
   // positional args after target
   const argsText = options._.slice(2).join(' ').trim()
 
@@ -52,8 +55,6 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
 
   const isChief = target === 'chief' || target === 'chiefofstaff'
 
-  console.log(`${ui.colors.dim(isChief ? '🎖  chief' : '📡 friday')} ${ui.colors.green('>')} ${text}`)
-
   // Check if luca main authority is running — if so, relay through it
   const networking = container.feature('networking')
   const mainPort = 4410
@@ -64,6 +65,15 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
     await relayThroughAuthority(container, mainPort, target, text, ui)
     return
   }
+
+  const assistantsManager = await container.feature('assistantsManager').discover()
+
+  if (assistantsManager.available.indexOf(target) > -1 ) {
+	const mgr = await assistantsManager.create(target) 
+	await mgr.ask(text).then(r => ui.print(ui.markdown(r)))
+	return 
+  }
+
 
   // Standalone mode — boot voice service locally
   const voiceService = container.feature('voiceService' as any) as any
@@ -116,7 +126,7 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
     const response = await chiefChat.ask(text)
     console.log()
     console.log(`${ui.colors.blue('Chief')} ${ui.colors.dim('>')} ${response}`)
-  } else {
+  } else if (assistant) {
     // Friday / default path: route through voice router
     await routeThroughRouter(router, text, voiceService, ui)
   }

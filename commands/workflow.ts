@@ -19,6 +19,20 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
 
   await container.helpers.discoverAll()
 
+  const wm = container.feature('windowManager')
+  
+  let launchedWindowId: any = null
+  let actualPort: any = undefined 
+  let serviceProcessPid : any = undefined
+  
+  wm.once('windowClosed', (w: any) => {
+    if(String(w.windowId).toLowerCase() === String(launchedWindowId).toLowerCase()) {
+      if (serviceProcessPid) {
+        process.exit(0)
+      }
+    }
+  })
+
   const library = container.feature('workflowLibrary')
 
   if (!library.isLoaded) await library.discover()
@@ -34,7 +48,6 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
 	  ui.print.red(`Invalid workflow! ${library.workflows.map(w => w.name).join(",")}`)
 	  return
   }
-
 
   switch (action) {
     case 'run': {
@@ -55,7 +68,7 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
         return
       }
 
-      const actualPort = port || info.port || 7700
+      actualPort = port || info.port || 7700
       const setupPath = container.paths.resolve(info.folderPath, 'luca.serve.ts')
       const endpointsDir = container.paths.resolve(info.folderPath, 'endpoints')
       const serveArgs = ['serve', '--setup', setupPath, '--port', String(actualPort), '--no-open', '--endpoints-dir', endpointsDir, '--force']
@@ -83,6 +96,10 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
 	      onError(output: string) {
           console.log(`[workflow:stderr] ${String(output).trim()}`)
         },
+        onStart: (p: any) => {
+          serviceProcessPid = p.pid
+          console.log('got a pid', serviceProcessPid)
+        }
       })
 
       // Poll until the port is accepting connections
@@ -99,11 +116,27 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
         await new Promise((r) => setTimeout(r, 250))
       }
       console.log(`[workflow] port ${actualPort} ready=${portReady} (waited ${Date.now() - start}ms)`)
+	
+      const launchedWindow = await wm.spawn({ url: `http://localhost:${actualPort}` })
 
-      await container.feature('opener').open(`http://localhost:${actualPort}`)
+      launchedWindowId = String(launchedWindow.result?.windowId).toLowerCase()
 
-      // Wait for the server process to finish
-      const result = await serverProcess
+      // Clean up windows and server process on exit (Ctrl+C)
+      const cleanup = async () => {
+        console.log('\n[workflow] shutting down...')
+        if (launchedWindowId) {
+          try { await wm.close(launchedWindowId) } catch {}
+        }
+        if (serviceProcessPid) {
+          try { process.kill(serviceProcessPid) } catch {}
+        }
+        process.exit(0)
+      }
+
+      process.on('SIGINT', cleanup)
+      process.on('SIGTERM', cleanup)
+
+      await serverProcess
 
       break
     }
