@@ -1,0 +1,1591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luca Playground</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --border: #1e1e2e;
+    --border-bright: #2a2a3e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --accent-glow: #00fff740;
+    --assistant: #c084fc;
+    --assistant-dim: #c084fc18;
+    --user-bg: #1a1a2e;
+    --input-bg: #0e0e16;
+    --error: #ff003c;
+    --success: #39ff14;
+    --warning: #f59e0b;
+    --tool-bg: #0d0d14;
+    --tool-border: #1a1a2a;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow: hidden;
+  }
+
+  /* ── Layout ──────────────────────────────── */
+  #app {
+    display: grid;
+    grid-template-columns: 320px 1fr 340px;
+    grid-template-rows: auto 1fr auto;
+    height: 100vh;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  #topbar {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #topbar .title {
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+  }
+
+  #topbar .subtitle {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  #topbar .spacer { flex: 1; }
+
+  #topbar .container-id {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .loading-indicator {
+    color: var(--warning);
+    font-size: 11px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Panels ──────────────────────────────── */
+  .panel {
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    padding: 10px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .panel-header .panel-title {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .panel-header .panel-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+  }
+
+  .badge-connected {
+    background: #39ff1420;
+    color: var(--success);
+  }
+
+  .badge-disconnected {
+    background: #ff003c20;
+    color: var(--error);
+  }
+
+  .badge-loading {
+    background: #f59e0b20;
+    color: var(--warning);
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+  }
+
+  .panel-body::-webkit-scrollbar {
+    width: 6px;
+  }
+  .panel-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .panel-body::-webkit-scrollbar-thumb {
+    background: var(--border-bright);
+    border-radius: 3px;
+  }
+
+  /* ── Left Column: stacked panels ─────────── */
+  #left-col {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  #left-col .panel {
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* ── Form controls ───────────────────────── */
+  .field {
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .field input, .field select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 8px;
+    outline: none;
+  }
+
+  .field input:focus, .field select:focus {
+    border-color: var(--accent);
+  }
+
+  .btn {
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 5px 12px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+
+  .btn-primary:hover {
+    opacity: 0.85;
+    color: var(--bg);
+  }
+
+  .btn-danger {
+    border-color: var(--error);
+    color: var(--error);
+  }
+
+  .btn-danger:hover {
+    background: #ff003c20;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  /* ── Info rows ───────────────────────────── */
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 11px;
+  }
+
+  .info-row .info-label {
+    color: var(--text-dim);
+  }
+
+  .info-row .info-value {
+    color: var(--text);
+    font-weight: 500;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .info-row .info-value.accent { color: var(--accent); }
+  .info-row .info-value.success { color: var(--success); }
+  .info-row .info-value.error { color: var(--error); }
+  .info-row .info-value.warning { color: var(--warning); }
+
+  .separator {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 10px 0;
+  }
+
+  /* ── Feature tags ────────────────────────── */
+  .feature-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .feature-tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-dim);
+  }
+
+  .feature-tag.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  /* ── Chat Panel (center) ─────────────────── */
+  #chat-panel {
+    display: flex;
+    flex-direction: column;
+  }
+
+  #chat-config {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #chat-config label {
+    font-size: 10px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #chat-config input, #chat-config select {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 4px 8px;
+    outline: none;
+    width: auto;
+  }
+
+  #chat-config input:focus, #chat-config select:focus {
+    border-color: var(--accent);
+  }
+
+  #chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  #chat-messages::-webkit-scrollbar {
+    width: 6px;
+  }
+  #chat-messages::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  #chat-messages::-webkit-scrollbar-thumb {
+    background: var(--border-bright);
+    border-radius: 3px;
+  }
+
+  .msg {
+    max-width: 85%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    animation: fadeIn 0.15s ease-out;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .msg.user {
+    align-self: flex-end;
+    background: var(--user-bg);
+    border: 1px solid var(--border);
+  }
+
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--assistant-dim);
+    border: 1px solid transparent;
+  }
+
+  .msg.assistant.streaming {
+    border-color: var(--assistant);
+  }
+
+  .msg.error-msg {
+    align-self: center;
+    color: var(--error);
+    font-size: 11px;
+    padding: 4px 8px;
+    background: transparent;
+  }
+
+  .msg.system-msg {
+    align-self: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    font-style: italic;
+    padding: 4px 8px;
+    background: transparent;
+  }
+
+  .cursor-blink {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--assistant);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 0.6s step-end infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Tool Activity ───────────────────────── */
+  .tool-activity {
+    align-self: flex-start;
+    max-width: 85%;
+    margin: 2px 0;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .tool-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--tool-bg);
+    border: 1px solid var(--tool-border);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 100%;
+    text-align: left;
+  }
+
+  .tool-toggle:hover {
+    border-color: var(--warning);
+  }
+
+  .tool-toggle .arrow {
+    transition: transform 0.15s;
+    font-size: 9px;
+  }
+
+  .tool-activity.expanded .tool-toggle .arrow {
+    transform: rotate(90deg);
+  }
+
+  .tool-toggle .tool-label {
+    color: var(--warning);
+    font-weight: 600;
+  }
+
+  .tool-toggle .tool-count {
+    margin-left: auto;
+  }
+
+  .tool-list {
+    display: none;
+    padding: 4px 0 0 0;
+  }
+
+  .tool-activity.expanded .tool-list {
+    display: block;
+  }
+
+  .tool-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--tool-border);
+    margin-left: 8px;
+    cursor: pointer;
+  }
+
+  .tool-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tool-dot.running {
+    background: var(--warning);
+    box-shadow: 0 0 4px var(--warning);
+    animation: blink 0.8s step-end infinite;
+  }
+
+  .tool-dot.ok {
+    background: var(--success);
+    box-shadow: 0 0 4px rgba(57,255,20,0.4);
+  }
+
+  .tool-dot.err {
+    background: var(--error);
+    box-shadow: 0 0 4px rgba(255,0,60,0.4);
+  }
+
+  .tool-name {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .tool-dur {
+    margin-left: auto;
+    font-size: 10px;
+  }
+
+  .tool-detail {
+    font-size: 10px;
+    margin-left: 14px;
+    padding: 2px 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.2s;
+  }
+
+  .tool-item.show-detail .tool-detail {
+    max-height: 60px;
+  }
+
+  .tool-err-msg {
+    color: var(--error);
+    font-size: 10px;
+    margin-left: 14px;
+    padding: 2px 0;
+  }
+
+  /* ── Chat Input ──────────────────────────── */
+  #chat-input-area {
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  #chat-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+    resize: none;
+    outline: none;
+    min-height: 38px;
+    max-height: 100px;
+    line-height: 1.4;
+  }
+
+  #chat-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  #chat-input::placeholder {
+    color: var(--text-dim);
+  }
+
+  #chat-send {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 6px;
+    padding: 0 16px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+  }
+
+  #chat-send:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  /* ── Code Editor (inspector) ─────────────── */
+  #code-editor {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 8px;
+    resize: vertical;
+    outline: none;
+    min-height: 60px;
+    max-height: 200px;
+    line-height: 1.4;
+  }
+
+  #code-editor:focus {
+    border-color: var(--accent);
+  }
+
+  #code-output {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    font-size: 11px;
+    color: var(--text);
+    max-height: 150px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    margin-top: 6px;
+    min-height: 40px;
+  }
+
+  #code-output:empty::before {
+    content: 'output will appear here';
+    color: var(--text-faint);
+  }
+
+  /* ── Event Log (bottom bar) ──────────────── */
+  #event-log-bar {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    max-height: 180px;
+    min-height: 32px;
+    overflow: hidden;
+  }
+
+  #event-log-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    user-select: none;
+  }
+
+  #event-log-header:hover {
+    background: var(--surface-2);
+  }
+
+  #event-log-header .panel-title {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  #event-log-header .arrow {
+    font-size: 9px;
+    color: var(--text-dim);
+    transition: transform 0.15s;
+  }
+
+  #event-log-bar.expanded #event-log-header .arrow {
+    transform: rotate(180deg);
+  }
+
+  #event-log-count {
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-left: auto;
+  }
+
+  #event-log-clear {
+    font-size: 10px;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-family: inherit;
+    padding: 2px 6px;
+  }
+
+  #event-log-clear:hover {
+    color: var(--accent);
+  }
+
+  #event-log-entries {
+    display: none;
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 14px 8px;
+    font-size: 11px;
+  }
+
+  #event-log-bar.expanded #event-log-entries {
+    display: block;
+  }
+
+  #event-log-bar.expanded {
+    min-height: 120px;
+  }
+
+  #event-log-entries::-webkit-scrollbar {
+    width: 6px;
+  }
+  #event-log-entries::-webkit-scrollbar-thumb {
+    background: var(--border-bright);
+    border-radius: 3px;
+  }
+
+  .log-entry {
+    padding: 2px 0;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .log-time {
+    color: var(--text-faint);
+    flex-shrink: 0;
+    width: 70px;
+  }
+
+  .log-source {
+    font-weight: 600;
+    flex-shrink: 0;
+    width: 80px;
+  }
+
+  .log-source.link { color: var(--accent); }
+  .log-source.chat { color: var(--assistant); }
+  .log-source.container { color: var(--warning); }
+  .log-source.error { color: var(--error); }
+
+  .log-text {
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Emit to Host ────────────────────────── */
+  .emit-section {
+    margin-top: 8px;
+  }
+
+  .emit-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .emit-row input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 4px 6px;
+    outline: none;
+  }
+
+  .emit-row input:focus {
+    border-color: var(--accent);
+  }
+
+  /* ── Empty state ─────────────────────────── */
+  .empty-state {
+    color: var(--text-faint);
+    font-size: 12px;
+    text-align: center;
+    padding: 40px 20px;
+    line-height: 1.8;
+  }
+
+  .empty-state .accent {
+    color: var(--accent);
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Top Bar -->
+  <div id="topbar">
+    <span class="title">LUCA PLAYGROUND</span>
+    <span class="subtitle" id="luca-status">loading container...</span>
+    <span class="spacer"></span>
+    <span class="container-id" id="container-uuid">—</span>
+  </div>
+
+  <!-- Left Column: Container Link + Inspector -->
+  <div id="left-col">
+    <!-- Container Link Panel -->
+    <div class="panel" id="link-panel">
+      <div class="panel-header">
+        <span class="panel-title">Container Link</span>
+        <span class="panel-badge badge-disconnected" id="link-badge">disconnected</span>
+      </div>
+      <div class="panel-body">
+        <div class="field">
+          <label>Host URL</label>
+          <input type="text" id="link-host-url" value="ws://localhost:8089" />
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="link-connect-btn" disabled>Connect</button>
+          <button class="btn btn-danger" id="link-disconnect-btn" disabled>Disconnect</button>
+        </div>
+        <hr class="separator" />
+        <div class="info-row">
+          <span class="info-label">Status</span>
+          <span class="info-value" id="link-status">idle</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Host ID</span>
+          <span class="info-value" id="link-host-id">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Token</span>
+          <span class="info-value" id="link-token">—</span>
+        </div>
+        <hr class="separator" />
+        <div class="emit-section">
+          <label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;">Emit to Host</label>
+          <div class="emit-row">
+            <input type="text" id="emit-event" placeholder="event name" />
+            <input type="text" id="emit-data" placeholder='{"key":"val"}' />
+            <button class="btn" id="emit-btn" disabled>Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Container Inspector Panel -->
+    <div class="panel" id="inspector-panel">
+      <div class="panel-header">
+        <span class="panel-title">Inspector</span>
+        <span class="panel-badge badge-loading" id="inspector-badge">loading</span>
+      </div>
+      <div class="panel-body">
+        <div class="info-row">
+          <span class="info-label">UUID</span>
+          <span class="info-value accent" id="insp-uuid">—</span>
+        </div>
+        <div class="info-row">
+          <span class="info-label">Platform</span>
+          <span class="info-value" id="insp-platform">web</span>
+        </div>
+        <label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;margin-top:8px;display:block;">Features</label>
+        <div class="feature-tags" id="insp-features"></div>
+        <hr class="separator" />
+        <label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;display:block;">Eval (VM)</label>
+        <textarea id="code-editor" placeholder="container.uuid" spellcheck="false">container.uuid</textarea>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="run-code-btn" disabled>Run</button>
+          <button class="btn" id="clear-output-btn">Clear</button>
+        </div>
+        <div id="code-output"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Center: Chat Panel -->
+  <div class="panel" id="chat-panel">
+    <div class="panel-header">
+      <span class="panel-title">Web Chat</span>
+      <span class="panel-badge badge-disconnected" id="chat-badge">disconnected</span>
+    </div>
+    <div id="chat-config">
+      <label>Host</label>
+      <input type="text" id="chat-host" value="localhost" style="width:120px;" />
+      <label>Port</label>
+      <input type="number" id="chat-port" value="3100" style="width:70px;" />
+      <label>Assistant</label>
+      <select id="chat-assistant-picker">
+        <option value="">default</option>
+      </select>
+      <span class="spacer" style="flex:1;"></span>
+      <button class="btn" id="chat-connect-btn">Connect</button>
+      <button class="btn btn-danger" id="chat-disconnect-btn" disabled>Disconnect</button>
+    </div>
+    <div id="chat-messages">
+      <div class="empty-state">
+        Connect to the <span class="accent">web-chat</span> server to start chatting.<br/>
+        Make sure <span class="accent">luca web-chat</span> is running.
+      </div>
+    </div>
+    <div id="chat-input-area">
+      <textarea id="chat-input" placeholder="Say something..." rows="1" disabled></textarea>
+      <button id="chat-send" disabled>SEND</button>
+    </div>
+  </div>
+
+  <!-- Right Column: reserved for future / event detail -->
+  <div class="panel" id="right-panel">
+    <div class="panel-header">
+      <span class="panel-title">Container State</span>
+      <button class="btn" id="refresh-state-btn" style="margin-left:auto;font-size:10px;padding:2px 8px;">Refresh</button>
+    </div>
+    <div class="panel-body" id="state-body">
+      <div class="empty-state">
+        Container state will appear here once loaded.
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom: Event Log -->
+  <div id="event-log-bar" class="expanded">
+    <div id="event-log-header">
+      <span class="arrow">&#9660;</span>
+      <span class="panel-title">Event Log</span>
+      <span id="event-log-count">0 events</span>
+      <button id="event-log-clear">clear</button>
+    </div>
+    <div id="event-log-entries"></div>
+  </div>
+</div>
+
+<script type="module">
+// ── Container loading ─────────────────────────
+let container = null;
+let containerReady = false;
+
+const statusEl = document.getElementById('luca-status');
+const uuidEl = document.getElementById('container-uuid');
+
+async function loadContainer() {
+  statusEl.textContent = 'loading @soederpop/luca from esm.sh...';
+  try {
+    const mod = await import('https://esm.sh/@soederpop/luca@0.0.25/src/browser.ts');
+    container = mod.default || window.luca;
+    if (!container) throw new Error('No container exported');
+    window.luca = container;
+    containerReady = true;
+    statusEl.textContent = 'container ready';
+    uuidEl.textContent = container.uuid || '—';
+    logEvent('container', 'Container loaded', `uuid=${container.uuid}`);
+    onContainerReady();
+  } catch (err) {
+    statusEl.textContent = `load failed: ${err.message}`;
+    logEvent('error', 'Container load failed', err.message);
+    // Still enable UI elements that don't need the container
+    document.getElementById('chat-connect-btn').disabled = false;
+    document.getElementById('inspector-badge').textContent = 'error';
+    document.getElementById('inspector-badge').className = 'panel-badge badge-disconnected';
+  }
+}
+
+function onContainerReady() {
+  // Enable buttons
+  document.getElementById('link-connect-btn').disabled = false;
+  document.getElementById('run-code-btn').disabled = false;
+  document.getElementById('chat-connect-btn').disabled = false;
+
+  // Inspector info
+  document.getElementById('insp-uuid').textContent = container.uuid || '—';
+  document.getElementById('inspector-badge').textContent = 'ready';
+  document.getElementById('inspector-badge').className = 'panel-badge badge-connected';
+
+  // Features
+  const featuresEl = document.getElementById('insp-features');
+  featuresEl.innerHTML = '';
+  try {
+    const available = container.features?.available || [];
+    for (const name of available) {
+      const tag = document.createElement('span');
+      tag.className = 'feature-tag';
+      tag.textContent = name;
+      featuresEl.appendChild(tag);
+    }
+    if (available.length === 0) {
+      featuresEl.innerHTML = '<span class="feature-tag">none discovered</span>';
+    }
+  } catch {
+    featuresEl.innerHTML = '<span class="feature-tag">unavailable</span>';
+  }
+
+  refreshState();
+}
+
+// ── Event Log ─────────────────────────────────
+let eventCount = 0;
+const logEntriesEl = document.getElementById('event-log-entries');
+const logCountEl = document.getElementById('event-log-count');
+
+function logEvent(source, label, detail = '') {
+  eventCount++;
+  logCountEl.textContent = `${eventCount} events`;
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+
+  const now = new Date();
+  const time = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+
+  let sourceClass = 'container';
+  if (source === 'link') sourceClass = 'link';
+  else if (source === 'chat') sourceClass = 'chat';
+  else if (source === 'error') sourceClass = 'error';
+
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-source ${sourceClass}">${esc(source)}</span><span class="log-text">${esc(label)}${detail ? ' — ' + esc(detail) : ''}</span>`;
+  logEntriesEl.appendChild(entry);
+  logEntriesEl.scrollTop = logEntriesEl.scrollHeight;
+}
+
+document.getElementById('event-log-header').addEventListener('click', () => {
+  document.getElementById('event-log-bar').classList.toggle('expanded');
+});
+
+document.getElementById('event-log-clear').addEventListener('click', (e) => {
+  e.stopPropagation();
+  logEntriesEl.innerHTML = '';
+  eventCount = 0;
+  logCountEl.textContent = '0 events';
+});
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+// ── Container Link ────────────────────────────
+let link = null;
+
+document.getElementById('link-connect-btn').addEventListener('click', async () => {
+  if (!containerReady) return;
+  const hostUrl = document.getElementById('link-host-url').value.trim();
+  if (!hostUrl) return;
+
+  try {
+    document.getElementById('link-status').textContent = 'connecting...';
+    document.getElementById('link-status').className = 'info-value warning';
+    document.getElementById('link-badge').textContent = 'connecting';
+    document.getElementById('link-badge').className = 'panel-badge badge-loading';
+    logEvent('link', 'Connecting', hostUrl);
+
+    link = container.feature('containerLink', { enable: true, hostUrl, reconnect: true });
+
+    link.on('connected', (hostId) => {
+      document.getElementById('link-status').textContent = 'connected';
+      document.getElementById('link-status').className = 'info-value success';
+      document.getElementById('link-host-id').textContent = hostId || '—';
+      document.getElementById('link-token').textContent = link.token ? link.token.slice(0, 16) + '...' : '—';
+      document.getElementById('link-badge').textContent = 'connected';
+      document.getElementById('link-badge').className = 'panel-badge badge-connected';
+      document.getElementById('link-connect-btn').disabled = true;
+      document.getElementById('link-disconnect-btn').disabled = false;
+      document.getElementById('emit-btn').disabled = false;
+      logEvent('link', 'Connected', `hostId=${hostId}`);
+      highlightFeature('containerLink');
+      refreshState();
+    });
+
+    link.on('disconnected', (reason) => {
+      document.getElementById('link-status').textContent = 'disconnected';
+      document.getElementById('link-status').className = 'info-value error';
+      document.getElementById('link-badge').textContent = 'disconnected';
+      document.getElementById('link-badge').className = 'panel-badge badge-disconnected';
+      document.getElementById('link-connect-btn').disabled = false;
+      document.getElementById('link-disconnect-btn').disabled = true;
+      document.getElementById('emit-btn').disabled = true;
+      logEvent('link', 'Disconnected', reason || '');
+    });
+
+    link.on('evalRequest', (code, requestId) => {
+      logEvent('link', 'Eval request', `[${requestId}] ${code.slice(0, 80)}`);
+    });
+
+    link.on('evalResult', (requestId, result) => {
+      logEvent('link', 'Eval result', `[${requestId}] ${JSON.stringify(result).slice(0, 80)}`);
+    });
+
+    link.on('reconnecting', (attempt) => {
+      document.getElementById('link-status').textContent = `reconnecting (#${attempt})`;
+      document.getElementById('link-status').className = 'info-value warning';
+      logEvent('link', 'Reconnecting', `attempt ${attempt}`);
+    });
+
+    link.on('error', (err) => {
+      logEvent('error', 'ContainerLink error', err?.message || String(err));
+    });
+
+    await link.connect();
+  } catch (err) {
+    document.getElementById('link-status').textContent = 'error';
+    document.getElementById('link-status').className = 'info-value error';
+    document.getElementById('link-badge').textContent = 'error';
+    document.getElementById('link-badge').className = 'panel-badge badge-disconnected';
+    logEvent('error', 'Link connect failed', err.message);
+  }
+});
+
+document.getElementById('link-disconnect-btn').addEventListener('click', () => {
+  if (link) {
+    link.disconnect('user');
+    link = null;
+  }
+});
+
+// Emit to host
+document.getElementById('emit-btn').addEventListener('click', () => {
+  if (!link || !link.isConnected) return;
+  const eventName = document.getElementById('emit-event').value.trim();
+  if (!eventName) return;
+  let data;
+  try {
+    const raw = document.getElementById('emit-data').value.trim();
+    data = raw ? JSON.parse(raw) : undefined;
+  } catch {
+    data = document.getElementById('emit-data').value.trim();
+  }
+  link.emitToHost(eventName, data);
+  logEvent('link', `Emitted "${eventName}"`, data ? JSON.stringify(data).slice(0, 60) : '');
+});
+
+function highlightFeature(name) {
+  const tags = document.querySelectorAll('.feature-tag');
+  for (const t of tags) {
+    if (t.textContent === name) {
+      t.classList.add('active');
+    }
+  }
+}
+
+// ── Inspector: Run Code ───────────────────────
+document.getElementById('run-code-btn').addEventListener('click', () => {
+  if (!containerReady) return;
+  const code = document.getElementById('code-editor').value;
+  const outputEl = document.getElementById('code-output');
+  try {
+    // Try using the VM feature if available, fallback to eval with container in scope
+    let result;
+    try {
+      const vm = container.feature('vm');
+      result = vm.run(code);
+    } catch {
+      // Fallback: eval with container in scope
+      const fn = new Function('container', 'luca', `return (${code})`);
+      result = fn(container, container);
+    }
+    // Handle promises
+    if (result && typeof result.then === 'function') {
+      outputEl.textContent = 'awaiting...';
+      outputEl.style.color = 'var(--warning)';
+      result.then(r => {
+        outputEl.textContent = formatResult(r);
+        outputEl.style.color = 'var(--text)';
+      }).catch(e => {
+        outputEl.textContent = `Error: ${e.message}`;
+        outputEl.style.color = 'var(--error)';
+      });
+    } else {
+      outputEl.textContent = formatResult(result);
+      outputEl.style.color = 'var(--text)';
+    }
+    logEvent('container', 'Eval', code.slice(0, 60));
+  } catch (err) {
+    outputEl.textContent = `Error: ${err.message}`;
+    outputEl.style.color = 'var(--error)';
+    logEvent('error', 'Eval error', err.message);
+  }
+});
+
+document.getElementById('code-editor').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    document.getElementById('run-code-btn').click();
+  }
+});
+
+document.getElementById('clear-output-btn').addEventListener('click', () => {
+  document.getElementById('code-output').textContent = '';
+});
+
+function formatResult(val) {
+  if (val === undefined) return 'undefined';
+  if (val === null) return 'null';
+  if (typeof val === 'string') return val;
+  try {
+    return JSON.stringify(val, null, 2);
+  } catch {
+    return String(val);
+  }
+}
+
+// ── Container State Panel ─────────────────────
+function refreshState() {
+  const body = document.getElementById('state-body');
+  if (!containerReady) {
+    body.innerHTML = '<div class="empty-state">Container not loaded yet.</div>';
+    return;
+  }
+
+  let html = '';
+
+  // Container basics
+  html += infoRowHtml('UUID', container.uuid || '—', 'accent');
+  html += infoRowHtml('CWD', container.cwd || '—');
+
+  // State
+  try {
+    const state = container.state?.getState ? container.state.getState() : (container.state || {});
+    html += '<hr class="separator" />';
+    html += '<label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">State</label>';
+    for (const [key, val] of Object.entries(state)) {
+      const display = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      html += infoRowHtml(key, display.slice(0, 40));
+    }
+  } catch {}
+
+  // Features with enable status
+  try {
+    const available = container.features?.available || [];
+    html += '<hr class="separator" />';
+    html += '<label style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:4px;">Feature States</label>';
+    for (const name of available) {
+      try {
+        const f = container.features.lookup(name);
+        const enabled = f?.isEnabled || f?.state?.get?.('enabled') || false;
+        html += infoRowHtml(name, enabled ? 'enabled' : 'registered', enabled ? 'success' : '');
+      } catch {
+        html += infoRowHtml(name, 'registered');
+      }
+    }
+  } catch {}
+
+  body.innerHTML = html || '<div class="empty-state">No state available.</div>';
+}
+
+document.getElementById('refresh-state-btn').addEventListener('click', refreshState);
+
+function infoRowHtml(label, value, valueClass = '') {
+  return `<div class="info-row"><span class="info-label">${esc(label)}</span><span class="info-value ${valueClass}">${esc(value)}</span></div>`;
+}
+
+// ── Web Chat ──────────────────────────────────
+let chatWs = null;
+let chatConnected = false;
+let chatInitialized = false;
+let chatStreaming = false;
+let chatStreamingEl = null;
+let chatToolActivityEl = null;
+let chatToolItems = {};
+let chatToolCount = 0;
+
+const chatMsgsEl = document.getElementById('chat-messages');
+const chatInputEl = document.getElementById('chat-input');
+const chatSendBtn = document.getElementById('chat-send');
+
+function getChatSessionId() {
+  let id = localStorage.getItem('playground-chat-session-id');
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem('playground-chat-session-id', id);
+  }
+  return id;
+}
+
+const chatSessionId = getChatSessionId();
+
+document.getElementById('chat-connect-btn').addEventListener('click', () => {
+  const host = document.getElementById('chat-host').value.trim() || 'localhost';
+  const port = document.getElementById('chat-port').value.trim() || '3100';
+  chatConnect(host, port);
+});
+
+document.getElementById('chat-disconnect-btn').addEventListener('click', () => {
+  if (chatWs) chatWs.close();
+});
+
+function chatConnect(host, port) {
+  if (chatWs) chatWs.close();
+
+  const url = `ws://${host}:${port}`;
+  chatMsgsEl.innerHTML = '';
+  appendChatMsg('system-msg', `Connecting to ${url}...`);
+  logEvent('chat', 'Connecting', url);
+
+  document.getElementById('chat-badge').textContent = 'connecting';
+  document.getElementById('chat-badge').className = 'panel-badge badge-loading';
+
+  try {
+    chatWs = new WebSocket(url);
+  } catch (err) {
+    appendChatMsg('error-msg', `Failed: ${err.message}`);
+    logEvent('error', 'Chat connect failed', err.message);
+    return;
+  }
+
+  chatWs.onopen = () => {
+    chatConnected = true;
+    document.getElementById('chat-badge').textContent = 'connected';
+    document.getElementById('chat-badge').className = 'panel-badge badge-connected';
+    document.getElementById('chat-connect-btn').disabled = true;
+    document.getElementById('chat-disconnect-btn').disabled = false;
+    logEvent('chat', 'WebSocket opened');
+
+    // Load assistants and init
+    loadChatAssistants(host, port);
+
+    const assistantId = document.getElementById('chat-assistant-picker').value || '';
+    const initMsg = { type: 'init', sessionId: chatSessionId };
+    if (assistantId) initMsg.assistantId = assistantId;
+    chatWs.send(JSON.stringify(initMsg));
+  };
+
+  chatWs.onclose = () => {
+    chatConnected = false;
+    chatInitialized = false;
+    chatStreaming = false;
+    chatStreamingEl = null;
+    document.getElementById('chat-badge').textContent = 'disconnected';
+    document.getElementById('chat-badge').className = 'panel-badge badge-disconnected';
+    document.getElementById('chat-connect-btn').disabled = false;
+    document.getElementById('chat-disconnect-btn').disabled = true;
+    chatInputEl.disabled = true;
+    chatSendBtn.disabled = true;
+    logEvent('chat', 'Disconnected');
+  };
+
+  chatWs.onerror = () => {
+    logEvent('error', 'Chat WebSocket error');
+    chatWs.close();
+  };
+
+  chatWs.onmessage = (evt) => {
+    let msg;
+    try { msg = JSON.parse(evt.data); } catch { return; }
+    handleChatMessage(msg);
+  };
+}
+
+async function loadChatAssistants(host, port) {
+  try {
+    const res = await fetch(`http://${host}:${port}/api/assistants`);
+    const data = await res.json();
+    const picker = document.getElementById('chat-assistant-picker');
+    picker.innerHTML = '';
+    const defaultOpt = document.createElement('option');
+    defaultOpt.value = '';
+    defaultOpt.textContent = `default (${data.default || 'chiefOfStaff'})`;
+    picker.appendChild(defaultOpt);
+    for (const a of (data.assistants || [])) {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = a.name;
+      picker.appendChild(opt);
+    }
+  } catch {}
+}
+
+function handleChatMessage(msg) {
+  logEvent('chat', msg.type, JSON.stringify(msg).slice(0, 80));
+
+  switch (msg.type) {
+    case 'init_ok':
+      chatInitialized = true;
+      chatInputEl.disabled = false;
+      chatSendBtn.disabled = false;
+      chatInputEl.focus();
+      if (msg.historyLength > 1) {
+        appendChatMsg('system-msg', `Session resumed (${msg.historyLength - 1} msgs in history)`);
+      } else {
+        appendChatMsg('system-msg', `Connected to ${msg.assistantId || 'assistant'}`);
+      }
+      break;
+
+    case 'init_error':
+      appendChatMsg('error-msg', msg.message || 'Init failed');
+      break;
+
+    case 'assistant_message_start':
+      chatStreaming = true;
+      chatToolActivityEl = null;
+      chatToolItems = {};
+      chatToolCount = 0;
+      chatStreamingEl = appendChatMsg('assistant', '');
+      chatStreamingEl.classList.add('streaming');
+      addCursor(chatStreamingEl);
+      chatSendBtn.disabled = true;
+      break;
+
+    case 'chunk':
+      if (chatStreamingEl) {
+        removeCursor(chatStreamingEl);
+        chatStreamingEl.textContent += msg.textDelta;
+        addCursor(chatStreamingEl);
+        chatScrollBottom();
+      }
+      break;
+
+    case 'tool_start':
+      handleChatToolStart(msg);
+      break;
+
+    case 'tool_end':
+      handleChatToolEnd(msg);
+      break;
+
+    case 'assistant_message_complete':
+      if (chatStreamingEl) {
+        removeCursor(chatStreamingEl);
+        chatStreamingEl.classList.remove('streaming');
+        if (msg.text) chatStreamingEl.textContent = msg.text;
+      }
+      chatStreaming = false;
+      chatStreamingEl = null;
+      chatSendBtn.disabled = false;
+      chatInputEl.focus();
+      break;
+
+    case 'error':
+      appendChatMsg('error-msg', msg.message || 'Unknown error');
+      chatStreaming = false;
+      chatStreamingEl = null;
+      chatSendBtn.disabled = false;
+      break;
+  }
+}
+
+function ensureChatToolContainer() {
+  if (chatToolActivityEl) return chatToolActivityEl;
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'tool-activity expanded';
+
+  const toggle = document.createElement('button');
+  toggle.className = 'tool-toggle';
+  toggle.innerHTML = '<span class="arrow">&#9654;</span> <span class="tool-label">Tools</span> <span class="tool-count"></span>';
+  toggle.addEventListener('click', () => wrapper.classList.toggle('expanded'));
+
+  const list = document.createElement('div');
+  list.className = 'tool-list';
+
+  wrapper.appendChild(toggle);
+  wrapper.appendChild(list);
+
+  if (chatStreamingEl) {
+    chatMsgsEl.insertBefore(wrapper, chatStreamingEl);
+  } else {
+    chatMsgsEl.appendChild(wrapper);
+  }
+
+  chatToolActivityEl = wrapper;
+  return wrapper;
+}
+
+function updateChatToolCount() {
+  if (!chatToolActivityEl) return;
+  const countEl = chatToolActivityEl.querySelector('.tool-count');
+  if (!countEl) return;
+  const running = Object.values(chatToolItems).filter(el => el.querySelector('.running')).length;
+  countEl.textContent = running > 0 ? `${running} running` : `${chatToolCount} completed`;
+}
+
+function handleChatToolStart(msg) {
+  const cont = ensureChatToolContainer();
+  const list = cont.querySelector('.tool-list');
+
+  const item = document.createElement('div');
+  item.className = 'tool-item';
+  item.innerHTML = `<span class="tool-dot running"></span><span class="tool-name">${esc(msg.name)}</span><span class="tool-dur">running...</span>`;
+  list.appendChild(item);
+  chatToolItems[msg.name] = item;
+  chatToolCount++;
+  updateChatToolCount();
+  chatScrollBottom();
+}
+
+function handleChatToolEnd(msg) {
+  const item = chatToolItems[msg.name];
+  if (!item) return;
+
+  const dot = item.querySelector('.tool-dot');
+  const dur = item.querySelector('.tool-dur');
+  dot.classList.remove('running');
+  dot.classList.add(msg.ok ? 'ok' : 'err');
+
+  dur.textContent = msg.durationMs < 1000 ? `${msg.durationMs}ms` : `${(msg.durationMs / 1000).toFixed(1)}s`;
+
+  if (!msg.ok && msg.error) {
+    const errEl = document.createElement('span');
+    errEl.className = 'tool-err-msg';
+    errEl.textContent = msg.error;
+    item.appendChild(errEl);
+  }
+
+  if (msg.ok && msg.summary) {
+    const detEl = document.createElement('span');
+    detEl.className = 'tool-detail';
+    detEl.textContent = msg.summary;
+    item.appendChild(detEl);
+    item.addEventListener('click', () => item.classList.toggle('show-detail'));
+  }
+
+  updateChatToolCount();
+  chatScrollBottom();
+}
+
+function appendChatMsg(role, text) {
+  // Remove empty state if present
+  const empty = chatMsgsEl.querySelector('.empty-state');
+  if (empty) empty.remove();
+
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  el.textContent = text;
+  chatMsgsEl.appendChild(el);
+  chatScrollBottom();
+  return el;
+}
+
+function addCursor(el) {
+  const c = document.createElement('span');
+  c.className = 'cursor-blink';
+  el.appendChild(c);
+}
+
+function removeCursor(el) {
+  const c = el.querySelector('.cursor-blink');
+  if (c) c.remove();
+}
+
+function chatScrollBottom() {
+  chatMsgsEl.scrollTop = chatMsgsEl.scrollHeight;
+}
+
+function chatSendMessage() {
+  const text = chatInputEl.value.trim();
+  if (!text || !chatConnected || !chatInitialized || chatStreaming) return;
+  appendChatMsg('user', text);
+  chatWs.send(JSON.stringify({ type: 'user_message', text }));
+  chatInputEl.value = '';
+  chatAutoResize();
+}
+
+chatSendBtn.addEventListener('click', chatSendMessage);
+
+chatInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    chatSendMessage();
+  }
+});
+
+function chatAutoResize() {
+  chatInputEl.style.height = 'auto';
+  chatInputEl.style.height = Math.min(chatInputEl.scrollHeight, 100) + 'px';
+}
+chatInputEl.addEventListener('input', chatAutoResize);
+
+// Re-init when assistant changes
+document.getElementById('chat-assistant-picker').addEventListener('change', () => {
+  if (chatWs && chatConnected) {
+    chatMsgsEl.innerHTML = '';
+    chatWs.close();
+    // Will reconnect via onclose → but let's reconnect explicitly
+    setTimeout(() => {
+      const host = document.getElementById('chat-host').value.trim() || 'localhost';
+      const port = document.getElementById('chat-port').value.trim() || '3100';
+      chatConnect(host, port);
+    }, 300);
+  }
+});
+
+// ── Boot ──────────────────────────────────────
+loadContainer();
+</script>
+</body>
+</html>

@@ -78,6 +78,26 @@ The `luca` binary is available in the path. Key commands:
 - `docs/` — content documents managed by the `contentDb` feature (`container.docs`). See [contentbase](https://github.com/soederpop/contentbase) for the document model system.
 - `luca.cli.ts` — optional project-level CLI customization (runs before any command)
 
+### Markdown is Runnable with Luca
+
+A great way to learn, experiment, and test your fluency with the luca container and the helpers, servers, features, etc available to you
+
+you should write markdown files which explain your hypothesis and what you are looking to test or verify.  
+
+The `container` object is available in every block that you tag with `ts` in the fenced code block.  All console output will be displayed beneath the block.
+
+One gotcha with these blocks: variables DO persist between fenced code blocks, but if you use a top level await in that block, they can't.  You can always `container.addContext('variableName', whatever)` and that `variableName` will be available in later blocks
+
+Feel free to do this in a /tmp directory
+
+```
+cat $your_content > /tmp/luca-scratchpad-idea.md
+luca run /tmp/luca-scratchpad-idea.md 
+```
+
+The luca container is always anchored to your CWD
+
+
 ### Command Arguments
 
 Command handlers receive `(options, context)`. The `options` object contains:
@@ -119,6 +139,7 @@ The container provides more than you might expect. Before importing anything ext
 - **Long-running commands** (servers, watchers) need `await new Promise(() => {})` at the end with a `process.on('SIGINT', ...)` handler for cleanup.
 - **Shared state between endpoints**: use `ctx.request.app.locals` to share data across endpoint files.
 - **Database init**: use `luca.cli.ts` `main()` hook for table creation and seeding — it runs before any command or server starts.
+- **`luca serve`**: always use the `--no-open` flag unless explicitly told otherwise. This prevents the browser from auto-opening.
 
 ### Extending the Container
 
