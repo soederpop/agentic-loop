@@ -1,16 +1,20 @@
 ---
-status: completed
-project: initial-assistant-workflows
-costUsd: 2.2179651
-turns: 59
-toolCalls: 79
-completedAt: '2026-03-22T23:48:37.112Z'
+goal: user-experience-improvements
+tags:
+  - workflow
+  - setup
+  - diagnostics
+  - onboarding
+  - voice
+  - system
+status: promoted
 ---
-
 
 # Setup / System Onboarding Workflow
 
 Technical onboarding that gets the system's dependencies, API keys, wake words, and native app configured. Separate from the blank-slate vision/goals workflow — this is about making the machine work, not defining what to build. Detects what's installed and what's missing, walks the user through each setup step.
+
+## Concept
 
 Runs as a standalone workflow at `workflows/setup/` on port 9304. Single scrollable page with collapsible capability cards. Feels like a system diagnostic / preflight check that also fixes what it finds.
 
@@ -57,15 +61,3 @@ Runs as a standalone workflow at `workflows/setup/` on port 9304. Single scrolla
 
 - `emit('setupProgress', { ready, total, capabilities })` on load and after changes
 - Presenter event with ready/total counts
-
-## References
-
-- Original idea: `docs/ideas/workflows/setup-system-onboarding.md`
-- System capabilities and their detection methods
-
-## Verification
-
-- Running `luca serve` in `workflows/setup/` starts on port 9304
-- Each capability check correctly detects installed/missing state
-- Setting an env key via the UI persists to `.env` and the card rechecks green
-- Progress bar accurately reflects ready/total count

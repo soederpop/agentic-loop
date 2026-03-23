@@ -1,3 +1,7 @@
+---
+tags: []
+---
+
 # Luca Telegram feature: receive messages and emit events
 
 This tutorial explains how to use Luca’s built-in **Telegram** feature (powered by [grammY](https://grammy.dev/)) with your bot token, and how to **emit events whenever Telegram receives a message**.

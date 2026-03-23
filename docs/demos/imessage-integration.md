@@ -3,6 +3,12 @@
 If you have the `imsg` CLI installed, you can use the `imsg` feature.
 
 ```ts
+try {
+  proc.exec(`which imsg`)
+} catch {
+  ui.print(`Sorry ${ui.colors.red('imsg')} is not installed!`)
+  process.exit(0)
+}
 const imsg = container.feature('imsg')
 ```
 
