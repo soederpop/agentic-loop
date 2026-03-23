@@ -11,6 +11,24 @@ tags:
 
 # Status Briefing
 
-A live dashboard showing the state of everything — goals, idea funnel by status, projects with plan progress, and recent activity. This is the "what's the status" view.
+A read-only overview of everything: goals, the idea funnel (grouped by status), projects with plan progress, recent git commits, and recently modified documents. This is the "show me the big picture" view.
 
-Read-only. Auto-refreshes every 30 seconds.
+## When to use
+
+Use this when the user wants to understand the current state of things without changing anything. Good for daily check-ins, orientation after being away, or getting context before deciding what to work on next.
+
+## Trigger signals
+
+- "What's the status?"
+- "Give me a briefing"
+- "What's going on?"
+- "Show me the dashboard"
+- "Where do things stand?"
+- "What have I been working on?"
+- "Catch me up"
+- The user is starting a new session and wants to orient themselves
+
+## When NOT to use
+
+- If the user wants to review a specific project in depth with an assistant — use **Project Reviewer** instead
+- If the user wants to act on something (create, edit, shape) — route to the appropriate workflow instead

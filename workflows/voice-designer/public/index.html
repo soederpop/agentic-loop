@@ -1,0 +1,1131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice Designer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --surface-3: #1a1a26;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --accent-glow: #00fff740;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #0e0e16;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ─────────────────────────────── */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .page-header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .page-header p {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 2px;
+  }
+
+  .assistant-picker {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .assistant-picker label {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .assistant-picker select {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 30px 8px 12px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236a6a80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    transition: border-color 0.15s;
+  }
+
+  .assistant-picker select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  /* ── Layout ─────────────────────────────── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    flex: 1;
+    min-height: 0;
+  }
+
+  @media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp 0.25s ease-out;
+  }
+
+  .panel-header {
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .panel-body {
+    padding: 16px 20px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Voice Settings (sliders) ───────────── */
+  .setting-group {
+    margin-bottom: 20px;
+  }
+
+  .setting-group-title {
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .setting {
+    margin-bottom: 14px;
+  }
+
+  .setting-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 4px;
+  }
+
+  .setting-label {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .setting-value {
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 700;
+    min-width: 36px;
+    text-align: right;
+  }
+
+  .setting-desc {
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+
+  input[type="range"] {
+    width: 100%;
+    height: 4px;
+    background: var(--surface-2);
+    border-radius: 2px;
+    outline: none;
+    appearance: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 6px var(--accent-glow);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+
+  input[type="range"]:active::-webkit-slider-thumb {
+    transform: scale(1.3);
+  }
+
+  /* ── Text input ─────────────────────────── */
+  .field {
+    margin-bottom: 14px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .field input,
+  .field textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus,
+  .field textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .field input::placeholder,
+  .field textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  /* ── Toggle ─────────────────────────────── */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+  }
+
+  .toggle-label {
+    font-size: 12px;
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  .toggle-desc {
+    font-size: 10px;
+    color: var(--text-faint);
+  }
+
+  .toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .toggle input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-track {
+    position: absolute;
+    inset: 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+
+  .toggle input:checked + .toggle-track {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  .toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: transform 0.2s, background 0.2s;
+    pointer-events: none;
+  }
+
+  .toggle input:checked ~ .toggle-knob {
+    transform: translateX(16px);
+    background: var(--accent);
+  }
+
+  /* ── Phrase list ─────────────────────────── */
+  .phrase-tag {
+    margin-bottom: 16px;
+  }
+
+  .phrase-tag-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .phrase-tag-name {
+    font-size: 11px;
+    color: var(--assistant);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+
+  .phrase-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    transition: border-color 0.15s;
+  }
+
+  .phrase-item:hover {
+    border-color: var(--text-faint);
+  }
+
+  .phrase-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text);
+    background: none;
+    border: none;
+    font-family: inherit;
+    outline: none;
+    padding: 0;
+  }
+
+  .phrase-text:focus {
+    color: var(--accent);
+  }
+
+  .phrase-play {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 4px 10px;
+    font-family: inherit;
+    font-weight: 600;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+
+  .phrase-play:hover:not(:disabled) {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  .phrase-play:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .phrase-play.playing {
+    color: var(--success);
+    border-color: var(--success);
+  }
+
+  .phrase-remove {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  .phrase-remove:hover {
+    color: var(--error);
+  }
+
+  .add-phrase-row {
+    display: flex;
+    gap: 6px;
+  }
+
+  .add-phrase-row input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 10px;
+    outline: none;
+  }
+
+  .add-phrase-row input:focus {
+    border-color: var(--accent);
+  }
+
+  .add-phrase-row input::placeholder {
+    color: var(--text-faint);
+  }
+
+  .add-phrase-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--accent);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 14px;
+    transition: all 0.15s;
+  }
+
+  .add-phrase-btn:hover {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+
+  /* ── Add tag ────────────────────────────── */
+  .add-tag-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── Test area ──────────────────────────── */
+  .test-area {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .test-area textarea {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    resize: vertical;
+    min-height: 60px;
+    transition: border-color 0.15s;
+  }
+
+  .test-area textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .test-area textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  .test-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+
+  .btn-accent {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    flex: 1;
+  }
+
+  .btn-accent:hover:not(:disabled) {
+    opacity: 0.85;
+  }
+
+  .btn-accent:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .btn-save {
+    background: var(--surface-2);
+    color: var(--success);
+    border-color: var(--success);
+    flex: 0;
+    white-space: nowrap;
+  }
+
+  .btn-save:hover:not(:disabled) {
+    background: #39ff1410;
+  }
+
+  .btn-save:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .btn-muted {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    flex: 0;
+    white-space: nowrap;
+  }
+
+  .btn-muted:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  /* ── Status bar ─────────────────────────── */
+  .status-bar {
+    font-size: 11px;
+    color: var(--text-faint);
+    text-align: center;
+    padding: 8px;
+    min-height: 30px;
+    transition: color 0.2s;
+  }
+
+  .status-bar.success { color: var(--success); }
+  .status-bar.error { color: var(--error); }
+  .status-bar.busy { color: var(--warning); }
+
+  /* ── Loading ────────────────────────────── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: var(--text-dim);
+    font-size: 13px;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  .loading span {
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  /* ── Waveform visualizer ────────────────── */
+  .waveform {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 24px;
+    margin-top: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .waveform.active { opacity: 1; }
+
+  .waveform-bar {
+    width: 3px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: height 0.1s;
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div>
+    <h1>VOICE DESIGNER</h1>
+    <p>Customize voice settings, test phrases, and preview in real time</p>
+  </div>
+  <div class="assistant-picker">
+    <label>Assistant</label>
+    <select id="assistant-select">
+      <option value="">Loading...</option>
+    </select>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- Left panel: Voice settings -->
+  <div class="panel">
+    <div class="panel-header">Voice Settings</div>
+    <div class="panel-body" id="settings-panel">
+      <div class="loading"><span>Loading assistants...</span></div>
+    </div>
+  </div>
+
+  <!-- Right panel: Phrases + test -->
+  <div class="panel">
+    <div class="panel-header">Phrases &amp; Testing</div>
+    <div class="panel-body" id="phrases-panel">
+      <div class="loading"><span>Select an assistant...</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar" id="status"></div>
+
+<script type="module">
+  const API = window.location.origin
+  let assistants = []
+  let currentAssistant = null
+  let currentConfig = null
+  let dirty = false
+  let audioCtx = null
+  let currentAudio = null
+
+  const selectEl = document.getElementById('assistant-select')
+  const settingsPanel = document.getElementById('settings-panel')
+  const phrasesPanel = document.getElementById('phrases-panel')
+  const statusEl = document.getElementById('status')
+
+  // ── Boot ────────────────────────────────
+  async function boot() {
+    try {
+      const res = await fetch(`${API}/api/assistants`)
+      const data = await res.json()
+      assistants = data.assistants || []
+
+      selectEl.innerHTML = ''
+      if (!assistants.length) {
+        selectEl.innerHTML = '<option value="">No voice assistants found</option>'
+        return
+      }
+
+      for (const a of assistants) {
+        const opt = document.createElement('option')
+        opt.value = a.name
+        opt.textContent = a.name
+        selectEl.appendChild(opt)
+      }
+
+      selectEl.addEventListener('change', () => loadAssistant(selectEl.value))
+      loadAssistant(assistants[0].name)
+    } catch (err) {
+      setStatus(`Failed to load: ${err.message}`, 'error')
+    }
+  }
+
+  function loadAssistant(name) {
+    const a = assistants.find(x => x.name === name)
+    if (!a) return
+    currentAssistant = a
+    currentConfig = structuredClone(a.voiceConfig)
+    dirty = false
+    renderSettings()
+    renderPhrases()
+    setStatus('')
+  }
+
+  // ── Render Settings ─────────────────────
+  function renderSettings() {
+    const cfg = currentConfig
+    const vs = cfg.voiceSettings || {}
+
+    const sliders = [
+      { key: 'stability', label: 'Stability', desc: 'How consistent the voice sounds across generations', min: 0, max: 1, step: 0.01, default: 0.5 },
+      { key: 'similarityBoost', label: 'Similarity Boost', desc: 'How close to the original trained voice', min: 0, max: 1, step: 0.01, default: 0.75 },
+      { key: 'style', label: 'Style', desc: 'Style exaggeration — higher values are more expressive', min: 0, max: 1, step: 0.01, default: 0 },
+      { key: 'speed', label: 'Speed', desc: 'Playback speed multiplier', min: 0.5, max: 2, step: 0.05, default: 1.0 },
+    ]
+
+    settingsPanel.innerHTML = `
+      <div class="setting-group">
+        <div class="setting-group-title">Identity</div>
+        <div class="field">
+          <label>Voice ID</label>
+          <input type="text" id="setting-voiceId" value="${esc(cfg.voiceId || '')}" placeholder="ElevenLabs voice ID" />
+        </div>
+        <div class="field">
+          <label>Model</label>
+          <select id="setting-modelId">
+            <option value="eleven_v3" ${(cfg.modelId || 'eleven_v3') === 'eleven_v3' ? 'selected' : ''}>eleven_v3</option>
+            <option value="eleven_multilingual_v2" ${cfg.modelId === 'eleven_multilingual_v2' ? 'selected' : ''}>eleven_multilingual_v2</option>
+            <option value="eleven_turbo_v2_5" ${cfg.modelId === 'eleven_turbo_v2_5' ? 'selected' : ''}>eleven_turbo_v2_5</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Conversation Mode Prefix</label>
+          <input type="text" id="setting-prefix" value="${esc(cfg.conversationModePrefix || '')}" placeholder='e.g. [fast paced english narrator]' />
+        </div>
+        <div class="field">
+          <label>Aliases</label>
+          <input type="text" id="setting-aliases" value="${esc((cfg.aliases || []).join(', '))}" placeholder="Wake words, comma separated" />
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <div class="setting-group-title">Voice Quality</div>
+        ${sliders.map(s => `
+          <div class="setting">
+            <div class="setting-header">
+              <span class="setting-label">${s.label}</span>
+              <span class="setting-value" id="val-${s.key}">${(vs[s.key] ?? s.default).toFixed(2)}</span>
+            </div>
+            <div class="setting-desc">${s.desc}</div>
+            <input type="range" id="slider-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${vs[s.key] ?? s.default}" />
+          </div>
+        `).join('')}
+
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-label">Speaker Boost</div>
+            <div class="toggle-desc">Enhance speaker clarity and presence</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="toggle-speakerBoost" ${vs.useSpeakerBoost !== false ? 'checked' : ''} />
+            <span class="toggle-track"></span>
+            <span class="toggle-knob"></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="test-actions">
+        <button class="btn btn-save" id="save-btn" disabled>Save to voice.yaml</button>
+      </div>
+    `
+
+    // Wire up sliders
+    for (const s of sliders) {
+      const slider = document.getElementById(`slider-${s.key}`)
+      const valEl = document.getElementById(`val-${s.key}`)
+      slider.addEventListener('input', () => {
+        valEl.textContent = parseFloat(slider.value).toFixed(2)
+        syncConfigFromUI()
+      })
+    }
+
+    // Wire up text fields and selects
+    for (const id of ['setting-voiceId', 'setting-prefix', 'setting-aliases']) {
+      document.getElementById(id).addEventListener('input', () => syncConfigFromUI())
+    }
+    document.getElementById('setting-modelId').addEventListener('change', () => syncConfigFromUI())
+
+    // Wire up toggle
+    document.getElementById('toggle-speakerBoost').addEventListener('change', () => syncConfigFromUI())
+
+    // Wire up save
+    document.getElementById('save-btn').addEventListener('click', saveConfig)
+  }
+
+  function syncConfigFromUI() {
+    currentConfig.voiceId = document.getElementById('setting-voiceId').value.trim()
+    currentConfig.modelId = document.getElementById('setting-modelId').value
+    currentConfig.conversationModePrefix = document.getElementById('setting-prefix').value.trim() || undefined
+    currentConfig.aliases = document.getElementById('setting-aliases').value
+      .split(',').map(s => s.trim()).filter(Boolean)
+
+    currentConfig.voiceSettings = {
+      stability: parseFloat(document.getElementById('slider-stability').value),
+      similarityBoost: parseFloat(document.getElementById('slider-similarityBoost').value),
+      style: parseFloat(document.getElementById('slider-style').value),
+      speed: parseFloat(document.getElementById('slider-speed').value),
+      useSpeakerBoost: document.getElementById('toggle-speakerBoost').checked,
+    }
+
+    dirty = true
+    const saveBtn = document.getElementById('save-btn')
+    if (saveBtn) saveBtn.disabled = false
+  }
+
+  // ── Render Phrases ──────────────────────
+  function renderPhrases() {
+    const phrases = currentConfig.phrases || {}
+    const tags = Object.keys(phrases)
+
+    let html = ''
+
+    for (const tag of tags) {
+      const items = phrases[tag] || []
+      html += `
+        <div class="phrase-tag" data-tag="${esc(tag)}">
+          <div class="phrase-tag-header">
+            <span class="phrase-tag-name">${esc(tag)}</span>
+            <button class="phrase-remove" title="Remove tag" onclick="removeTag('${esc(tag)}')">&times;</button>
+          </div>
+          ${items.map((item, i) => {
+            const text = typeof item === 'string' ? item : item.text
+            return `
+              <div class="phrase-item">
+                <input class="phrase-text" value="${esc(text)}" data-tag="${esc(tag)}" data-index="${i}"
+                       placeholder="Type a phrase..." />
+                <button class="phrase-play" data-tag="${esc(tag)}" data-index="${i}">Play</button>
+                <button class="phrase-remove" data-tag="${esc(tag)}" data-index="${i}">&times;</button>
+              </div>
+            `
+          }).join('')}
+          <div class="add-phrase-row">
+            <input type="text" placeholder="Add a ${esc(tag)} phrase..." data-add-tag="${esc(tag)}" />
+            <button class="add-phrase-btn" data-add-tag="${esc(tag)}">+</button>
+          </div>
+        </div>
+      `
+    }
+
+    html += `
+      <div class="add-tag-row">
+        <input type="text" class="add-phrase-row" id="new-tag-input" placeholder="New tag name..."
+               style="flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;outline:none" />
+        <button class="add-phrase-btn" id="add-tag-btn">+ Tag</button>
+      </div>
+
+      <div class="test-area">
+        <div class="setting-group-title">Test Any Phrase</div>
+        <textarea id="test-text" placeholder="Type anything to hear it spoken with current settings..."></textarea>
+        <div class="waveform" id="waveform">
+          ${Array.from({length: 16}, () => '<div class="waveform-bar"></div>').join('')}
+        </div>
+        <div class="test-actions">
+          <button class="btn btn-accent" id="test-btn" disabled>Speak</button>
+        </div>
+      </div>
+    `
+
+    phrasesPanel.innerHTML = html
+
+    // Wire up phrase text editing
+    phrasesPanel.querySelectorAll('.phrase-text').forEach(input => {
+      input.addEventListener('change', (e) => {
+        const tag = e.target.dataset.tag
+        const idx = parseInt(e.target.dataset.index)
+        const items = currentConfig.phrases[tag]
+        if (typeof items[idx] === 'string') {
+          items[idx] = e.target.value.trim()
+        } else {
+          items[idx].text = e.target.value.trim()
+        }
+        syncConfigFromUI()
+      })
+    })
+
+    // Wire up play buttons
+    phrasesPanel.querySelectorAll('.phrase-play').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        const tag = e.target.dataset.tag
+        const idx = parseInt(e.target.dataset.index)
+        const items = currentConfig.phrases[tag]
+        const text = typeof items[idx] === 'string' ? items[idx] : items[idx].text
+        await synthesizeAndPlay(text, e.target)
+      })
+    })
+
+    // Wire up remove phrase buttons
+    phrasesPanel.querySelectorAll('.phrase-item .phrase-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const tag = e.target.dataset.tag
+        const idx = parseInt(e.target.dataset.index)
+        currentConfig.phrases[tag].splice(idx, 1)
+        if (currentConfig.phrases[tag].length === 0) {
+          delete currentConfig.phrases[tag]
+        }
+        syncConfigFromUI()
+        renderPhrases()
+      })
+    })
+
+    // Wire up add phrase
+    phrasesPanel.querySelectorAll('[data-add-tag].add-phrase-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tag = btn.dataset.addTag
+        const input = phrasesPanel.querySelector(`input[data-add-tag="${tag}"]`)
+        if (input.value.trim()) {
+          currentConfig.phrases[tag].push(input.value.trim())
+          input.value = ''
+          syncConfigFromUI()
+          renderPhrases()
+        }
+      })
+    })
+
+    phrasesPanel.querySelectorAll('input[data-add-tag]').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && input.value.trim()) {
+          const tag = input.dataset.addTag
+          currentConfig.phrases[tag].push(input.value.trim())
+          input.value = ''
+          syncConfigFromUI()
+          renderPhrases()
+        }
+      })
+    })
+
+    // Wire up add tag
+    document.getElementById('add-tag-btn')?.addEventListener('click', addNewTag)
+    document.getElementById('new-tag-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') addNewTag()
+    })
+
+    // Wire up test area
+    const testText = document.getElementById('test-text')
+    const testBtn = document.getElementById('test-btn')
+    testText?.addEventListener('input', () => {
+      testBtn.disabled = !testText.value.trim()
+    })
+    testBtn?.addEventListener('click', () => {
+      synthesizeAndPlay(testText.value.trim(), testBtn)
+    })
+    testText?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.metaKey && testText.value.trim()) {
+        e.preventDefault()
+        synthesizeAndPlay(testText.value.trim(), testBtn)
+      }
+    })
+  }
+
+  // ── Tag management ──────────────────────
+  window.removeTag = function(tag) {
+    delete currentConfig.phrases[tag]
+    syncConfigFromUI()
+    renderPhrases()
+  }
+
+  function addNewTag() {
+    const input = document.getElementById('new-tag-input')
+    const tag = input.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+    if (!tag) return
+    if (!currentConfig.phrases) currentConfig.phrases = {}
+    if (currentConfig.phrases[tag]) {
+      setStatus(`Tag "${tag}" already exists`, 'error')
+      return
+    }
+    currentConfig.phrases[tag] = []
+    input.value = ''
+    syncConfigFromUI()
+    renderPhrases()
+  }
+
+  // ── Synthesize & play ───────────────────
+  async function synthesizeAndPlay(text, triggerBtn) {
+    if (!text || !currentConfig.voiceId) {
+      setStatus('Need text and a voice ID to synthesize', 'error')
+      return
+    }
+
+    // Stop current playback
+    if (currentAudio) {
+      currentAudio.pause()
+      currentAudio = null
+    }
+
+    triggerBtn.disabled = true
+    const origText = triggerBtn.textContent
+    triggerBtn.textContent = 'Generating...'
+    triggerBtn.classList.remove('playing')
+    setStatus('Synthesizing...', 'busy')
+
+    const waveform = document.getElementById('waveform')
+    let animFrame = null
+
+    try {
+      const res = await fetch(`${API}/api/synthesize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          voiceId: currentConfig.voiceId,
+          modelId: currentConfig.modelId || 'eleven_v3',
+          voiceSettings: currentConfig.voiceSettings,
+          conversationModePrefix: currentConfig.conversationModePrefix,
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Synthesis failed' }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      currentAudio = audio
+
+      // Waveform animation
+      const bars = waveform.querySelectorAll('.waveform-bar')
+      waveform.classList.add('active')
+      function animateBars() {
+        for (const bar of bars) {
+          bar.style.height = `${4 + Math.random() * 16}px`
+        }
+        animFrame = requestAnimationFrame(animateBars)
+      }
+
+      audio.addEventListener('play', () => {
+        triggerBtn.textContent = 'Playing...'
+        triggerBtn.classList.add('playing')
+        setStatus('Playing audio', 'success')
+        animateBars()
+      })
+
+      audio.addEventListener('ended', () => {
+        cleanup()
+        URL.revokeObjectURL(url)
+      })
+
+      audio.addEventListener('error', () => {
+        cleanup()
+        setStatus('Audio playback error', 'error')
+      })
+
+      function cleanup() {
+        triggerBtn.disabled = false
+        triggerBtn.textContent = origText
+        triggerBtn.classList.remove('playing')
+        waveform.classList.remove('active')
+        if (animFrame) cancelAnimationFrame(animFrame)
+        for (const bar of bars) bar.style.height = '4px'
+        currentAudio = null
+        setStatus('')
+      }
+
+      await audio.play()
+    } catch (err) {
+      triggerBtn.disabled = false
+      triggerBtn.textContent = origText
+      triggerBtn.classList.remove('playing')
+      waveform.classList.remove('active')
+      if (animFrame) cancelAnimationFrame(animFrame)
+      setStatus(`Error: ${err.message}`, 'error')
+    }
+  }
+
+  // ── Save config ─────────────────────────
+  async function saveConfig() {
+    const saveBtn = document.getElementById('save-btn')
+    saveBtn.disabled = true
+    saveBtn.textContent = 'Saving...'
+    setStatus('Saving voice.yaml...', 'busy')
+
+    try {
+      const res = await fetch(`${API}/api/assistants/${currentAssistant.name}/voice`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(currentConfig),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+
+      dirty = false
+      setStatus('Saved to voice.yaml', 'success')
+      setTimeout(() => { if (!dirty) setStatus('') }, 3000)
+    } catch (err) {
+      setStatus(`Save failed: ${err.message}`, 'error')
+    } finally {
+      saveBtn.textContent = 'Save to voice.yaml'
+      saveBtn.disabled = !dirty
+    }
+  }
+
+  // ── Utils ───────────────────────────────
+  function setStatus(msg, cls) {
+    statusEl.textContent = msg
+    statusEl.className = 'status-bar' + (cls ? ` ${cls}` : '')
+  }
+
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str ?? '')
+    return d.innerHTML
+  }
+
+  boot()
+</script>
+</body>
+</html>

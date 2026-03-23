@@ -1,0 +1,1433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Reviewer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --surface-3: #1a1a26;
+    --border: #1e1e2e;
+    --border-light: #2a2a3e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --accent-glow: #00fff740;
+    --purple: #c084fc;
+    --purple-dim: #c084fc20;
+    --success: #39ff14;
+    --success-dim: #39ff1420;
+    --warning: #f59e0b;
+    --warning-dim: #f59e0b20;
+    --error: #ff003c;
+    --error-dim: #ff003c20;
+    --blue: #60a5fa;
+    --blue-dim: #60a5fa20;
+    --chat-width: 420px;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ─────────────────────────── */
+  .header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+    background: var(--surface);
+    z-index: 10;
+  }
+
+  .header h1 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .header .divider {
+    width: 1px;
+    height: 20px;
+    background: var(--border);
+  }
+
+  .project-select {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 28px 6px 10px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236a6a80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: border-color 0.15s;
+  }
+
+  .project-select:focus {
+    border-color: var(--accent);
+  }
+
+  .header-meta {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .chat-toggle-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--purple);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .chat-toggle-btn:hover {
+    border-color: var(--purple);
+    background: var(--purple-dim);
+  }
+
+  .chat-toggle-btn.active {
+    background: var(--purple-dim);
+    border-color: var(--purple);
+  }
+
+  .chat-toggle-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-faint);
+  }
+
+  .chat-toggle-dot.connected { background: var(--success); }
+  .chat-toggle-dot.streaming { background: var(--purple); animation: pulse 1s ease-in-out infinite; }
+
+  /* ── Layout ─────────────────────────── */
+  .layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: var(--surface);
+  }
+
+  .main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+    transition: margin-right 0.3s ease;
+  }
+
+  /* ── Chat Drawer ────────────────────── */
+  .chat-drawer {
+    width: 0;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.3s ease;
+  }
+
+  .chat-drawer.open {
+    width: var(--chat-width);
+  }
+
+  .chat-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .chat-header-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--purple);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    flex: 1;
+  }
+
+  .chat-header-status {
+    font-size: 10px;
+    color: var(--text-dim);
+  }
+
+  .chat-close-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 18px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  .chat-close-btn:hover { color: var(--text); }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Chat Messages ──────────────────── */
+  .chat-msg {
+    max-width: 100%;
+    animation: slideUp 0.15s ease-out;
+  }
+
+  .chat-msg-system {
+    text-align: center;
+    padding: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .chat-msg-system .chat-msg-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+  }
+
+  .chat-msg-system p {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  .chat-msg-assistant {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+
+  .chat-msg-assistant .chat-msg-content {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .chat-msg-assistant .chat-msg-content h2,
+  .chat-msg-assistant .chat-msg-content h3 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--purple);
+    margin: 14px 0 6px;
+    font-weight: 700;
+  }
+
+  .chat-msg-assistant .chat-msg-content h2:first-child,
+  .chat-msg-assistant .chat-msg-content h3:first-child {
+    margin-top: 0;
+  }
+
+  .chat-msg-assistant .chat-msg-content ul,
+  .chat-msg-assistant .chat-msg-content ol {
+    padding-left: 18px;
+    margin: 6px 0;
+  }
+
+  .chat-msg-assistant .chat-msg-content li { margin-bottom: 3px; }
+  .chat-msg-assistant .chat-msg-content p { margin-bottom: 6px; }
+
+  .chat-msg-assistant .chat-msg-content code {
+    background: var(--surface-3);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--purple);
+  }
+
+  .chat-msg-assistant .chat-msg-content strong { color: var(--text); }
+
+  .chat-msg-user {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-left: 32px;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .chat-msg-streaming .chat-msg-content::after {
+    content: '';
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--purple);
+    margin-left: 2px;
+    animation: blink 0.8s step-end infinite;
+    vertical-align: text-bottom;
+  }
+
+  @keyframes blink {
+    50% { opacity: 0; }
+  }
+
+  /* ── Tool Activity ──────────────────── */
+  .tool-activity {
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+
+  .tool-activity-header {
+    padding: 8px 12px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    user-select: none;
+  }
+
+  .tool-activity-header:hover { color: var(--text); }
+
+  .tool-activity-chevron {
+    font-size: 8px;
+    transition: transform 0.15s;
+  }
+
+  .tool-activity.collapsed .tool-activity-chevron {
+    transform: rotate(-90deg);
+  }
+
+  .tool-activity-list {
+    padding: 0 12px 8px;
+  }
+
+  .tool-activity.collapsed .tool-activity-list {
+    display: none;
+  }
+
+  .tool-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+    font-size: 11px;
+  }
+
+  .tool-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tool-dot.running {
+    background: var(--warning);
+    box-shadow: 0 0 6px var(--warning);
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .tool-dot.success { background: var(--success); }
+  .tool-dot.error { background: var(--error); }
+
+  .tool-name { color: var(--text-dim); }
+  .tool-duration { color: var(--text-faint); font-size: 10px; }
+
+  /* ── Catching Up State ──────────────── */
+  .catching-up {
+    text-align: center;
+    padding: 24px 16px;
+  }
+
+  .catching-up-icon {
+    font-size: 24px;
+    margin-bottom: 8px;
+    animation: spin 2s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .catching-up h3 {
+    font-size: 12px;
+    color: var(--purple);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .catching-up p {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* ── Chat Input ─────────────────────── */
+  .chat-input-area {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .chat-input-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  .chat-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    resize: none;
+    min-height: 36px;
+    max-height: 120px;
+    transition: border-color 0.15s;
+  }
+
+  .chat-input:focus { border-color: var(--purple); }
+  .chat-input::placeholder { color: var(--text-faint); }
+  .chat-input:disabled { opacity: 0.4; }
+
+  .chat-send-btn {
+    background: var(--purple);
+    border: none;
+    border-radius: 6px;
+    color: var(--bg);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+
+  .chat-send-btn:hover:not(:disabled) { opacity: 0.85; }
+  .chat-send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* ── Sidebar ────────────────────────── */
+  .sidebar-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-section h3 {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    font-weight: 600;
+  }
+
+  .project-status-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .project-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+
+  .project-goal {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .progress-bar {
+    height: 4px;
+    background: var(--surface-3);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+
+  .progress-fill.empty { width: 0; background: var(--text-faint); }
+
+  .progress-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .plan-list { list-style: none; }
+
+  .plan-list-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.1s;
+    margin-bottom: 2px;
+  }
+
+  .plan-list-item:hover { background: var(--surface-2); }
+
+  .plan-list-item.active {
+    background: var(--surface-3);
+    border: 1px solid var(--border-light);
+  }
+
+  .plan-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+  }
+
+  .plan-list-item .plan-name { font-size: 12px; color: var(--text); line-height: 1.4; }
+  .plan-list-item .plan-meta { font-size: 10px; color: var(--text-dim); }
+
+  /* ── Status badges ──────────────────── */
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+  }
+
+  .badge-draft { background: var(--blue-dim); color: var(--blue); }
+  .badge-approved { background: var(--accent-dim); color: var(--accent); }
+  .badge-pending { background: var(--warning-dim); color: var(--warning); }
+  .badge-building, .badge-in_progress { background: var(--purple-dim); color: var(--purple); }
+  .badge-completed { background: var(--success-dim); color: var(--success); }
+  .badge-failed, .badge-rejected { background: var(--error-dim); color: var(--error); }
+  .badge-reviewing { background: var(--blue-dim); color: var(--blue); }
+
+  /* ── Main content ───────────────────── */
+  .overview-section { margin-bottom: 32px; }
+
+  .overview-section h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .overview-section h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .overview-text {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.7;
+    max-width: 720px;
+  }
+
+  /* ── Plan detail cards ──────────────── */
+  .plan-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .plan-card.highlighted {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px var(--accent-dim);
+  }
+
+  .plan-card-header {
+    padding: 16px 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+
+  .plan-card-header:hover { background: var(--surface-2); }
+
+  .plan-card-number {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    background: var(--surface-2);
+  }
+
+  .plan-card.highlighted .plan-card-number {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .plan-card-title-area { flex: 1; min-width: 0; }
+
+  .plan-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .plan-card-subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .plan-card-chevron {
+    color: var(--text-faint);
+    font-size: 16px;
+    transition: transform 0.2s;
+    margin-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .plan-card.open .plan-card-chevron { transform: rotate(90deg); }
+
+  .plan-card-body {
+    display: none;
+    border-top: 1px solid var(--border);
+    padding: 20px;
+  }
+
+  .plan-card.open .plan-card-body { display: block; }
+
+  .plan-body-content {
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    max-width: 720px;
+  }
+
+  .plan-body-content h2, .plan-body-content h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    margin: 20px 0 8px;
+    font-weight: 700;
+  }
+
+  .plan-body-content h2:first-child, .plan-body-content h3:first-child { margin-top: 0; }
+  .plan-body-content ul, .plan-body-content ol { padding-left: 20px; margin: 8px 0; }
+  .plan-body-content li { margin-bottom: 4px; }
+  .plan-body-content p { margin-bottom: 8px; }
+
+  .plan-body-content code {
+    background: var(--surface-3);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--purple);
+  }
+
+  .plan-body-content strong { color: var(--text); }
+
+  .plan-stats {
+    display: flex;
+    gap: 16px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+
+  .plan-stat { font-size: 11px; color: var(--text-dim); }
+  .plan-stat span { color: var(--text); font-weight: 600; }
+
+  /* ── Empty state ────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 40px;
+  }
+
+  .empty-state .icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-state p { font-size: 13px; max-width: 320px; }
+
+  /* ── Loading ────────────────────────── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+  }
+
+  .loading-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: 0 4px;
+    animation: pulse 1s ease-in-out infinite;
+  }
+
+  .loading-dot:nth-child(2) { animation-delay: 0.15s; }
+  .loading-dot:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.2; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animate-in { animation: slideUp 0.2s ease-out; }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Project Reviewer</h1>
+  <div class="divider"></div>
+  <select class="project-select" id="project-select">
+    <option value="">Loading...</option>
+  </select>
+  <div class="header-meta" id="header-meta">
+    <span id="header-stats"></span>
+    <button class="chat-toggle-btn" id="chat-toggle-btn">
+      <span class="chat-toggle-dot" id="chat-dot"></span>
+      Review with Chief
+    </button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="loading" id="sidebar-loading">
+      <div class="loading-dot"></div>
+      <div class="loading-dot"></div>
+      <div class="loading-dot"></div>
+    </div>
+    <div id="sidebar-content" style="display:none;"></div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="loading" id="main-loading">
+      <div class="loading-dot"></div>
+      <div class="loading-dot"></div>
+      <div class="loading-dot"></div>
+    </div>
+    <div id="main-content" style="display:none;"></div>
+  </main>
+
+  <!-- Chat Drawer -->
+  <aside class="chat-drawer" id="chat-drawer">
+    <div class="chat-header">
+      <span class="chat-header-title">Chief of Staff</span>
+      <span class="chat-header-status" id="chat-status">connecting...</span>
+      <button class="chat-close-btn" id="chat-close-btn">&times;</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-input-area">
+      <div class="chat-input-row">
+        <textarea class="chat-input" id="chat-input" placeholder="Ask about this project..." rows="1" disabled></textarea>
+        <button class="chat-send-btn" id="chat-send-btn" disabled>Send</button>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<script type="module">
+  const API = window.location.origin
+  let projects = []
+  let currentProject = null
+
+  const selectEl = document.getElementById('project-select')
+  const sidebarLoading = document.getElementById('sidebar-loading')
+  const sidebarContent = document.getElementById('sidebar-content')
+  const mainLoading = document.getElementById('main-loading')
+  const mainContent = document.getElementById('main-content')
+  const headerStats = document.getElementById('header-stats')
+
+  // ── Chat state ─────────────────────────
+  const chatDrawer = document.getElementById('chat-drawer')
+  const chatToggleBtn = document.getElementById('chat-toggle-btn')
+  const chatCloseBtn = document.getElementById('chat-close-btn')
+  const chatMessages = document.getElementById('chat-messages')
+  const chatInput = document.getElementById('chat-input')
+  const chatSendBtn = document.getElementById('chat-send-btn')
+  const chatStatus = document.getElementById('chat-status')
+  const chatDot = document.getElementById('chat-dot')
+
+  let ws = null
+  let chatOpen = false
+  let chatStreaming = false
+  let chatInitiatedForProject = null
+  let currentStreamEl = null
+  let currentStreamText = ''
+  let currentToolActivity = null
+  let toolItems = {}
+  let chatSessionId = crypto.randomUUID()
+  let chatSessionReady = false
+
+  // ── Chat toggle ────────────────────────
+  chatToggleBtn.addEventListener('click', () => {
+    chatOpen = !chatOpen
+    chatDrawer.classList.toggle('open', chatOpen)
+    chatToggleBtn.classList.toggle('active', chatOpen)
+
+    if (chatOpen) {
+      // Connect WebSocket if not already connected
+      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
+        connectWebSocket()
+      }
+      if (currentProject && chatInitiatedForProject !== currentProject.slug) {
+        // Wait for session to be ready before starting review
+        const tryStart = () => {
+          if (chatSessionReady) {
+            startReviewSession(currentProject.slug)
+          } else {
+            setTimeout(tryStart, 200)
+          }
+        }
+        tryStart()
+      }
+    }
+  })
+
+  chatCloseBtn.addEventListener('click', () => {
+    chatOpen = false
+    chatDrawer.classList.remove('open')
+    chatToggleBtn.classList.remove('active')
+  })
+
+  // ── WebSocket ──────────────────────────
+  function connectWebSocket() {
+    chatSessionReady = false
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    ws = new WebSocket(`${proto}://${location.hostname}:${location.port}`)
+
+    ws.onopen = () => {
+      console.log('[chat] WebSocket connected, sending init')
+      chatDot.className = 'chat-toggle-dot'
+      chatStatus.textContent = 'initializing...'
+      // Send init to bind session before any messages
+      sendWS({ type: 'init', sessionId: chatSessionId })
+    }
+
+    ws.onclose = (e) => {
+      console.log('[chat] WebSocket closed, code:', e.code, 'reason:', e.reason)
+      chatDot.className = 'chat-toggle-dot'
+      chatStatus.textContent = 'disconnected'
+      chatSessionReady = false
+      chatInput.disabled = true
+      chatSendBtn.disabled = true
+      // Reconnect after 2s
+      setTimeout(connectWebSocket, 2000)
+    }
+
+    ws.onerror = (e) => {
+      console.error('[chat] WebSocket error:', e)
+      chatDot.className = 'chat-toggle-dot'
+    }
+
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data)
+      console.log('[chat] received:', msg.type, msg.type === 'chunk' ? msg.textDelta?.slice(0,30) : '')
+      handleChatMessage(msg)
+    }
+  }
+
+  function sendWS(data) {
+    console.log('[chat] sending:', data.type, 'ws state:', ws?.readyState)
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(data))
+    } else {
+      console.warn('[chat] cannot send, ws not open')
+    }
+  }
+
+  // ── Start review session ───────────────
+  function startReviewSession(projectSlug) {
+    chatInitiatedForProject = projectSlug
+    chatMessages.innerHTML = ''
+    chatStreaming = false
+    currentStreamEl = null
+    currentStreamText = ''
+    currentToolActivity = null
+    toolItems = {}
+
+    // Show "catching up" system message
+    const sysMsg = document.createElement('div')
+    sysMsg.className = 'chat-msg chat-msg-system'
+    sysMsg.innerHTML = `
+      <div class="chat-msg-label">System</div>
+      <p>Briefing Chief on <strong>${esc(currentProject.title)}</strong> and its ${currentProject.plans.length} plans...</p>
+    `
+    chatMessages.appendChild(sysMsg)
+
+    chatInput.disabled = true
+    chatSendBtn.disabled = true
+    chatDot.className = 'chat-toggle-dot streaming'
+    chatStatus.textContent = 'getting caught up...'
+
+    sendWS({ type: 'start_review', projectSlug })
+  }
+
+  // ── Handle incoming messages ───────────
+  function handleChatMessage(msg) {
+    switch (msg.type) {
+      case 'init_ok':
+        chatSessionReady = true
+        chatDot.className = 'chat-toggle-dot connected'
+        chatStatus.textContent = 'connected'
+        console.log('[chat] session ready, history:', msg.historyLength)
+        break
+
+      case 'init_error':
+        chatSessionReady = false
+        chatDot.className = 'chat-toggle-dot'
+        chatStatus.textContent = 'init failed'
+        appendSystemMsg(`Session init failed: ${msg.message}`)
+        break
+
+      case 'review_started':
+        // Session is ready, briefing is being sent
+        break
+
+      case 'assistant_message_start':
+        chatStreaming = true
+        chatDot.className = 'chat-toggle-dot streaming'
+        currentStreamText = ''
+
+        // Create tool activity container (will be populated by tool events)
+        currentToolActivity = null
+        toolItems = {}
+
+        // Create streaming message element
+        currentStreamEl = document.createElement('div')
+        currentStreamEl.className = 'chat-msg chat-msg-assistant chat-msg-streaming'
+        currentStreamEl.innerHTML = '<div class="chat-msg-content"></div>'
+        chatMessages.appendChild(currentStreamEl)
+        scrollChat()
+        break
+
+      case 'chunk':
+        if (currentStreamEl) {
+          currentStreamText += msg.textDelta
+          currentStreamEl.querySelector('.chat-msg-content').innerHTML = renderMarkdown(currentStreamText)
+          scrollChat()
+        }
+        break
+
+      case 'tool_start': {
+        if (!currentToolActivity) {
+          currentToolActivity = document.createElement('div')
+          currentToolActivity.className = 'tool-activity'
+          currentToolActivity.innerHTML = `
+            <div class="tool-activity-header">
+              <span class="tool-activity-chevron">&#9660;</span>
+              <span class="tool-activity-count">0 tools</span>
+            </div>
+            <div class="tool-activity-list"></div>
+          `
+          // Insert before the streaming message
+          if (currentStreamEl) {
+            chatMessages.insertBefore(currentToolActivity, currentStreamEl)
+          } else {
+            chatMessages.appendChild(currentToolActivity)
+          }
+
+          currentToolActivity.querySelector('.tool-activity-header').addEventListener('click', () => {
+            currentToolActivity.classList.toggle('collapsed')
+          })
+        }
+
+        const toolEl = document.createElement('div')
+        toolEl.className = 'tool-item'
+        toolEl.innerHTML = `
+          <span class="tool-dot running"></span>
+          <span class="tool-name">${esc(msg.name)}</span>
+          <span class="tool-duration">running...</span>
+        `
+        toolItems[msg.id] = toolEl
+        currentToolActivity.querySelector('.tool-activity-list').appendChild(toolEl)
+        updateToolCount()
+        scrollChat()
+        break
+      }
+
+      case 'tool_end': {
+        const toolEl = toolItems[msg.id]
+        if (toolEl) {
+          const dot = toolEl.querySelector('.tool-dot')
+          dot.className = `tool-dot ${msg.ok ? 'success' : 'error'}`
+          toolEl.querySelector('.tool-duration').textContent = msg.ok
+            ? `${msg.durationMs}ms`
+            : msg.error || 'error'
+        }
+        updateToolCount()
+        break
+      }
+
+      case 'assistant_message_complete':
+        chatStreaming = false
+        chatDot.className = 'chat-toggle-dot connected'
+        chatStatus.textContent = 'connected'
+        chatInput.disabled = false
+        chatSendBtn.disabled = false
+
+        if (currentStreamEl) {
+          currentStreamEl.classList.remove('chat-msg-streaming')
+          currentStreamEl.querySelector('.chat-msg-content').innerHTML = renderMarkdown(msg.text)
+        }
+
+        // Collapse tool activity
+        if (currentToolActivity) {
+          currentToolActivity.classList.add('collapsed')
+        }
+
+        currentStreamEl = null
+        currentStreamText = ''
+        chatInput.focus()
+        scrollChat()
+        break
+
+      case 'error':
+        appendSystemMsg(`Error: ${msg.message}`)
+        chatStreaming = false
+        chatDot.className = 'chat-toggle-dot connected'
+        chatStatus.textContent = 'connected'
+        chatInput.disabled = false
+        chatSendBtn.disabled = false
+        break
+    }
+  }
+
+  function updateToolCount() {
+    if (!currentToolActivity) return
+    const total = Object.keys(toolItems).length
+    const running = currentToolActivity.querySelectorAll('.tool-dot.running').length
+    const label = running > 0 ? `${running} running, ${total} total` : `${total} completed`
+    currentToolActivity.querySelector('.tool-activity-count').textContent = label
+  }
+
+  function appendSystemMsg(text) {
+    const el = document.createElement('div')
+    el.className = 'chat-msg chat-msg-system'
+    el.innerHTML = `<div class="chat-msg-label">System</div><p>${esc(text)}</p>`
+    chatMessages.appendChild(el)
+    scrollChat()
+  }
+
+  function scrollChat() {
+    chatMessages.scrollTop = chatMessages.scrollHeight
+  }
+
+  // ── Send user message ──────────────────
+  function sendUserMessage() {
+    const text = chatInput.value.trim()
+    if (!text || chatStreaming) return
+
+    // Show user message
+    const el = document.createElement('div')
+    el.className = 'chat-msg chat-msg-user'
+    el.textContent = text
+    chatMessages.appendChild(el)
+    scrollChat()
+
+    chatInput.value = ''
+    chatInput.style.height = 'auto'
+    chatInput.disabled = true
+    chatSendBtn.disabled = true
+
+    sendWS({ type: 'user_message', text })
+  }
+
+  chatSendBtn.addEventListener('click', sendUserMessage)
+
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendUserMessage()
+    }
+  })
+
+  // Auto-resize textarea
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto'
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px'
+  })
+
+  // ── Load all projects ──────────────────
+  async function loadProjects() {
+    try {
+      const res = await fetch(`${API}/api/projects`)
+      const data = await res.json()
+      projects = data.projects || []
+
+      selectEl.innerHTML = ''
+      if (projects.length === 0) {
+        selectEl.innerHTML = '<option value="">No projects found</option>'
+        showEmpty()
+        return
+      }
+
+      for (const p of projects) {
+        const opt = document.createElement('option')
+        opt.value = p.slug
+        opt.textContent = p.title
+        selectEl.appendChild(opt)
+      }
+
+      const hash = window.location.hash.slice(1)
+      const target = projects.find(p => p.slug === hash) || projects[0]
+      selectEl.value = target.slug
+      showProject(target)
+    } catch (err) {
+      console.error('Failed to load projects:', err)
+      selectEl.innerHTML = '<option value="">Error loading</option>'
+    }
+  }
+
+  selectEl.addEventListener('change', () => {
+    const p = projects.find(p => p.slug === selectEl.value)
+    if (p) {
+      window.location.hash = p.slug
+      showProject(p)
+    }
+  })
+
+  // ── Render project ─────────────────────
+  function showProject(project) {
+    currentProject = project
+    sidebarLoading.style.display = 'none'
+    mainLoading.style.display = 'none'
+    sidebarContent.style.display = ''
+    mainContent.style.display = ''
+
+    renderSidebar(project)
+    renderMain(project)
+    updateHeaderMeta(project)
+
+    // If chat drawer is open and we switched projects, restart the session
+    if (chatOpen && chatInitiatedForProject !== project.slug) {
+      startReviewSession(project.slug)
+    }
+  }
+
+  function showEmpty() {
+    sidebarLoading.style.display = 'none'
+    mainLoading.style.display = 'none'
+    sidebarContent.style.display = 'none'
+    mainContent.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">&#9744;</div>
+        <p>No projects found. Create a project in docs/projects/ to get started.</p>
+      </div>
+    `
+    mainContent.style.display = ''
+  }
+
+  function updateHeaderMeta(project) {
+    const completed = project.plans.filter(p => p.status === 'completed').length
+    const total = project.plans.length
+    headerStats.innerHTML = `
+      <span>${badgeHTML(project.status)}</span>
+      <span>${completed}/${total} plans complete</span>
+    `
+  }
+
+  // ── Sidebar ────────────────────────────
+  function renderSidebar(project) {
+    const completed = project.plans.filter(p => p.status === 'completed').length
+    const total = project.plans.length
+    const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+    const progressColor = pct === 100 ? 'var(--success)' : pct > 0 ? 'var(--accent)' : 'var(--text-faint)'
+
+    sidebarContent.innerHTML = `
+      <div class="sidebar-section">
+        <h3>Project</h3>
+        <div class="project-status-card">
+          <div class="project-title">${esc(project.title)}</div>
+          ${project.goal ? `<div class="project-goal">Goal: ${esc(project.goal)}</div>` : ''}
+          <div class="progress-bar">
+            <div class="progress-fill" style="width:${pct}%;background:${progressColor}"></div>
+          </div>
+          <div class="progress-label">
+            <span>${completed} of ${total} plans</span>
+            <span>${pct}%</span>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <h3>Plans</h3>
+        <ul class="plan-list" id="plan-list"></ul>
+      </div>
+    `
+
+    const listEl = document.getElementById('plan-list')
+    project.plans.forEach((plan, i) => {
+      const li = document.createElement('li')
+      li.className = 'plan-list-item'
+      li.dataset.index = i
+      li.innerHTML = `
+        <div class="plan-dot" style="background:${statusColor(plan.status)}"></div>
+        <div>
+          <div class="plan-name">${esc(plan.title)}</div>
+          <div class="plan-meta">${esc(plan.status)}</div>
+        </div>
+      `
+      li.addEventListener('click', () => {
+        scrollToPlan(i)
+        highlightSidebarItem(i)
+      })
+      listEl.appendChild(li)
+    })
+  }
+
+  function highlightSidebarItem(index) {
+    document.querySelectorAll('.plan-list-item').forEach(el => el.classList.remove('active'))
+    const item = document.querySelector(`.plan-list-item[data-index="${index}"]`)
+    if (item) item.classList.add('active')
+  }
+
+  // ── Main content ───────────────────────
+  function renderMain(project) {
+    let html = ''
+
+    if (project.sections.overview) {
+      html += `
+        <div class="overview-section animate-in">
+          <h2>Overview</h2>
+          <div class="overview-text">${renderMarkdown(project.sections.overview)}</div>
+        </div>
+      `
+    }
+
+    html += `<div class="overview-section"><h2>Plans (${project.plans.length})</h2></div>`
+
+    project.plans.forEach((plan, i) => {
+      html += renderPlanCard(plan, i)
+    })
+
+    mainContent.innerHTML = html
+
+    document.querySelectorAll('.plan-card-header').forEach(header => {
+      header.addEventListener('click', () => {
+        header.closest('.plan-card').classList.toggle('open')
+      })
+    })
+  }
+
+  function renderPlanCard(plan, index) {
+    const bodyParts = []
+
+    if (plan.content) {
+      const content = plan.content.replace(/^\s*#\s+[^\n]+\n*/, '')
+      bodyParts.push(`<div class="plan-body-content">${renderMarkdown(content)}</div>`)
+    }
+
+    const stats = []
+    if (plan.costUsd) stats.push(`<div class="plan-stat">Cost: <span>$${plan.costUsd}</span></div>`)
+    if (plan.turns) stats.push(`<div class="plan-stat">Turns: <span>${plan.turns}</span></div>`)
+    if (plan.toolCalls) stats.push(`<div class="plan-stat">Tool calls: <span>${plan.toolCalls}</span></div>`)
+    if (plan.completedAt) stats.push(`<div class="plan-stat">Completed: <span>${plan.completedAt}</span></div>`)
+
+    const statsHTML = stats.length > 0 ? `<div class="plan-stats">${stats.join('')}</div>` : ''
+
+    return `
+      <div class="plan-card animate-in" id="plan-${index}" style="animation-delay:${index * 0.05}s">
+        <div class="plan-card-header">
+          <div class="plan-card-number">${index + 1}</div>
+          <div class="plan-card-title-area">
+            <div class="plan-card-title">${esc(plan.title)}</div>
+            <div class="plan-card-subtitle">${badgeHTML(plan.status)}</div>
+          </div>
+          <div class="plan-card-chevron">&#9654;</div>
+        </div>
+        <div class="plan-card-body">
+          ${bodyParts.join('')}
+          ${statsHTML}
+        </div>
+      </div>
+    `
+  }
+
+  function scrollToPlan(index) {
+    const card = document.getElementById(`plan-${index}`)
+    if (card) {
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      card.classList.add('open')
+      card.classList.add('highlighted')
+      setTimeout(() => card.classList.remove('highlighted'), 1500)
+    }
+  }
+
+  // ── Markdown rendering (lightweight) ───
+  function renderMarkdown(text) {
+    if (!text) return ''
+
+    if (Array.isArray(text)) {
+      return '<ul>' + text.map(item => `<li>${esc(item)}</li>`).join('') + '</ul>'
+    }
+
+    let html = esc(text)
+
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+    html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>')
+    html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, (m) => {
+      return '<ol>' + m.replace(/<\/?oli>/g, (t) => t.replace('oli', 'li')) + '</ol>'
+    })
+
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+
+    html = html.replace(/\n\n/g, '</p><p>')
+    html = '<p>' + html + '</p>'
+
+    html = html.replace(/<p><\/p>/g, '')
+    html = html.replace(/<p>(<h[23]>)/g, '$1')
+    html = html.replace(/(<\/h[23]>)<\/p>/g, '$1')
+    html = html.replace(/<p>(<[uo]l>)/g, '$1')
+    html = html.replace(/(<\/[uo]l>)<\/p>/g, '$1')
+
+    return html
+  }
+
+  // ── Helpers ────────────────────────────
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
+  }
+
+  function badgeHTML(status) {
+    const s = String(status || 'unknown').toLowerCase()
+    return `<span class="badge badge-${s.replace(/\s+/g, '_')}">${esc(s)}</span>`
+  }
+
+  function statusColor(status) {
+    const map = {
+      pending: 'var(--warning)',
+      approved: 'var(--accent)',
+      building: 'var(--purple)',
+      in_progress: 'var(--purple)',
+      completed: 'var(--success)',
+      failed: 'var(--error)',
+      rejected: 'var(--error)',
+      draft: 'var(--blue)',
+      reviewing: 'var(--blue)',
+    }
+    return map[status] || 'var(--text-faint)'
+  }
+
+  // ── Boot ───────────────────────────────
+  loadProjects()
+</script>
+</body>
+</html>

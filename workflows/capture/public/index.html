@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capture — New Idea</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #0e0e16;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  /* ── Card ──────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 560px;
+    overflow: hidden;
+    animation: slideUp 0.25s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card-header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .card-header p {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .card-body {
+    padding: 20px 24px;
+  }
+
+  /* ── Fields ────────────────────────────── */
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .field input,
+  .field textarea,
+  .field select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus,
+  .field textarea:focus,
+  .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .field input::placeholder,
+  .field textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  .field textarea {
+    resize: vertical;
+    min-height: 100px;
+    line-height: 1.5;
+  }
+
+  .field select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236a6a80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+
+  .field-hint {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 4px;
+  }
+
+  /* ── Tags ───────────────────────────────── */
+  .tag-input-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px 10px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-height: 42px;
+    cursor: text;
+    transition: border-color 0.15s;
+  }
+
+  .tag-input-area:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 12px;
+    color: var(--accent);
+    animation: fadeIn 0.1s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .tag button {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    padding: 0;
+  }
+
+  .tag button:hover {
+    color: var(--error);
+  }
+
+  .tag-input {
+    flex: 1;
+    min-width: 80px;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    padding: 2px 0;
+  }
+
+  .tag-input::placeholder {
+    color: var(--text-faint);
+  }
+
+  /* ── Existing ideas (context) ──────────── */
+  .existing-ideas {
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .existing-ideas::-webkit-scrollbar { width: 4px; }
+  .existing-ideas::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .existing-ideas summary {
+    font-size: 11px;
+    color: var(--text-dim);
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+  }
+
+  .existing-idea {
+    font-size: 12px;
+    color: var(--text-dim);
+    padding: 3px 0;
+    display: flex;
+    gap: 8px;
+  }
+
+  .existing-idea .idea-status {
+    font-size: 10px;
+    padding: 0 5px;
+    border-radius: 3px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .existing-idea .idea-status.parked {
+    background: #f59e0b18;
+    color: var(--warning);
+  }
+
+  /* ── Actions ───────────────────────────── */
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+
+  .btn-submit {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .btn-submit:hover:not(:disabled) {
+    opacity: 0.85;
+  }
+
+  .btn-submit:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .btn-cancel {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    flex: 0;
+    padding: 12px 20px;
+  }
+
+  .btn-cancel:hover {
+    color: var(--text);
+    border-color: var(--text-dim);
+  }
+
+  /* ── Success state ─────────────────────── */
+  .success-state {
+    text-align: center;
+    padding: 40px 24px;
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .success-state .check {
+    font-size: 48px;
+    color: var(--success);
+    margin-bottom: 12px;
+  }
+
+  .success-state h2 {
+    font-size: 16px;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .success-state p {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .success-state .btn {
+    margin-top: 20px;
+    flex: 0;
+    display: inline-block;
+  }
+
+  /* ── Error ─────────────────────────────── */
+  .error-msg {
+    color: var(--error);
+    font-size: 12px;
+    margin-top: 8px;
+    display: none;
+  }
+
+  .error-msg.visible {
+    display: block;
+  }
+</style>
+</head>
+<body>
+
+<div class="card" id="card">
+  <div class="card-header">
+    <h1>CAPTURE</h1>
+    <p>Record a new idea. It'll be filed as a spark.</p>
+  </div>
+  <div class="card-body" id="form-view">
+    <!-- Existing ideas for context -->
+    <details class="existing-ideas" id="existing-ideas">
+      <summary>Existing ideas (loading...)</summary>
+    </details>
+
+    <div class="field">
+      <label>Title</label>
+      <input type="text" id="title" placeholder="What's the idea?" autofocus />
+    </div>
+
+    <div class="field">
+      <label>Goal</label>
+      <select id="goal">
+        <option value="">No goal alignment</option>
+      </select>
+      <div class="field-hint">Which goal does this idea support?</div>
+    </div>
+
+    <div class="field">
+      <label>Tags</label>
+      <div class="tag-input-area" id="tag-area">
+        <input type="text" class="tag-input" id="tag-input" placeholder="type and press enter" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Description</label>
+      <textarea id="description" placeholder="What's the core of it? What problem does it solve? Even a rough sketch is fine."></textarea>
+    </div>
+
+    <div class="error-msg" id="error"></div>
+
+    <div class="actions">
+      <button class="btn btn-cancel" id="cancel-btn">Close</button>
+      <button class="btn btn-submit" id="submit-btn" disabled>File It</button>
+    </div>
+  </div>
+
+  <!-- Success view (hidden by default) -->
+  <div class="card-body success-state" id="success-view" style="display:none;">
+    <div class="check">&#10003;</div>
+    <h2 id="success-title">Idea filed</h2>
+    <p id="success-detail">Saved as a spark.</p>
+    <button class="btn btn-submit" id="another-btn">Capture Another</button>
+  </div>
+</div>
+
+<script type="module">
+  // ── State ─────────────────────────────────
+  const tags = [];
+  let goals = [];
+  let ideas = [];
+  let submitting = false;
+
+  const titleEl = document.getElementById('title');
+  const goalEl = document.getElementById('goal');
+  const descEl = document.getElementById('description');
+  const tagInputEl = document.getElementById('tag-input');
+  const tagAreaEl = document.getElementById('tag-area');
+  const submitBtn = document.getElementById('submit-btn');
+  const cancelBtn = document.getElementById('cancel-btn');
+  const errorEl = document.getElementById('error');
+  const formView = document.getElementById('form-view');
+  const successView = document.getElementById('success-view');
+  const existingIdeasEl = document.getElementById('existing-ideas');
+  const anotherBtn = document.getElementById('another-btn');
+
+  // ── API base — auto-detect from current URL ──
+  const API = window.location.origin;
+
+  // ── Load goals and ideas ──────────────────
+  async function loadData() {
+    try {
+      const [goalsRes, ideasRes] = await Promise.all([
+        fetch(`${API}/api/goals`).then(r => r.json()),
+        fetch(`${API}/api/ideas`).then(r => r.json()),
+      ]);
+
+      goals = goalsRes.goals || [];
+      ideas = ideasRes.ideas || [];
+
+      // Populate goal picker
+      goalEl.innerHTML = '<option value="">No goal alignment</option>';
+      for (const g of goals) {
+        const opt = document.createElement('option');
+        opt.value = g.id;
+        opt.textContent = g.title;
+        goalEl.appendChild(opt);
+      }
+
+      // Pre-select if there's only one goal
+      if (goals.length === 1) {
+        goalEl.value = goals[0].id;
+      }
+
+      // Populate existing ideas
+      const summary = existingIdeasEl.querySelector('summary');
+      summary.textContent = `Existing ideas (${ideas.length})`;
+
+      for (const idea of ideas) {
+        const div = document.createElement('div');
+        div.className = 'existing-idea';
+        const statusClass = idea.status === 'parked' ? 'idea-status parked' : 'idea-status';
+        div.innerHTML = `<span class="${statusClass}">${esc(idea.status)}</span> ${esc(idea.title)}`;
+        existingIdeasEl.appendChild(div);
+      }
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      existingIdeasEl.querySelector('summary').textContent = 'Existing ideas (offline)';
+    }
+  }
+
+  // ── Title validation ──────────────────────
+  titleEl.addEventListener('input', () => {
+    submitBtn.disabled = !titleEl.value.trim();
+    hideError();
+  });
+
+  // ── Tag input ─────────────────────────────
+  tagAreaEl.addEventListener('click', () => tagInputEl.focus());
+
+  tagInputEl.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && tagInputEl.value.trim()) {
+      e.preventDefault();
+      addTag(tagInputEl.value.trim().replace(/,/g, ''));
+      tagInputEl.value = '';
+    }
+    if (e.key === 'Backspace' && !tagInputEl.value && tags.length) {
+      removeTag(tags.length - 1);
+    }
+  });
+
+  function addTag(text) {
+    const clean = text.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    if (!clean || tags.includes(clean)) return;
+    tags.push(clean);
+    renderTags();
+  }
+
+  function removeTag(index) {
+    tags.splice(index, 1);
+    renderTags();
+  }
+
+  function renderTags() {
+    // Remove existing tag elements
+    tagAreaEl.querySelectorAll('.tag').forEach(t => t.remove());
+    // Add tags before the input
+    for (let i = 0; i < tags.length; i++) {
+      const tag = document.createElement('span');
+      tag.className = 'tag';
+      tag.innerHTML = `${esc(tags[i])} <button type="button">&times;</button>`;
+      tag.querySelector('button').addEventListener('click', () => removeTag(i));
+      tagAreaEl.insertBefore(tag, tagInputEl);
+    }
+  }
+
+  // ── Submit ────────────────────────────────
+  submitBtn.addEventListener('click', submit);
+
+  titleEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && titleEl.value.trim()) {
+      e.preventDefault();
+      descEl.focus();
+    }
+  });
+
+  descEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.metaKey && titleEl.value.trim()) {
+      e.preventDefault();
+      submit();
+    }
+  });
+
+  async function submit() {
+    if (submitting || !titleEl.value.trim()) return;
+    submitting = true;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Filing...';
+    hideError();
+
+    try {
+      const res = await fetch(`${API}/api/ideas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: titleEl.value.trim(),
+          goal: goalEl.value || undefined,
+          tags: [...tags],
+          description: descEl.value.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to create idea');
+      }
+
+      // Success
+      document.getElementById('success-title').textContent = `"${data.title}" filed`;
+      const goalName = goals.find(g => g.id === goalEl.value)?.title;
+      document.getElementById('success-detail').textContent = goalName
+        ? `Saved as a spark under ${goalName}`
+        : 'Saved as a spark';
+
+      formView.style.display = 'none';
+      successView.style.display = '';
+
+      // Emit event for containerLink / presenter feedback
+      if (window.luca) {
+        try {
+          const link = window.luca.feature('containerLink');
+          if (link && link.isConnected) {
+            link.emitToHost('ideaCaptured', {
+              id: data.id,
+              title: data.title,
+              slug: data.slug,
+              goal: goalEl.value || null,
+              tags: [...tags],
+            });
+          }
+        } catch {}
+      }
+
+      // Also post to parent if in presenter iframe
+      try {
+        window.parent.postMessage({
+          type: '__PRESENTER_EVENT__',
+          action: 'submitted',
+          data: {
+            id: data.id,
+            title: data.title,
+            slug: data.slug,
+          },
+        }, '*');
+      } catch {}
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      submitting = false;
+      submitBtn.disabled = !titleEl.value.trim();
+      submitBtn.textContent = 'File It';
+    }
+  }
+
+  // ── Cancel ────────────────────────────────
+  cancelBtn.addEventListener('click', () => {
+    try {
+      window.parent.postMessage({
+        type: '__PRESENTER_EVENT__',
+        action: 'closed',
+      }, '*');
+    } catch {}
+    // If not in an iframe, just reset
+    resetForm();
+  });
+
+  // ── Another ───────────────────────────────
+  anotherBtn.addEventListener('click', () => {
+    resetForm();
+    formView.style.display = '';
+    successView.style.display = 'none';
+    titleEl.focus();
+    // Reload to pick up the new idea in the list
+    loadData();
+  });
+
+  function resetForm() {
+    titleEl.value = '';
+    descEl.value = '';
+    tagInputEl.value = '';
+    tags.length = 0;
+    renderTags();
+    submitBtn.disabled = true;
+    hideError();
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.classList.add('visible');
+  }
+
+  function hideError() {
+    errorEl.classList.remove('visible');
+  }
+
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+  }
+
+  // ── Boot ──────────────────────────────────
+  loadData();
+
+  // Try loading luca container (non-blocking, for containerLink if available)
+  import('https://esm.sh/@soederpop/luca@0.0.25/src/browser.ts').catch(() => {});
+</script>
+</body>
+</html>

@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Blank Slate — Onboarding</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --border: #1e1e2e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #0e0e16;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  /* ── Card ──────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 640px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .card-header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .card-header p {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  /* ── Step Indicator ──────────────────────── */
+  .steps-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+
+  .step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-faint);
+    transition: all 0.3s;
+    flex-shrink: 0;
+  }
+
+  .step-dot.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: 0 0 12px var(--accent-dim);
+  }
+
+  .step-dot.done {
+    border-color: var(--success);
+    color: var(--success);
+    background: #39ff1410;
+  }
+
+  .step-line {
+    width: 40px;
+    height: 2px;
+    background: var(--border);
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+
+  .step-line.done {
+    background: var(--success);
+  }
+
+  .step-label {
+    font-size: 10px;
+    color: var(--text-faint);
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .step-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .step-group .step-label.active { color: var(--accent); }
+  .step-group .step-label.done { color: var(--success); }
+
+  /* ── Card Body ───────────────────────────── */
+  .card-body {
+    padding: 24px;
+    animation: slideIn 0.25s ease-out;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(16px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .step-panel { display: none; }
+  .step-panel.active { display: block; }
+
+  /* ── Fields ──────────────────────────────── */
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .field input,
+  .field textarea,
+  .field select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 14px;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus,
+  .field textarea:focus,
+  .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .field input::placeholder,
+  .field textarea::placeholder {
+    color: var(--text-faint);
+  }
+
+  .field textarea {
+    resize: vertical;
+    line-height: 1.5;
+  }
+
+  .field select {
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236a6a80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 30px;
+  }
+
+  .field-hint {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-top: 4px;
+  }
+
+  .vision-textarea {
+    min-height: 200px;
+  }
+
+  /* ── Actions ─────────────────────────────── */
+  .actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .btn {
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+    flex: 1;
+  }
+
+  .btn-primary:hover:not(:disabled) { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--surface-2);
+    color: var(--text-dim);
+    padding: 12px 20px;
+  }
+
+  .btn-secondary:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .btn-small {
+    padding: 8px 14px;
+    font-size: 12px;
+    border-radius: 6px;
+  }
+
+  .btn-success {
+    background: #39ff1418;
+    color: var(--success);
+    border-color: #39ff1440;
+  }
+
+  .btn-success:hover { background: #39ff1428; }
+
+  /* ── Created Items List ──────────────────── */
+  .created-list {
+    list-style: none;
+    margin: 12px 0;
+  }
+
+  .created-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: scale(1); }
+  }
+
+  .created-item .check {
+    color: var(--success);
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .created-item .title {
+    flex: 1;
+    color: var(--text);
+  }
+
+  .created-item .meta {
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .empty-state {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  /* ── Existing Vision Display ─────────────── */
+  .vision-preview {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+  }
+
+  .vision-preview::-webkit-scrollbar { width: 4px; }
+  .vision-preview::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Error ───────────────────────────────── */
+  .error-msg {
+    color: var(--error);
+    font-size: 12px;
+    margin-top: 8px;
+    display: none;
+  }
+
+  .error-msg.visible { display: block; }
+
+  /* ── Section Heading ─────────────────────── */
+  .section-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .section-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+  }
+
+  /* ── Complete State ──────────────────────── */
+  .complete-state {
+    text-align: center;
+    padding: 20px 0;
+  }
+
+  .complete-icon {
+    font-size: 56px;
+    color: var(--success);
+    margin-bottom: 16px;
+  }
+
+  .complete-state h2 {
+    font-size: 18px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+
+  .complete-state p {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+
+  .complete-summary {
+    margin: 24px 0;
+    text-align: left;
+  }
+
+  .summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+
+  .summary-row .label { color: var(--text-dim); }
+  .summary-row .value { color: var(--success); font-weight: 700; }
+
+  .next-steps {
+    margin-top: 24px;
+    padding: 16px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    text-align: left;
+  }
+
+  .next-steps h3 {
+    font-size: 12px;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .next-steps li {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    list-style: none;
+    padding-left: 16px;
+    position: relative;
+  }
+
+  .next-steps li::before {
+    content: '>';
+    position: absolute;
+    left: 0;
+    color: var(--accent);
+  }
+
+  .next-steps code {
+    background: var(--input-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  /* ── Goal Form Inline ────────────────────── */
+  .inline-form {
+    padding: 16px;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 12px;
+  }
+
+  .inline-form .field { margin-bottom: 12px; }
+  .inline-form .field:last-of-type { margin-bottom: 0; }
+
+  /* ── Context Panel ───────────────────────── */
+  .context-panel {
+    padding: 12px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 16px;
+  }
+
+  .context-panel h4 {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+
+  .context-chip {
+    display: inline-block;
+    padding: 3px 10px;
+    background: var(--accent-dim);
+    border: 1px solid #00fff730;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--accent);
+    margin: 2px 4px 2px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="card-header">
+    <h1>BLANK SLATE</h1>
+    <p>Let's set up your north star, goals, and first ideas.</p>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="steps-bar">
+    <div class="step-group">
+      <div class="step-dot active" id="dot-1">1</div>
+      <div class="step-label active" id="label-1">Vision</div>
+    </div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step-group">
+      <div class="step-dot" id="dot-2">2</div>
+      <div class="step-label" id="label-2">Goals</div>
+    </div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step-group">
+      <div class="step-dot" id="dot-3">3</div>
+      <div class="step-label" id="label-3">Ideas</div>
+    </div>
+    <div class="step-line" id="line-3"></div>
+    <div class="step-group">
+      <div class="step-dot" id="dot-4">4</div>
+      <div class="step-label" id="label-4">Done</div>
+    </div>
+  </div>
+
+  <div class="card-body">
+
+    <!-- ═══════════════════════════════════════ STEP 1: VISION ═══ -->
+    <div class="step-panel active" id="step-1">
+      <div class="section-title">Your Vision</div>
+      <div class="section-desc">This is the most important thing you'll write. What does success look like? What are you building toward?</div>
+
+      <!-- Shown if vision already exists -->
+      <div id="vision-existing" style="display:none;">
+        <div class="vision-preview" id="vision-preview-text"></div>
+        <div class="actions">
+          <button class="btn btn-secondary" id="vision-edit-btn">Edit</button>
+          <button class="btn btn-primary" id="vision-keep-btn">Looks Good — Next</button>
+        </div>
+      </div>
+
+      <!-- Shown if no vision (or editing) -->
+      <div id="vision-form">
+        <div class="field">
+          <label>Vision Statement</label>
+          <textarea class="vision-textarea" id="vision-text" placeholder="What does success look like for you? What problem are you solving? What's the north star that everything else should point toward?"></textarea>
+          <div class="field-hint">Write freely. This doesn't need to be polished — it needs to be honest.</div>
+        </div>
+        <div class="error-msg" id="vision-error"></div>
+        <div class="actions">
+          <button class="btn btn-primary" id="vision-save-btn" disabled>Save Vision & Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════ STEP 2: GOALS ═══ -->
+    <div class="step-panel" id="step-2">
+      <div class="section-title">Set Your Goals</div>
+      <div class="section-desc">Break your vision into concrete goals. Each one should have a clear success criteria. You need at least one.</div>
+
+      <ul class="created-list" id="goals-list"></ul>
+
+      <div class="inline-form" id="goal-form">
+        <div class="field">
+          <label>Goal Title</label>
+          <input type="text" id="goal-title" placeholder="What do you want to achieve?" />
+        </div>
+        <div class="field">
+          <label>Horizon</label>
+          <select id="goal-horizon">
+            <option value="short">Short (< 3 months)</option>
+            <option value="medium" selected>Medium (3–6 months)</option>
+            <option value="long">Long (6+ months)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Motivation</label>
+          <textarea id="goal-motivation" style="min-height:60px;" placeholder="Why is this goal worth pursuing?"></textarea>
+        </div>
+        <div class="field">
+          <label>Success Criteria</label>
+          <textarea id="goal-criteria" style="min-height:60px;" placeholder="How will you know when you've achieved this? One bullet per line."></textarea>
+          <div class="field-hint">Start each line with a dash: - Users can do X</div>
+        </div>
+        <div class="error-msg" id="goal-error"></div>
+        <div class="actions">
+          <button class="btn btn-success btn-small" id="goal-add-btn" disabled>Add Goal</button>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:16px;">
+        <button class="btn btn-secondary" id="goals-back-btn">Back</button>
+        <button class="btn btn-primary" id="goals-next-btn" disabled>Continue to Ideas</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════ STEP 3: IDEAS ═══ -->
+    <div class="step-panel" id="step-3">
+      <div class="section-title">Capture First Ideas</div>
+      <div class="section-desc">Now that you have goals, what ideas come to mind? These are seeds — they don't need to be fully formed.</div>
+
+      <div class="context-panel" id="ideas-goals-context">
+        <h4>Your Goals</h4>
+      </div>
+
+      <ul class="created-list" id="ideas-list"></ul>
+
+      <div class="inline-form" id="idea-form">
+        <div class="field">
+          <label>Idea Title</label>
+          <input type="text" id="idea-title" placeholder="What's the idea?" />
+        </div>
+        <div class="field">
+          <label>Goal</label>
+          <select id="idea-goal">
+            <option value="">No goal alignment</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Description</label>
+          <textarea id="idea-desc" style="min-height:80px;" placeholder="What's the core of it? Even a rough sketch is fine."></textarea>
+        </div>
+        <div class="error-msg" id="idea-error"></div>
+        <div class="actions">
+          <button class="btn btn-success btn-small" id="idea-add-btn" disabled>Add Idea</button>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:16px;">
+        <button class="btn btn-secondary" id="ideas-back-btn">Back</button>
+        <button class="btn btn-primary" id="ideas-next-btn">Finish</button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════ STEP 4: COMPLETE ═══ -->
+    <div class="step-panel" id="step-4">
+      <div class="complete-state">
+        <div class="complete-icon">&#10003;</div>
+        <h2>You're all set.</h2>
+        <p>Your north star is defined and the roadmap has begun.</p>
+
+        <div class="complete-summary" id="complete-summary">
+          <div class="summary-row">
+            <span class="label">Vision</span>
+            <span class="value" id="sum-vision">Written</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Goals created</span>
+            <span class="value" id="sum-goals">0</span>
+          </div>
+          <div class="summary-row">
+            <span class="label">Ideas captured</span>
+            <span class="value" id="sum-ideas">0</span>
+          </div>
+        </div>
+
+        <div class="next-steps">
+          <h3>What's Next</h3>
+          <ul>
+            <li>Talk to your chief of staff: <code>luca chat chiefOfStaff</code></li>
+            <li>Capture more ideas anytime: <code>luca serve --setup workflows/capture/luca.serve.ts --staticDir workflows/capture/public --port 9300</code></li>
+            <li>Review your docs: <code>cnotes summary</code></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+  const API = window.location.origin;
+
+  // ── State ────────────────────────────────────
+  let currentStep = 1;
+  let visionWritten = false;
+  const createdGoals = [];
+  const createdIdeas = [];
+  let existingGoals = [];
+
+  // ── DOM refs ─────────────────────────────────
+  const panels = [null, document.getElementById('step-1'), document.getElementById('step-2'), document.getElementById('step-3'), document.getElementById('step-4')];
+
+  // Vision
+  const visionExisting = document.getElementById('vision-existing');
+  const visionForm = document.getElementById('vision-form');
+  const visionPreview = document.getElementById('vision-preview-text');
+  const visionText = document.getElementById('vision-text');
+  const visionSaveBtn = document.getElementById('vision-save-btn');
+  const visionEditBtn = document.getElementById('vision-edit-btn');
+  const visionKeepBtn = document.getElementById('vision-keep-btn');
+  const visionError = document.getElementById('vision-error');
+
+  // Goals
+  const goalsList = document.getElementById('goals-list');
+  const goalTitle = document.getElementById('goal-title');
+  const goalHorizon = document.getElementById('goal-horizon');
+  const goalMotivation = document.getElementById('goal-motivation');
+  const goalCriteria = document.getElementById('goal-criteria');
+  const goalAddBtn = document.getElementById('goal-add-btn');
+  const goalError = document.getElementById('goal-error');
+  const goalsNextBtn = document.getElementById('goals-next-btn');
+
+  // Ideas
+  const ideaGoalCtx = document.getElementById('ideas-goals-context');
+  const ideasList = document.getElementById('ideas-list');
+  const ideaTitle = document.getElementById('idea-title');
+  const ideaGoal = document.getElementById('idea-goal');
+  const ideaDesc = document.getElementById('idea-desc');
+  const ideaAddBtn = document.getElementById('idea-add-btn');
+  const ideaError = document.getElementById('idea-error');
+
+  // ── Step navigation ──────────────────────────
+  function goToStep(n) {
+    currentStep = n;
+    for (let i = 1; i <= 4; i++) {
+      panels[i].classList.toggle('active', i === n);
+      const dot = document.getElementById(`dot-${i}`);
+      const label = document.getElementById(`label-${i}`);
+      dot.classList.remove('active', 'done');
+      label.classList.remove('active', 'done');
+      if (i < n) {
+        dot.classList.add('done');
+        dot.textContent = '\u2713';
+        label.classList.add('done');
+      } else if (i === n) {
+        dot.classList.add('active');
+        dot.textContent = String(i);
+        label.classList.add('active');
+      } else {
+        dot.textContent = String(i);
+      }
+      if (i < 4) {
+        document.getElementById(`line-${i}`).classList.toggle('done', i < n);
+      }
+    }
+    // Re-trigger animation
+    const body = document.querySelector('.card-body');
+    body.style.animation = 'none';
+    body.offsetHeight; // reflow
+    body.style.animation = '';
+  }
+
+  // ── Helpers ──────────────────────────────────
+  function esc(str) {
+    const d = document.createElement('div');
+    d.textContent = String(str || '');
+    return d.innerHTML;
+  }
+
+  function showError(el, msg) {
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+
+  function hideError(el) {
+    el.classList.remove('visible');
+  }
+
+  // ── STEP 1: Vision ──────────────────────────
+  visionText.addEventListener('input', () => {
+    visionSaveBtn.disabled = !visionText.value.trim();
+    hideError(visionError);
+  });
+
+  visionSaveBtn.addEventListener('click', async () => {
+    const text = visionText.value.trim();
+    if (!text) return;
+    visionSaveBtn.disabled = true;
+    visionSaveBtn.textContent = 'Saving...';
+    hideError(visionError);
+
+    try {
+      const res = await fetch(`${API}/api/vision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to save vision');
+
+      visionWritten = true;
+      goToStep(2);
+    } catch (err) {
+      showError(visionError, err.message);
+    } finally {
+      visionSaveBtn.disabled = !visionText.value.trim();
+      visionSaveBtn.textContent = 'Save Vision & Continue';
+    }
+  });
+
+  visionEditBtn.addEventListener('click', () => {
+    visionExisting.style.display = 'none';
+    visionForm.style.display = '';
+    // Pre-fill textarea with current vision (strip heading)
+    const raw = visionPreview.textContent;
+    visionText.value = raw;
+    visionText.focus();
+    visionSaveBtn.disabled = false;
+  });
+
+  visionKeepBtn.addEventListener('click', () => {
+    visionWritten = true;
+    goToStep(2);
+  });
+
+  // ── STEP 2: Goals ───────────────────────────
+  goalTitle.addEventListener('input', () => {
+    goalAddBtn.disabled = !goalTitle.value.trim();
+    hideError(goalError);
+  });
+
+  goalAddBtn.addEventListener('click', async () => {
+    const title = goalTitle.value.trim();
+    if (!title) return;
+    goalAddBtn.disabled = true;
+    goalAddBtn.textContent = 'Creating...';
+    hideError(goalError);
+
+    try {
+      const res = await fetch(`${API}/api/goals`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          horizon: goalHorizon.value,
+          motivation: goalMotivation.value.trim() || undefined,
+          successCriteria: goalCriteria.value.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create goal');
+
+      createdGoals.push(data);
+      renderGoalsList();
+      updateGoalsNext();
+      updateIdeaGoalPicker();
+
+      // Reset form
+      goalTitle.value = '';
+      goalHorizon.value = 'medium';
+      goalMotivation.value = '';
+      goalCriteria.value = '';
+      goalTitle.focus();
+    } catch (err) {
+      showError(goalError, err.message);
+    } finally {
+      goalAddBtn.disabled = !goalTitle.value.trim();
+      goalAddBtn.textContent = 'Add Goal';
+    }
+  });
+
+  goalTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && goalTitle.value.trim()) {
+      e.preventDefault();
+      goalMotivation.focus();
+    }
+  });
+
+  function renderGoalsList() {
+    const allGoals = [...existingGoals, ...createdGoals];
+    if (!allGoals.length) {
+      goalsList.innerHTML = '<div class="empty-state">No goals yet. Create your first one below.</div>';
+      return;
+    }
+    goalsList.innerHTML = allGoals.map(g => `
+      <li class="created-item">
+        <span class="check">\u2713</span>
+        <span class="title">${esc(g.title)}</span>
+        <span class="meta">${esc(g.horizon || '')}</span>
+      </li>
+    `).join('');
+  }
+
+  function updateGoalsNext() {
+    const total = existingGoals.length + createdGoals.length;
+    goalsNextBtn.disabled = total === 0;
+  }
+
+  goalsNextBtn.addEventListener('click', () => {
+    populateIdeasContext();
+    goToStep(3);
+    ideaTitle.focus();
+  });
+
+  document.getElementById('goals-back-btn').addEventListener('click', () => goToStep(1));
+
+  // ── STEP 3: Ideas ───────────────────────────
+  ideaTitle.addEventListener('input', () => {
+    ideaAddBtn.disabled = !ideaTitle.value.trim();
+    hideError(ideaError);
+  });
+
+  function updateIdeaGoalPicker() {
+    const allGoals = [...existingGoals, ...createdGoals];
+    ideaGoal.innerHTML = '<option value="">No goal alignment</option>';
+    for (const g of allGoals) {
+      const opt = document.createElement('option');
+      opt.value = g.id;
+      opt.textContent = g.title;
+      ideaGoal.appendChild(opt);
+    }
+    if (allGoals.length === 1) {
+      ideaGoal.value = allGoals[0].id;
+    }
+  }
+
+  function populateIdeasContext() {
+    const allGoals = [...existingGoals, ...createdGoals];
+    ideaGoalCtx.innerHTML = '<h4>Your Goals</h4>';
+    for (const g of allGoals) {
+      const chip = document.createElement('span');
+      chip.className = 'context-chip';
+      chip.textContent = g.title;
+      ideaGoalCtx.appendChild(chip);
+    }
+  }
+
+  ideaAddBtn.addEventListener('click', async () => {
+    const title = ideaTitle.value.trim();
+    if (!title) return;
+    ideaAddBtn.disabled = true;
+    ideaAddBtn.textContent = 'Creating...';
+    hideError(ideaError);
+
+    try {
+      const res = await fetch(`${API}/api/ideas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          goal: ideaGoal.value || undefined,
+          description: ideaDesc.value.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to create idea');
+
+      createdIdeas.push({ ...data, goal: ideaGoal.value });
+      renderIdeasList();
+
+      // Reset
+      ideaTitle.value = '';
+      ideaDesc.value = '';
+      ideaTitle.focus();
+    } catch (err) {
+      showError(ideaError, err.message);
+    } finally {
+      ideaAddBtn.disabled = !ideaTitle.value.trim();
+      ideaAddBtn.textContent = 'Add Idea';
+    }
+  });
+
+  ideaTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && ideaTitle.value.trim()) {
+      e.preventDefault();
+      ideaDesc.focus();
+    }
+  });
+
+  function renderIdeasList() {
+    if (!createdIdeas.length) {
+      ideasList.innerHTML = '';
+      return;
+    }
+    const allGoals = [...existingGoals, ...createdGoals];
+    ideasList.innerHTML = createdIdeas.map(i => {
+      const goalName = allGoals.find(g => g.id === i.goal)?.title || '';
+      return `
+        <li class="created-item">
+          <span class="check">\u2713</span>
+          <span class="title">${esc(i.title)}</span>
+          ${goalName ? `<span class="meta">${esc(goalName)}</span>` : ''}
+        </li>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('ideas-back-btn').addEventListener('click', () => goToStep(2));
+
+  document.getElementById('ideas-next-btn').addEventListener('click', () => {
+    // Fill summary
+    document.getElementById('sum-vision').textContent = visionWritten ? 'Written' : 'Already existed';
+    document.getElementById('sum-goals').textContent = String(createdGoals.length);
+    document.getElementById('sum-ideas').textContent = String(createdIdeas.length);
+
+    goToStep(4);
+
+    // Emit events
+    emitComplete();
+  });
+
+  function emitComplete() {
+    const payload = {
+      visionWritten,
+      goalsCreated: createdGoals.length,
+      ideasCreated: createdIdeas.length,
+    };
+
+    if (window.luca) {
+      try {
+        const link = window.luca.feature('containerLink');
+        if (link && link.isConnected) {
+          link.emitToHost('onboardingComplete', payload);
+        }
+      } catch {}
+    }
+
+    try {
+      window.parent.postMessage({
+        type: '__PRESENTER_EVENT__',
+        action: 'submitted',
+        data: payload,
+      }, '*');
+    } catch {}
+  }
+
+  // ── Boot ─────────────────────────────────────
+  async function init() {
+    try {
+      const [statusRes, visionRes, goalsRes] = await Promise.all([
+        fetch(`${API}/api/status`).then(r => r.json()),
+        fetch(`${API}/api/vision`).then(r => r.json()),
+        fetch(`${API}/api/goals`).then(r => r.json()),
+      ]);
+
+      existingGoals = (goalsRes.goals || []).map(g => ({
+        id: g.id,
+        title: g.title,
+        horizon: g.horizon,
+      }));
+
+      // Determine starting step
+      if (statusRes.hasVision) {
+        // Vision already written — show it with edit option
+        const rawText = visionRes.text.replace(/^#\s*Vision Statement\s*\n+/, '').trim();
+        visionPreview.textContent = rawText;
+        visionExisting.style.display = '';
+        visionForm.style.display = 'none';
+        visionWritten = false; // They didn't write it this session
+
+        if (statusRes.goalCount > 0) {
+          // Already have goals — jump to step 2 so they can review and add more, or go further
+          renderGoalsList();
+          updateGoalsNext();
+          updateIdeaGoalPicker();
+        }
+      } else {
+        // No vision yet — start fresh
+        visionExisting.style.display = 'none';
+        visionForm.style.display = '';
+        visionText.focus();
+      }
+
+      renderGoalsList();
+      updateGoalsNext();
+      updateIdeaGoalPicker();
+    } catch (err) {
+      console.error('Failed to initialize:', err);
+    }
+  }
+
+  init();
+
+  // Non-blocking: load luca container for event emission
+  import('https://esm.sh/@soederpop/luca@0.0.25/src/browser.ts').catch(() => {});
+</script>
+</body>
+</html>
