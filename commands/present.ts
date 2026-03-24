@@ -540,17 +540,20 @@ async function presentViaAuthority(
   container: any,
   opts: { url: string; title: string; mode: string },
 ): Promise<PresentResult> {
-  const { PRESENTER_EXPRESS_PORT, PRESENTER_LINK_PORT } = await import('../features/presenter')
+  const { readCurrentInstance } = await import('../features/instance-registry')
+  const instance = readCurrentInstance()
+  const presenterExpressPort = instance?.ports.presenterExpress ?? (await import('../features/presenter')).PRESENTER_EXPRESS_PORT
+  const presenterLinkPort = instance?.ports.presenterLink ?? (await import('../features/presenter')).PRESENTER_LINK_PORT
+  const authorityPort = instance?.ports.authority ?? 4410
 
-  const wsUrl = `ws://localhost:${PRESENTER_LINK_PORT}`
-  const localLucaScriptUrl = `http://localhost:${PRESENTER_EXPRESS_PORT}/__present_luca_browser.js`
-  const pageUrl = `http://localhost:${PRESENTER_EXPRESS_PORT}?url=${encodeURIComponent(opts.url)}&title=${encodeURIComponent(opts.title)}&wsUrl=${encodeURIComponent(wsUrl)}&mode=${opts.mode}&lucaScriptUrl=${encodeURIComponent(localLucaScriptUrl)}`
+  const wsUrl = `ws://localhost:${presenterLinkPort}`
+  const localLucaScriptUrl = `http://localhost:${presenterExpressPort}/__present_luca_browser.js`
+  const pageUrl = `http://localhost:${presenterExpressPort}?url=${encodeURIComponent(opts.url)}&title=${encodeURIComponent(opts.title)}&wsUrl=${encodeURIComponent(wsUrl)}&mode=${opts.mode}&lucaScriptUrl=${encodeURIComponent(localLucaScriptUrl)}`
 
   console.log(`Presenter service detected — skipping server boot`)
   console.log(`Presenter serving at ${pageUrl}`)
 
   // Connect to luca main's authority WS and register for presenter events
-  const authorityPort = 4410
   const ws = container.client('websocket', {
     baseURL: `ws://localhost:${authorityPort}`,
     json: true,

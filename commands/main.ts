@@ -4,7 +4,7 @@ import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 import type { TaskEntry } from '../features/task-scheduler'
 
 export const argsSchema = CommandOptionsSchema.extend({
-  port: z.number().default(4410).describe('WebSocket port for assistant/client connections'),
+  port: z.number().default(0).describe('WebSocket port (0 = auto-allocate from instance registry)'),
   taskInterval: z.number().default(1).describe('Minutes between task scheduler ticks'),
   watchInterval: z.number().default(60_000).describe('Ms between project builder polls'),
   docsPath: z.string().default('./docs').describe('Path to the docs folder'),
@@ -29,15 +29,23 @@ async function main(options: MainOptions, context: ContainerContext) {
   const proc = container.feature('proc')
   const ui = container.feature('ui')
 
-  // --- Check if authority is already running ---
-  const authorityRunning = !(await networking.isPortOpen(options.port))
+  // --- Instance registry: check for existing authority ---
+  await container.helpers.discover('features')
+  const registry = container.feature('instanceRegistry')
+  registry.pruneStale()
+
+  const existing = registry.getSelf()
+  const authorityRunning = existing && !(await networking.isPortOpen(existing.ports.authority))
+
+  // Resolve port for client commands — use existing registry entry or explicit flag
+  const resolvedPort = authorityRunning ? existing!.ports.authority : options.port
 
   if (options.kill) {
     if (!authorityRunning) {
       ui.print.yellow('No luca main process detected.')
       return
     }
-    return await sendCommand(container, options.port, 'shutdown')
+    return await sendCommand(container, resolvedPort, 'shutdown')
   }
 
   if (options.stop || options.pause) {
@@ -45,7 +53,7 @@ async function main(options: MainOptions, context: ContainerContext) {
       ui.print.yellow('No luca main process detected.')
       return
     }
-    return await sendCommand(container, options.port, 'pause-all')
+    return await sendCommand(container, resolvedPort, 'pause-all')
   }
 
   if (options.unpause) {
@@ -53,7 +61,7 @@ async function main(options: MainOptions, context: ContainerContext) {
       ui.print.yellow('No luca main process detected.')
       return
     }
-    return await sendCommand(container, options.port, 'resume-all')
+    return await sendCommand(container, resolvedPort, 'resume-all')
   }
 
   if (options.console) {
@@ -61,15 +69,22 @@ async function main(options: MainOptions, context: ContainerContext) {
       ui.print.yellow('No luca main process detected. Start one with: luca main')
       return
     }
+    options.port = resolvedPort
     return await runConsole(container, options, ui)
   }
 
   if (authorityRunning) {
     // 2nd instance: connect as client and show live TUI
+    options.port = resolvedPort
     return await runClient(container, options, ui)
   }
 
   // --- 1st instance: become the authority ---
+  // Allocate ports from registry (avoids collisions with other instances)
+  const ports = await registry.allocatePorts()
+  options.port = ports.authority
+  ;(options as any)._registryPorts = ports
+
   return await runAuthority(container, options, ui, proc)
 }
 
@@ -94,8 +109,13 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   fs.ensureFolder(container.paths.resolve('logs'))
   fs.ensureFolder(container.paths.resolve('logs/prompt-outputs'))
 
-  await container.helpers.discover('features')
+  // Features already discovered in main() for registry access
   await container.docs.load()
+
+  // --- Register this instance in the shared registry ---
+  const registry = container.feature('instanceRegistry')
+  const ports = (options as any)._registryPorts as import('../features/instance-registry').InstanceEntry['ports']
+  const instanceEntry = registry.register(ports)
 
   // --- Subscribers map (declared early so broadcastLog can reference it) ---
   const subscribers = new Map<any, Set<string>>()
@@ -305,7 +325,12 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       } : { running: false, disabled: true },
       contentServer: {
         running: contentServerRunning,
-        port: 4100,
+        port: contentPort,
+      },
+      instance: {
+        id: instanceEntry.id,
+        cwd: instanceEntry.cwd,
+        ports: instanceEntry.ports,
       },
       git: gitSummary,
       content: contentCounts,
@@ -829,7 +854,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   let presenter: any = null
 
   if (options.presenterService) {
-    presenter = container.feature('presenter')
+    presenter = container.feature('presenter', {
+      expressPort: ports.presenterExpress,
+      linkPort: ports.presenterLink,
+    })
 
     try {
       await presenter.start()
@@ -849,7 +877,8 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   // 6. Content Server (cnotes serve)
   let contentServerRunning = true
   const cnotesBin = container.paths.resolve('node_modules/.bin/cnotes')
-  const cnotesProcess = proc.spawnAndCapture(cnotesBin, ['serve', '--port', '4100', '--force'], {
+  const contentPort = ports.content
+  const cnotesProcess = proc.spawnAndCapture(cnotesBin, ['serve', '--port', String(contentPort), '--force'], {
     onOutput: (data: string) => {
       for (const line of data.split('\n')) {
         if (line) log('content', line)
@@ -872,7 +901,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('content', `error: ${err?.message || err}`)
   })
 
-  log('content', 'serving on http://localhost:4100')
+  log('content', `serving on http://localhost:${contentPort}`)
 
   // --- Status summary ---
   log('main', '')
@@ -907,6 +936,9 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     windowManager?.stop().catch(() => {})
 
     wss.stop().catch(() => {})
+
+    // Deregister from shared instance registry
+    registry.deregister()
 
     log('main', 'Goodbye.')
     process.exit(0)

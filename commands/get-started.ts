@@ -29,10 +29,12 @@ export default async function getStarted(options: z.infer<typeof argsSchema>, co
   const no = colors.red('✗')
   const dim = colors.dim
 
-  // Check if the main authority process is running (port 4410)
+  // Check if the main authority process is running via instance registry
+  const { readCurrentInstance } = await import('../features/instance-registry')
   const networking = container.feature('networking')
-  const mainPort = 4410
-  const authorityRunning = !(await networking.isPortOpen(mainPort))
+  const instance = readCurrentInstance()
+  const mainPort = instance?.ports.authority ?? 4410
+  const authorityRunning = instance ? !(await networking.isPortOpen(mainPort)) : false
 
   console.log(colors.bold('  System Status'))
   console.log(dim('  ─────────────────────────────────'))

@@ -212,12 +212,15 @@ export default async function setup(server: any) {
   }
 
   async function checkAuthority() {
-    const running = await portListening(4410)
+    const { readCurrentInstance } = await import('../../features/instance-registry')
+    const instance = readCurrentInstance()
+    const port = instance?.ports.authority
+    const running = port ? await portListening(port) : false
     return {
       capability: 'authority', group: 'authority', title: 'Authority Process',
-      description: 'luca main process (port 4410)',
+      description: `luca main process${port ? ` (port ${port})` : ''}`,
       status: running ? 'ok' : 'warning',
-      details: running ? 'Running on port 4410' : 'Not running',
+      details: running ? `Running on port ${port}` : 'Not running',
       action: running ? undefined : 'Start with: luca main',
     }
   }
