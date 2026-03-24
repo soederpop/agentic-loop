@@ -271,19 +271,19 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   <span class="sep"></span>
 
   <div class="loader-dropdown">
-    <button class="btn btn-sm" onclick="toggleLoaderMenu()">Load</button>
+    <button class="btn btn-sm" id="loadBtn">Load</button>
     <div class="loader-menu" id="loaderMenu"></div>
   </div>
 
   <input class="assistant-name-input" id="assistantName" value="my-assistant"
-    placeholder="assistant-name" oninput="onNameChange(this.value)">
+    placeholder="assistant-name">
 
   <span class="sep"></span>
 
   <label class="local-toggle">
-    <input type="checkbox" id="localToggle" onchange="toggleLocal()"> local
+    <input type="checkbox" id="localToggle"> local
   </label>
-  <select class="model-select" id="modelSelect" onchange="onModelChange(this.value)">
+  <select class="model-select" id="modelSelect">
     <option value="">loading...</option>
   </select>
 
@@ -297,7 +297,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     <span class="streaming-dot"></span>
   </span>
 
-  <button class="btn btn-deploy" id="deployBtn" onclick="deploy()">Deploy</button>
+  <button class="btn btn-deploy" id="deployBtn">Deploy</button>
 </div>
 
 <!-- ── Main ──────────────────────── -->
@@ -305,10 +305,10 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   <!-- ── Left: Editor Tabs ── -->
   <div class="panel panel-left">
     <div class="tabs">
-      <button class="tab active" onclick="switchTab(this,'left','core-tab')">CORE.md</button>
-      <button class="tab" onclick="switchTab(this,'left','tools-tab')">Tools</button>
-      <button class="tab" onclick="switchTab(this,'left','hooks-tab')">Hooks</button>
-      <button class="tab" onclick="switchTab(this,'left','preview-tab')">Preview</button>
+      <button class="tab active" data-panel="left" data-tab="core-tab">CORE.md</button>
+      <button class="tab" data-panel="left" data-tab="tools-tab">Tools</button>
+      <button class="tab" data-panel="left" data-tab="hooks-tab">Hooks</button>
+      <button class="tab" data-panel="left" data-tab="preview-tab">Preview</button>
     </div>
 
     <!-- CORE.md editor -->
@@ -317,8 +317,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         <span class="filename">CORE.md</span>
         <span class="path">assistants/<span id="pathName">my-assistant</span>/</span>
       </div>
-      <textarea class="editor" id="coreEditor" placeholder="# My Assistant&#10;&#10;You are a helpful assistant.&#10;&#10;Write your system prompt here as markdown..."
-        oninput="onCoreChange()"></textarea>
+      <textarea class="editor" id="coreEditor" placeholder="# My Assistant&#10;&#10;You are a helpful assistant.&#10;&#10;Write your system prompt here as markdown..."></textarea>
     </div>
 
     <!-- Tools editor -->
@@ -332,7 +331,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         <!-- Tool cards rendered here -->
       </div>
       <div style="padding:8px;">
-        <button class="add-tool-btn" onclick="addTool()">+ add tool</button>
+        <button class="add-tool-btn" id="addToolBtn">+ add tool</button>
       </div>
     </div>
 
@@ -342,8 +341,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
         <span class="filename">hooks.ts</span>
         <span class="path">assistants/<span id="pathName3">my-assistant</span>/</span>
       </div>
-      <textarea class="editor" id="hooksEditor" placeholder="import type { Assistant } from '@soederpop/luca/agi'&#10;&#10;export function created(assistant: Assistant) {&#10;  // called when assistant is created&#10;}&#10;&#10;export async function formatSystemPrompt(prompt: string) {&#10;  // modify the system prompt before each turn&#10;  return prompt&#10;}"
-        oninput="onHooksChange()"></textarea>
+      <textarea class="editor" id="hooksEditor" placeholder="import type { Assistant } from '@soederpop/luca/agi'&#10;&#10;export function created(assistant: Assistant) {&#10;  // called when assistant is created&#10;}&#10;&#10;export async function formatSystemPrompt(prompt: string) {&#10;  // modify the system prompt before each turn&#10;  return prompt&#10;}"></textarea>
     </div>
 
     <!-- Preview -->
@@ -351,7 +349,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       <div class="file-header">
         <span class="filename">generated files</span>
         <span class="spacer" style="flex:1"></span>
-        <button class="btn btn-sm" onclick="refreshPreview()">refresh</button>
+        <button class="btn btn-sm" id="refreshPreviewBtn">refresh</button>
       </div>
       <div class="preview-panel" id="previewPanel"></div>
     </div>
@@ -360,8 +358,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   <!-- ── Right: Chat + REPL ── -->
   <div class="panel panel-right">
     <div class="tabs">
-      <button class="tab active" onclick="switchTab(this,'right','chat-tab')">Chat</button>
-      <button class="tab" onclick="switchTab(this,'right','repl-tab')">REPL</button>
+      <button class="tab active" data-panel="right" data-tab="chat-tab">Chat</button>
+      <button class="tab" data-panel="right" data-tab="repl-tab">REPL</button>
     </div>
 
     <!-- Chat -->
@@ -373,8 +371,8 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       </div>
       <div class="chat-input-area">
         <textarea class="chat-input" id="chatInput" placeholder="Send a message..."
-          rows="1" onkeydown="handleChatKey(event)"></textarea>
-        <button class="btn" id="sendBtn" onclick="sendMessage()">Send</button>
+          rows="1"></textarea>
+        <button class="btn" id="sendBtn">Send</button>
       </div>
     </div>
 
@@ -390,514 +388,906 @@ body { display: flex; flex-direction: column; overflow: hidden; }
       </div>
       <div class="repl-input-area">
         <textarea class="repl-input" id="replInput" placeholder="assistant.availableTools"
-          rows="1" onkeydown="handleReplKey(event)"></textarea>
-        <button class="btn btn-sm" onclick="evalRepl()">Run</button>
+          rows="1"></textarea>
+        <button class="btn btn-sm" id="replRunBtn">Run</button>
       </div>
     </div>
   </div>
 </div>
 
-<script>
-// ── State ──────────────────────────
-const state = {
-  assistantName: 'my-assistant',
-  systemPrompt: '',
-  tools: [],
-  hooksSource: '',
-  model: 'gpt-4o',
-  provider: 'openai',
-  maxTokens: 4096,
-  temperature: 1,
-  deployed: false,
-};
+<script type="module">
+// ── Luca Browser Container ─────────
+const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
 
-let allModels = [];
-let isStreaming = false;
-let replHistory = [];
-let replHistoryIdx = -1;
-let saveTimer = null;
+const API = window.location.origin
 
-// ── Init ───────────────────────────
-async function init() {
-  try {
-    // Load current state from server
-    const res = await fetch('/api/state');
-    const data = await res.json();
-    Object.assign(state, data);
-
-    document.getElementById('assistantName').value = state.assistantName;
-    document.getElementById('coreEditor').value = state.systemPrompt;
-    document.getElementById('hooksEditor').value = state.hooksSource;
-    updatePathNames();
-    renderTools();
-    updateStatusBadge();
-  } catch {}
-
-  // Load models
-  try {
-    const res = await fetch('/api/models');
-    const data = await res.json();
-    allModels = data.models || [];
-    renderModelSelect();
-  } catch {}
-
-  // Load available assistants for the loader menu
-  loadAssistantList();
-}
-init();
-
-// ── Tab Switching ──────────────────
-function switchTab(btn, panel, tabId) {
-  const container = btn.closest('.panel');
-  container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  container.querySelectorAll('.tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none'; });
-  btn.classList.add('active');
-  const target = document.getElementById(tabId);
-  target.classList.add('active');
-  target.style.display = 'flex';
-
-  if (tabId === 'preview-tab') refreshPreview();
+// ── Utility ─────────────────────────
+function esc(s) {
+  if (typeof s !== 'string') s = String(s ?? '')
+  const d = document.createElement('div')
+  d.textContent = s
+  return d.innerHTML
 }
 
-// ── Model / Provider ───────────────
-function renderModelSelect() {
-  const sel = document.getElementById('modelSelect');
-  const providers = state.provider === 'lm-studio' ? ['lm-studio'] : ['openai'];
-  const filtered = allModels.filter(m => providers.includes(m.provider));
+// ═══════════════════════════════════════════════════════════════════════════
+// Feature: ApiClient — wraps all fetch() calls to backend endpoints
+// ═══════════════════════════════════════════════════════════════════════════
+class ApiClient extends Feature {
+  static shortcut = 'features.apiClient'
 
-  if (filtered.length === 0) {
-    sel.innerHTML = '<option value="">No models</option>';
-    return;
+  static stateSchema = {
+    lastError: { type: 'string', default: null, describe: 'Last API error message' },
   }
 
-  const groups = {};
-  for (const m of filtered) {
-    if (!groups[m.provider]) groups[m.provider] = [];
-    groups[m.provider].push(m);
+  static optionsSchema = {
+    apiBase: { type: 'string', default: '', describe: 'Base URL for API calls' },
   }
 
-  let html = '';
-  for (const [provider, models] of Object.entries(groups)) {
-    const label = provider === 'lm-studio' ? 'LM Studio' : 'OpenAI';
-    html += `<optgroup label="${label}">`;
-    for (const m of models) {
-      html += `<option value="${esc(m.id)}" data-provider="${esc(m.provider)}">${esc(m.name)}</option>`;
-    }
-    html += '</optgroup>';
+  static eventsSchema = {
+    'error': { args: ['error'], describe: 'Fired on any API error' },
   }
 
-  sel.innerHTML = html;
-  if (filtered.find(m => m.id === state.model)) {
-    sel.value = state.model;
-  } else {
-    sel.value = filtered[0].id;
-    state.model = filtered[0].id;
-  }
-}
+  static { Feature.register(this, 'apiClient') }
 
-function onModelChange(val) {
-  state.model = val;
-  const opt = document.querySelector(`#modelSelect option[value="${CSS.escape(val)}"]`);
-  if (opt) state.provider = opt.dataset.provider;
-  syncState();
-}
+  get base() { return this.options?.apiBase || API }
 
-function toggleLocal() {
-  const isLocal = document.getElementById('localToggle').checked;
-  state.provider = isLocal ? 'lm-studio' : 'openai';
-  renderModelSelect();
-  syncState();
-}
-
-// ── Name ───────────────────────────
-function onNameChange(val) {
-  state.assistantName = val.replace(/[^a-zA-Z0-9_-]/g, '');
-  updatePathNames();
-  syncState();
-}
-
-function updatePathNames() {
-  document.querySelectorAll('[id^="pathName"]').forEach(el => el.textContent = state.assistantName);
-}
-
-// ── CORE.md ────────────────────────
-function onCoreChange() {
-  state.systemPrompt = document.getElementById('coreEditor').value;
-  debouncedSync();
-}
-
-// ── Hooks ──────────────────────────
-function onHooksChange() {
-  state.hooksSource = document.getElementById('hooksEditor').value;
-  debouncedSync();
-}
-
-// ── Tools ──────────────────────────
-function renderTools() {
-  const panel = document.getElementById('toolsPanel');
-  panel.innerHTML = '';
-
-  state.tools.forEach((tool, i) => {
-    const card = document.createElement('div');
-    card.className = 'tool-card';
-    card.innerHTML = `
-      <div class="tool-card-header">
-        <input class="tool-name-input" value="${esc(tool.name)}" placeholder="toolName"
-          oninput="updateTool(${i}, 'name', this.value)">
-        <button class="btn btn-sm btn-danger" onclick="removeTool(${i})">×</button>
-      </div>
-      <input class="tool-desc-input" value="${esc(tool.description)}" placeholder="Tool description..."
-        oninput="updateTool(${i}, 'description', this.value)">
-      <div class="tool-section-label">schema (zod)</div>
-      <textarea class="tool-editor" rows="3" placeholder="z.object({&#10;  query: z.string().describe('The search query')&#10;})"
-        oninput="updateTool(${i}, 'schema', this.value)">${esc(tool.schema)}</textarea>
-      <div class="tool-section-label">handler</div>
-      <textarea class="tool-editor" rows="4" placeholder="// args has the parsed schema fields&#10;return { result: 'hello' }"
-        oninput="updateTool(${i}, 'handler', this.value)">${esc(tool.handler)}</textarea>
-    `;
-    panel.appendChild(card);
-  });
-}
-
-function addTool() {
-  state.tools.push({
-    name: 'newTool',
-    description: '',
-    schema: 'z.object({\n  \n})',
-    handler: "return { result: 'not implemented' }",
-  });
-  renderTools();
-  debouncedSync();
-}
-
-function removeTool(i) {
-  state.tools.splice(i, 1);
-  renderTools();
-  debouncedSync();
-}
-
-function updateTool(i, field, value) {
-  state.tools[i][field] = value;
-  debouncedSync();
-}
-
-// ── Deploy ─────────────────────────
-async function deploy() {
-  const btn = document.getElementById('deployBtn');
-  btn.classList.add('deploying');
-  btn.textContent = 'Deploying...';
-
-  try {
-    // Save state first
-    await syncState();
-
-    const res = await fetch('/api/deploy', { method: 'POST' });
-    const data = await res.json();
-
-    if (data.ok) {
-      state.deployed = true;
-      updateStatusBadge();
-      document.getElementById('notDeployedMsg').style.display = 'none';
-      appendMessage('system', `Deployed "${state.assistantName}" with ${(data.tools || []).length} tools.`);
-    } else {
-      appendMessage('error', `Deploy failed: ${data.error}`);
-    }
-  } catch (err) {
-    appendMessage('error', `Deploy error: ${err.message}`);
-  } finally {
-    btn.classList.remove('deploying');
-    btn.textContent = 'Deploy';
-  }
-}
-
-function updateStatusBadge() {
-  const badge = document.getElementById('statusBadge');
-  if (state.deployed) {
-    badge.innerHTML = '<span class="badge badge-deployed">deployed</span>';
-  } else {
-    badge.innerHTML = '<span class="badge badge-draft">draft</span>';
-  }
-}
-
-// ── Chat ───────────────────────────
-async function sendMessage() {
-  const input = document.getElementById('chatInput');
-  const msg = input.value.trim();
-  if (!msg || isStreaming) return;
-
-  input.value = '';
-  appendMessage('user', msg);
-
-  if (!state.deployed) {
-    appendMessage('error', 'Deploy the assistant first.');
-    return;
+  /** Fetch current designer state from server */
+  async getState() {
+    const res = await fetch(`${this.base}/api/state`)
+    return res.json()
   }
 
-  isStreaming = true;
-  document.getElementById('streamingIndicator').classList.add('active');
-  document.getElementById('sendBtn').disabled = true;
+  /** Sync designer state to server */
+  async putState(data) {
+    const res = await fetch(`${this.base}/api/state`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    return res.json()
+  }
 
-  try {
-    const response = await fetch('/api/chat', {
+  /** Fetch available models */
+  async getModels() {
+    const res = await fetch(`${this.base}/api/models`)
+    return res.json()
+  }
+
+  /** Deploy the current assistant config */
+  async deploy() {
+    const res = await fetch(`${this.base}/api/deploy`, { method: 'POST' })
+    return res.json()
+  }
+
+  /** Send a chat message — returns the raw Response for SSE streaming */
+  async chat(message) {
+    return fetch(`${this.base}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: msg }),
-    });
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let currentText = '';
-    let streamDiv = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('event: ')) var eventType = line.slice(7).trim();
-        if (!line.startsWith('data: ')) continue;
-
-        let data;
-        try { data = JSON.parse(line.slice(6)); } catch { continue; }
-
-        if (eventType === 'chunk') {
-          if (!streamDiv) streamDiv = createStreamDiv();
-          currentText += data.text;
-          streamDiv.querySelector('.msg-body').textContent = currentText;
-          scrollChat();
-        }
-
-        if (eventType === 'tool_start') {
-          if (streamDiv) { streamDiv.classList.remove('streaming'); streamDiv = null; }
-          appendMessage('tool', `→ ${data.name}(${JSON.stringify(data.args || {}).slice(0, 100)})`);
-          currentText = '';
-        }
-
-        if (eventType === 'tool_result') {
-          const preview = typeof data.result === 'string' ? data.result.slice(0, 200) : JSON.stringify(data.result).slice(0, 200);
-          appendMessage('tool', `← ${data.name}: ${preview}`);
-        }
-
-        if (eventType === 'tool_error') {
-          appendMessage('error', `Tool error (${data.name}): ${data.error}`);
-        }
-
-        if (eventType === 'done') {
-          if (streamDiv) { streamDiv.classList.remove('streaming'); streamDiv = null; }
-        }
-
-        if (eventType === 'error') {
-          if (streamDiv) { streamDiv.classList.remove('streaming'); streamDiv = null; }
-          appendMessage('error', data.message);
-        }
-      }
-    }
-  } catch (err) {
-    appendMessage('error', err.message);
-  } finally {
-    isStreaming = false;
-    document.getElementById('streamingIndicator').classList.remove('active');
-    document.getElementById('sendBtn').disabled = false;
+      body: JSON.stringify({ message }),
+    })
   }
-}
 
-function createStreamDiv() {
-  const el = document.createElement('div');
-  el.className = 'msg msg-assistant streaming';
-  el.innerHTML = '<div class="msg-label">assistant</div><pre class="msg-body"></pre>';
-  document.getElementById('chatMessages').appendChild(el);
-  scrollChat();
-  return el;
-}
-
-function appendMessage(type, text) {
-  const el = document.createElement('div');
-  const cls = type === 'user' ? 'msg-user' : type === 'tool' ? 'msg-tool' : type === 'error' ? 'msg-error' : 'msg-assistant';
-  el.className = `msg ${cls}`;
-  if (type === 'system') {
-    el.style.cssText = 'align-self:center;color:var(--text-dim);font-size:10px;background:var(--surface);border:1px solid var(--border);';
-  }
-  el.innerHTML = type === 'assistant' || type === 'system'
-    ? `<div class="msg-label">${type}</div><pre class="msg-body">${esc(text)}</pre>`
-    : esc(text);
-  document.getElementById('chatMessages').appendChild(el);
-  scrollChat();
-}
-
-function scrollChat() {
-  const c = document.getElementById('chatMessages');
-  c.scrollTop = c.scrollHeight;
-}
-
-function handleChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-}
-
-// ── REPL ───────────────────────────
-async function evalRepl() {
-  const input = document.getElementById('replInput');
-  const code = input.value.trim();
-  if (!code) return;
-
-  replHistory.push(code);
-  replHistoryIdx = replHistory.length;
-
-  const output = document.getElementById('replOutput');
-  const entry = document.createElement('div');
-  entry.className = 'repl-entry';
-  entry.innerHTML = `<div class="repl-input-line">${esc(code)}</div>`;
-
-  try {
-    const res = await fetch('/api/eval', {
+  /** Evaluate a REPL expression */
+  async eval(code) {
+    const res = await fetch(`${this.base}/api/eval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
+    })
+    return res.json()
+  }
+
+  /** Export assistant files for preview */
+  async exportFiles() {
+    const res = await fetch(`${this.base}/api/export`)
+    return res.json()
+  }
+
+  /** List available assistants */
+  async listAssistants() {
+    const res = await fetch(`${this.base}/api/load`)
+    return res.json()
+  }
+
+  /** Load an existing assistant by name */
+  async loadAssistant(name) {
+    const res = await fetch(`${this.base}/api/load`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    })
+    return res.json()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Feature: DesignerStore — manages designer state, models, sync
+// ═══════════════════════════════════════════════════════════════════════════
+class DesignerStore extends Feature {
+  static shortcut = 'features.designerStore'
+
+  static stateSchema = {
+    assistantName: { type: 'string', default: 'my-assistant', describe: 'Current assistant name' },
+    systemPrompt: { type: 'string', default: '', describe: 'System prompt (CORE.md content)' },
+    tools: { type: 'array', default: [], describe: 'Tool definitions array' },
+    hooksSource: { type: 'string', default: '', describe: 'Hooks file source code' },
+    model: { type: 'string', default: 'gpt-4o', describe: 'Selected model ID' },
+    provider: { type: 'string', default: 'openai', describe: 'Active provider (openai|lm-studio)' },
+    maxTokens: { type: 'number', default: 4096, describe: 'Max tokens setting' },
+    temperature: { type: 'number', default: 1, describe: 'Temperature setting' },
+    deployed: { type: 'boolean', default: false, describe: 'Whether assistant is deployed' },
+    models: { type: 'array', default: [], describe: 'All available models' },
+    assistants: { type: 'array', default: [], describe: 'Available assistants for loading' },
+  }
+
+  static eventsSchema = {
+    'state:loaded':       { args: [],              describe: 'Initial state loaded from server' },
+    'state:synced':       { args: [],              describe: 'State synced to server' },
+    'models:loaded':      { args: ['models'],      describe: 'Models fetched from server' },
+    'deployed':           { args: ['result'],      describe: 'Assistant deployed successfully' },
+    'deploy:failed':      { args: ['error'],       describe: 'Deployment failed' },
+    'assistant:loaded':   { args: ['data'],        describe: 'An existing assistant was loaded' },
+    'assistants:listed':  { args: ['assistants'],  describe: 'Available assistants list refreshed' },
+    'tools:changed':      { args: [],              describe: 'Tools array was modified' },
+    'name:changed':       { args: ['name'],        describe: 'Assistant name changed' },
+    'provider:changed':   { args: ['provider'],    describe: 'Provider toggled' },
+    'error':              { args: ['error'],        describe: 'Store error' },
+  }
+
+  static { Feature.register(this, 'designerStore') }
+
+  _syncTimer = null
+
+  get api() { return this.container.feature('apiClient') }
+
+  /** Load state + models from server */
+  async start() {
+    try {
+      const data = await this.api.getState()
+      for (const key of ['assistantName', 'systemPrompt', 'tools', 'hooksSource', 'model', 'provider', 'maxTokens', 'temperature', 'deployed']) {
+        if (data[key] !== undefined) this.state.set(key, data[key])
+      }
+      this.emit('state:loaded')
+    } catch {}
+
+    try {
+      const data = await this.api.getModels()
+      this.state.set('models', data.models || [])
+      this.emit('models:loaded', data.models || [])
+    } catch {}
+
+    await this.refreshAssistantList()
+  }
+
+  /** Debounced sync to server */
+  scheduleSync() {
+    clearTimeout(this._syncTimer)
+    this._syncTimer = setTimeout(() => this.sync(), 500)
+  }
+
+  /** Immediate sync to server */
+  async sync() {
+    clearTimeout(this._syncTimer)
+    const s = this.state
+    await this.api.putState({
+      assistantName: s.get('assistantName'),
+      systemPrompt: s.get('systemPrompt'),
+      tools: s.get('tools'),
+      hooksSource: s.get('hooksSource'),
+      model: s.get('model'),
+      provider: s.get('provider'),
+      maxTokens: s.get('maxTokens'),
+      temperature: s.get('temperature'),
+    })
+    this.emit('state:synced')
+  }
+
+  /** Update assistant name (sanitized) */
+  setName(val) {
+    const clean = val.replace(/[^a-zA-Z0-9_-]/g, '')
+    this.state.set('assistantName', clean)
+    this.emit('name:changed', clean)
+    this.scheduleSync()
+  }
+
+  /** Update system prompt */
+  setSystemPrompt(val) {
+    this.state.set('systemPrompt', val)
+    this.scheduleSync()
+  }
+
+  /** Update hooks source */
+  setHooksSource(val) {
+    this.state.set('hooksSource', val)
+    this.scheduleSync()
+  }
+
+  /** Set model + provider */
+  setModel(modelId, provider) {
+    this.state.set('model', modelId)
+    if (provider) this.state.set('provider', provider)
+    this.scheduleSync()
+  }
+
+  /** Toggle provider */
+  setProvider(provider) {
+    this.state.set('provider', provider)
+    this.emit('provider:changed', provider)
+    this.scheduleSync()
+  }
+
+  /** Add a new tool */
+  addTool() {
+    const tools = [...this.state.get('tools')]
+    tools.push({ name: 'newTool', description: '', schema: 'z.object({\n  \n})', handler: "return { result: 'not implemented' }" })
+    this.state.set('tools', tools)
+    this.emit('tools:changed')
+    this.scheduleSync()
+  }
+
+  /** Remove a tool by index */
+  removeTool(index) {
+    const tools = [...this.state.get('tools')]
+    tools.splice(index, 1)
+    this.state.set('tools', tools)
+    this.emit('tools:changed')
+    this.scheduleSync()
+  }
+
+  /** Update a tool field */
+  updateTool(index, field, value) {
+    const tools = [...this.state.get('tools')]
+    tools[index] = { ...tools[index], [field]: value }
+    this.state.set('tools', tools)
+    this.scheduleSync()
+  }
+
+  /** Deploy the assistant */
+  async deploy() {
+    await this.sync()
+    try {
+      const data = await this.api.deploy()
+      if (data.ok) {
+        this.state.set('deployed', true)
+        this.emit('deployed', data)
+      } else {
+        this.emit('deploy:failed', data.error)
+      }
+      return data
+    } catch (err) {
+      this.emit('deploy:failed', err.message)
+      return { ok: false, error: err.message }
+    }
+  }
+
+  /** Load an existing assistant */
+  async loadAssistant(name) {
+    try {
+      const data = await this.api.loadAssistant(name)
+      if (data.ok) {
+        this.state.set('assistantName', data.assistantName)
+        this.state.set('systemPrompt', data.systemPrompt)
+        this.state.set('tools', data.tools || [])
+        this.state.set('hooksSource', data.hooksSource || '')
+        this.state.set('deployed', false)
+        this.emit('assistant:loaded', data)
+      }
+      return data
+    } catch (err) {
+      this.emit('error', err.message)
+      return { ok: false, error: err.message }
+    }
+  }
+
+  /** Refresh the assistants list */
+  async refreshAssistantList() {
+    try {
+      const data = await this.api.listAssistants()
+      this.state.set('assistants', data.assistants || [])
+      this.emit('assistants:listed', data.assistants || [])
+    } catch {}
+  }
+
+  /** Get filtered models for current provider */
+  get filteredModels() {
+    const provider = this.state.get('provider')
+    const providers = provider === 'lm-studio' ? ['lm-studio'] : ['openai']
+    return (this.state.get('models') || []).filter(m => providers.includes(m.provider))
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Feature: ChatManager — chat messaging with SSE streaming
+// ═══════════════════════════════════════════════════════════════════════════
+class ChatManager extends Feature {
+  static shortcut = 'features.chatManager'
+
+  static stateSchema = {
+    streaming: { type: 'boolean', default: false, describe: 'True while streaming a response' },
+    messageCount: { type: 'number', default: 0, describe: 'Number of messages in chat' },
+  }
+
+  static eventsSchema = {
+    'message':        { args: ['type', 'text'],  describe: 'A message to display (user, assistant, tool, error, system)' },
+    'stream:start':   { args: [],                describe: 'SSE stream started' },
+    'stream:chunk':   { args: ['text'],          describe: 'Text chunk received' },
+    'stream:tool':    { args: ['data'],          describe: 'Tool call event received' },
+    'stream:end':     { args: [],                describe: 'SSE stream ended' },
+    'error':          { args: ['error'],         describe: 'Chat error' },
+  }
+
+  static { Feature.register(this, 'chatManager') }
+
+  get api() { return this.container.feature('apiClient') }
+  get store() { return this.container.feature('designerStore') }
+
+  /**
+   * Send a chat message and stream the response
+   * @param {string} message - The user message
+   */
+  async send(message) {
+    if (!message || this.state.get('streaming')) return
+    this.emit('message', 'user', message)
+    this.state.set('messageCount', this.state.get('messageCount') + 1)
+
+    if (!this.store.state.get('deployed')) {
+      this.emit('message', 'error', 'Deploy the assistant first.')
+      return
+    }
+
+    this.state.set('streaming', true)
+    this.emit('stream:start')
+
+    try {
+      const response = await this.api.chat(message)
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let eventType = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) { eventType = line.slice(7).trim(); continue }
+          if (!line.startsWith('data: ')) continue
+
+          let data
+          try { data = JSON.parse(line.slice(6)) } catch { continue }
+
+          if (eventType === 'chunk') {
+            this.emit('stream:chunk', data.text)
+          } else if (eventType === 'tool_start') {
+            this.emit('stream:tool', { type: 'start', name: data.name, args: data.args })
+          } else if (eventType === 'tool_result') {
+            this.emit('stream:tool', { type: 'result', name: data.name, result: data.result })
+          } else if (eventType === 'tool_error') {
+            this.emit('stream:tool', { type: 'error', name: data.name, error: data.error })
+          } else if (eventType === 'done') {
+            this.emit('stream:end')
+          } else if (eventType === 'error') {
+            this.emit('message', 'error', data.message)
+          }
+        }
+      }
+    } catch (err) {
+      this.emit('message', 'error', err.message)
+    } finally {
+      this.state.set('streaming', false)
+      this.emit('stream:end')
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Feature: ReplManager — REPL evaluation and history
+// ═══════════════════════════════════════════════════════════════════════════
+class ReplManager extends Feature {
+  static shortcut = 'features.replManager'
+
+  static stateSchema = {
+    historyIndex: { type: 'number', default: -1, describe: 'Current position in history navigation' },
+  }
+
+  static eventsSchema = {
+    'result': { args: ['code', 'output', 'ok'], describe: 'REPL eval completed. ok=true for success, false for error' },
+  }
+
+  static { Feature.register(this, 'replManager') }
+
+  _history = []
+
+  get api() { return this.container.feature('apiClient') }
+
+  /**
+   * Evaluate a code expression
+   * @param {string} code - The JS expression to evaluate
+   */
+  async eval(code) {
+    if (!code) return
+    this._history.push(code)
+    this.state.set('historyIndex', this._history.length)
+
+    try {
+      const data = await this.api.eval(code)
+      this.emit('result', code, data.ok ? data.output : data.error, data.ok)
+    } catch (err) {
+      this.emit('result', code, err.message, false)
+    }
+  }
+
+  /** Navigate history up — returns the code string or null */
+  historyUp() {
+    if (this._history.length === 0) return null
+    const idx = Math.max(0, this.state.get('historyIndex') - 1)
+    this.state.set('historyIndex', idx)
+    return this._history[idx] || ''
+  }
+
+  /** Navigate history down — returns the code string or null */
+  historyDown() {
+    const idx = Math.min(this._history.length, this.state.get('historyIndex') + 1)
+    this.state.set('historyIndex', idx)
+    return this._history[idx] || ''
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Feature: AppController — central orchestrator
+// ═══════════════════════════════════════════════════════════════════════════
+class AppController extends Feature {
+  static shortcut = 'features.appController'
+
+  static stateSchema = {
+    ready: { type: 'boolean', default: false, describe: 'True after all sub-features initialized' },
+    activeLeftTab: { type: 'string', default: 'core-tab', describe: 'Active left panel tab' },
+    activeRightTab: { type: 'string', default: 'chat-tab', describe: 'Active right panel tab' },
+  }
+
+  static eventsSchema = {
+    'ready':          { args: [],             describe: 'All features initialized and data loaded' },
+    'tab:changed':    { args: ['panel', 'tabId'], describe: 'A tab was switched' },
+  }
+
+  static { Feature.register(this, 'appController') }
+
+  get store() { return this.container.feature('designerStore') }
+  get chat() { return this.container.feature('chatManager') }
+  get repl() { return this.container.feature('replManager') }
+  get api() { return this.container.feature('apiClient') }
+
+  /**
+   * Initialize all features and load data
+   */
+  async start() {
+    await this.store.start()
+    this.state.set('ready', true)
+    this.emit('ready')
+  }
+
+  /**
+   * Switch a tab panel
+   * @param {string} panel - 'left' or 'right'
+   * @param {string} tabId - The tab content ID
+   */
+  switchTab(panel, tabId) {
+    const stateKey = panel === 'left' ? 'activeLeftTab' : 'activeRightTab'
+    this.state.set(stateKey, tabId)
+    this.emit('tab:changed', panel, tabId)
+  }
+
+  /**
+   * Deploy the assistant
+   */
+  async deploy() {
+    return this.store.deploy()
+  }
+
+  /**
+   * Send a chat message
+   * @param {string} message - The message text
+   */
+  async sendMessage(message) {
+    return this.chat.send(message)
+  }
+
+  /**
+   * Evaluate a REPL expression
+   * @param {string} code - The code to evaluate
+   */
+  async evalRepl(code) {
+    return this.repl.eval(code)
+  }
+
+  /**
+   * Load an existing assistant by name
+   * @param {string} name - The assistant name
+   */
+  async loadAssistant(name) {
+    return this.store.loadAssistant(name)
+  }
+
+  /**
+   * Get a preview of exported files
+   */
+  async getPreview() {
+    return this.api.exportFiles()
+  }
+
+  /**
+   * Get the full state snapshot
+   * @returns {object} Current state across all features
+   */
+  snapshot() {
+    return {
+      ready: this.state.get('ready'),
+      activeLeftTab: this.state.get('activeLeftTab'),
+      activeRightTab: this.state.get('activeRightTab'),
+      store: this.store.state.current,
+      chat: this.chat.state.current,
+      repl: { historyIndex: this.repl.state.get('historyIndex'), historyLength: this.repl._history.length },
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// UI Wiring — bind DOM events to features, features events to DOM updates
+// ═══════════════════════════════════════════════════════════════════════════
+const app = container.feature('appController')
+const store = app.store
+const chat = app.chat
+const repl = app.repl
+
+// ── DOM refs ──
+const $name = document.getElementById('assistantName')
+const $core = document.getElementById('coreEditor')
+const $hooks = document.getElementById('hooksEditor')
+const $modelSelect = document.getElementById('modelSelect')
+const $localToggle = document.getElementById('localToggle')
+const $statusBadge = document.getElementById('statusBadge')
+const $deployBtn = document.getElementById('deployBtn')
+const $toolsPanel = document.getElementById('toolsPanel')
+const $chatMessages = document.getElementById('chatMessages')
+const $chatInput = document.getElementById('chatInput')
+const $sendBtn = document.getElementById('sendBtn')
+const $replInput = document.getElementById('replInput')
+const $replOutput = document.getElementById('replOutput')
+const $streamingIndicator = document.getElementById('streamingIndicator')
+const $previewPanel = document.getElementById('previewPanel')
+const $loaderMenu = document.getElementById('loaderMenu')
+const $notDeployedMsg = document.getElementById('notDeployedMsg')
+
+// ── Tab switching ──
+document.querySelectorAll('.tab[data-tab]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const panel = btn.dataset.panel
+    const tabId = btn.dataset.tab
+    const panelEl = btn.closest('.panel')
+    panelEl.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    panelEl.querySelectorAll('.tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none' })
+    btn.classList.add('active')
+    const target = document.getElementById(tabId)
+    target.classList.add('active')
+    target.style.display = 'flex'
+    app.switchTab(panel, tabId)
+    if (tabId === 'preview-tab') refreshPreview()
+  })
+})
+
+// ── Header controls ──
+$name.addEventListener('input', () => store.setName($name.value))
+$core.addEventListener('input', () => store.setSystemPrompt($core.value))
+$hooks.addEventListener('input', () => store.setHooksSource($hooks.value))
+
+$modelSelect.addEventListener('change', () => {
+  const val = $modelSelect.value
+  const opt = $modelSelect.querySelector(`option[value="${CSS.escape(val)}"]`)
+  store.setModel(val, opt?.dataset?.provider)
+})
+
+$localToggle.addEventListener('change', () => {
+  store.setProvider($localToggle.checked ? 'lm-studio' : 'openai')
+})
+
+// ── Deploy button ──
+$deployBtn.addEventListener('click', async () => {
+  $deployBtn.classList.add('deploying')
+  $deployBtn.textContent = 'Deploying...'
+  try {
+    const data = await app.deploy()
     if (data.ok) {
-      entry.innerHTML += `<div class="repl-result">${esc(data.output)}</div>`;
+      appendMessage('system', `Deployed "${store.state.get('assistantName')}" with ${(data.tools || []).length} tools.`)
     } else {
-      entry.innerHTML += `<div class="repl-error">${esc(data.error)}</div>`;
+      appendMessage('error', `Deploy failed: ${data.error}`)
     }
   } catch (err) {
-    entry.innerHTML += `<div class="repl-error">${esc(err.message)}</div>`;
+    appendMessage('error', `Deploy error: ${err.message}`)
+  } finally {
+    $deployBtn.classList.remove('deploying')
+    $deployBtn.textContent = 'Deploy'
   }
+})
 
-  output.appendChild(entry);
-  output.scrollTop = output.scrollHeight;
-  input.value = '';
+// ── Add tool button ──
+document.getElementById('addToolBtn').addEventListener('click', () => store.addTool())
+
+// ── Load dropdown ──
+document.getElementById('loadBtn').addEventListener('click', () => {
+  $loaderMenu.classList.toggle('open')
+  if ($loaderMenu.classList.contains('open')) {
+    store.refreshAssistantList()
+    setTimeout(() => document.addEventListener('click', () => $loaderMenu.classList.remove('open'), { once: true }), 0)
+  }
+})
+
+// ── Chat input ──
+$chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
+})
+$sendBtn.addEventListener('click', sendChat)
+
+async function sendChat() {
+  const msg = $chatInput.value.trim()
+  if (!msg) return
+  $chatInput.value = ''
+  $chatInput.style.height = 'auto'
+  await app.sendMessage(msg)
 }
 
-function handleReplKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); evalRepl(); }
-  if (e.key === 'ArrowUp' && replHistory.length > 0) {
-    e.preventDefault();
-    replHistoryIdx = Math.max(0, replHistoryIdx - 1);
-    document.getElementById('replInput').value = replHistory[replHistoryIdx] || '';
-  }
-  if (e.key === 'ArrowDown') {
-    e.preventDefault();
-    replHistoryIdx = Math.min(replHistory.length, replHistoryIdx + 1);
-    document.getElementById('replInput').value = replHistory[replHistoryIdx] || '';
-  }
+// ── REPL input ──
+$replInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runRepl() }
+  if (e.key === 'ArrowUp') { e.preventDefault(); const v = repl.historyUp(); if (v !== null) $replInput.value = v }
+  if (e.key === 'ArrowDown') { e.preventDefault(); const v = repl.historyDown(); if (v !== null) $replInput.value = v }
+})
+document.getElementById('replRunBtn').addEventListener('click', runRepl)
+
+async function runRepl() {
+  const code = $replInput.value.trim()
+  if (!code) return
+  $replInput.value = ''
+  await app.evalRepl(code)
 }
 
-// ── Preview ────────────────────────
+// ── Preview ──
+document.getElementById('refreshPreviewBtn').addEventListener('click', refreshPreview)
+
 async function refreshPreview() {
-  const panel = document.getElementById('previewPanel');
   try {
-    const res = await fetch('/api/export');
-    const data = await res.json();
-
-    let html = '';
+    const data = await app.getPreview()
+    let html = ''
     for (const [name, content] of Object.entries(data.files || {})) {
       html += `<div class="preview-file">
         <div class="preview-file-header">assistants/${esc(data.assistantName)}/${esc(name)}</div>
         <pre class="preview-code">${esc(content)}</pre>
-      </div>`;
+      </div>`
     }
-    panel.innerHTML = html;
+    $previewPanel.innerHTML = html
   } catch (err) {
-    panel.innerHTML = `<div style="color:var(--error)">${esc(err.message)}</div>`;
+    $previewPanel.innerHTML = `<div style="color:var(--error)">${esc(err.message)}</div>`
   }
 }
 
-// ── Load Assistant ─────────────────
-async function loadAssistantList() {
-  try {
-    const res = await fetch('/api/load');
-    const data = await res.json();
-    const menu = document.getElementById('loaderMenu');
-    menu.innerHTML = (data.assistants || []).map(a =>
-      `<button class="loader-item" onclick="loadAssistant('${esc(a.name)}')">${esc(a.name)}</button>`
-    ).join('');
-  } catch {}
-}
-
-function toggleLoaderMenu() {
-  const menu = document.getElementById('loaderMenu');
-  menu.classList.toggle('open');
-  if (menu.classList.contains('open')) {
-    loadAssistantList();
-    setTimeout(() => document.addEventListener('click', closeLoaderMenu, { once: true }), 0);
-  }
-}
-
-function closeLoaderMenu() {
-  document.getElementById('loaderMenu').classList.remove('open');
-}
-
-async function loadAssistant(name) {
-  closeLoaderMenu();
-  try {
-    const res = await fetch('/api/load', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    });
-    const data = await res.json();
-    if (data.ok) {
-      state.assistantName = data.assistantName;
-      state.systemPrompt = data.systemPrompt;
-      state.tools = data.tools || [];
-      state.hooksSource = data.hooksSource || '';
-      state.deployed = false;
-
-      document.getElementById('assistantName').value = state.assistantName;
-      document.getElementById('coreEditor').value = state.systemPrompt;
-      document.getElementById('hooksEditor').value = state.hooksSource;
-      updatePathNames();
-      renderTools();
-      updateStatusBadge();
-    }
-  } catch (err) {
-    appendMessage('error', `Load failed: ${err.message}`);
-  }
-}
-
-// ── Sync State ─────────────────────
-async function syncState() {
-  await fetch('/api/state', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      assistantName: state.assistantName,
-      systemPrompt: state.systemPrompt,
-      tools: state.tools,
-      hooksSource: state.hooksSource,
-      model: state.model,
-      provider: state.provider,
-      maxTokens: state.maxTokens,
-      temperature: state.temperature,
-    }),
-  });
-}
-
-function debouncedSync() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(syncState, 500);
-}
-
-// ── Utils ──────────────────────────
-function esc(s) {
-  if (typeof s !== 'string') s = String(s ?? '');
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-// Auto-resize textareas
+// ── Auto-resize textareas ──
 document.querySelectorAll('.chat-input, .repl-input').forEach(el => {
   el.addEventListener('input', function() {
-    this.style.height = 'auto';
-    this.style.height = Math.min(this.scrollHeight, parseInt(getComputedStyle(this).maxHeight)) + 'px';
-  });
-});
+    this.style.height = 'auto'
+    this.style.height = Math.min(this.scrollHeight, parseInt(getComputedStyle(this).maxHeight)) + 'px'
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Feature → DOM bindings (react to feature events)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── Store: state loaded → populate UI ──
+store.on('state:loaded', () => {
+  $name.value = store.state.get('assistantName')
+  $core.value = store.state.get('systemPrompt')
+  $hooks.value = store.state.get('hooksSource')
+  updatePathNames()
+  renderTools()
+  updateStatusBadge()
+})
+
+// ── Store: models loaded → render model select ──
+store.on('models:loaded', () => renderModelSelect())
+store.on('provider:changed', () => renderModelSelect())
+
+// ── Store: name changed → update path labels ──
+store.on('name:changed', () => updatePathNames())
+
+// ── Store: deployed → update badge ──
+store.on('deployed', () => {
+  updateStatusBadge()
+  $notDeployedMsg.style.display = 'none'
+})
+
+// ── Store: tools changed → re-render ──
+store.on('tools:changed', () => renderTools())
+
+// ── Store: assistant loaded → refresh UI ──
+store.on('assistant:loaded', () => {
+  $name.value = store.state.get('assistantName')
+  $core.value = store.state.get('systemPrompt')
+  $hooks.value = store.state.get('hooksSource')
+  updatePathNames()
+  renderTools()
+  updateStatusBadge()
+})
+
+// ── Store: assistants listed → render loader menu ──
+store.on('assistants:listed', (assistants) => {
+  $loaderMenu.innerHTML = (assistants || []).map(a =>
+    `<button class="loader-item" data-name="${esc(a.name)}">${esc(a.name)}</button>`
+  ).join('')
+  $loaderMenu.querySelectorAll('.loader-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $loaderMenu.classList.remove('open')
+      app.loadAssistant(btn.dataset.name)
+    })
+  })
+})
+
+// ── Chat: messages ──
+let _streamDiv = null
+let _streamText = ''
+
+chat.on('message', (type, text) => appendMessage(type, text))
+
+chat.on('stream:start', () => {
+  _streamDiv = null
+  _streamText = ''
+  $streamingIndicator.classList.add('active')
+  $sendBtn.disabled = true
+})
+
+chat.on('stream:chunk', (text) => {
+  if (!_streamDiv) {
+    _streamDiv = document.createElement('div')
+    _streamDiv.className = 'msg msg-assistant streaming'
+    _streamDiv.innerHTML = '<div class="msg-label">assistant</div><pre class="msg-body"></pre>'
+    $chatMessages.appendChild(_streamDiv)
+  }
+  _streamText += text
+  _streamDiv.querySelector('.msg-body').textContent = _streamText
+  scrollChat()
+})
+
+chat.on('stream:tool', (data) => {
+  if (data.type === 'start') {
+    if (_streamDiv) { _streamDiv.classList.remove('streaming'); _streamDiv = null; _streamText = '' }
+    appendMessage('tool', `→ ${data.name}(${JSON.stringify(data.args || {}).slice(0, 100)})`)
+  } else if (data.type === 'result') {
+    const preview = typeof data.result === 'string' ? data.result.slice(0, 200) : JSON.stringify(data.result).slice(0, 200)
+    appendMessage('tool', `← ${data.name}: ${preview}`)
+  } else if (data.type === 'error') {
+    appendMessage('error', `Tool error (${data.name}): ${data.error}`)
+  }
+})
+
+chat.on('stream:end', () => {
+  if (_streamDiv) { _streamDiv.classList.remove('streaming'); _streamDiv = null; _streamText = '' }
+  $streamingIndicator.classList.remove('active')
+  $sendBtn.disabled = false
+})
+
+// ── REPL: results ──
+repl.on('result', (code, output, ok) => {
+  const entry = document.createElement('div')
+  entry.className = 'repl-entry'
+  entry.innerHTML = `<div class="repl-input-line">${esc(code)}</div>`
+  entry.innerHTML += ok
+    ? `<div class="repl-result">${esc(output)}</div>`
+    : `<div class="repl-error">${esc(output)}</div>`
+  $replOutput.appendChild(entry)
+  $replOutput.scrollTop = $replOutput.scrollHeight
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DOM helpers (used by feature → DOM bindings)
+// ═══════════════════════════════════════════════════════════════════════════
+function updatePathNames() {
+  const name = store.state.get('assistantName')
+  document.querySelectorAll('[id^="pathName"]').forEach(el => el.textContent = name)
+}
+
+function updateStatusBadge() {
+  if (store.state.get('deployed')) {
+    $statusBadge.innerHTML = '<span class="badge badge-deployed">deployed</span>'
+  } else {
+    $statusBadge.innerHTML = '<span class="badge badge-draft">draft</span>'
+  }
+}
+
+function renderModelSelect() {
+  const filtered = store.filteredModels
+  if (filtered.length === 0) {
+    $modelSelect.innerHTML = '<option value="">No models</option>'
+    return
+  }
+  const groups = {}
+  for (const m of filtered) {
+    if (!groups[m.provider]) groups[m.provider] = []
+    groups[m.provider].push(m)
+  }
+  let html = ''
+  for (const [provider, models] of Object.entries(groups)) {
+    const label = provider === 'lm-studio' ? 'LM Studio' : 'OpenAI'
+    html += `<optgroup label="${label}">`
+    for (const m of models) {
+      html += `<option value="${esc(m.id)}" data-provider="${esc(m.provider)}">${esc(m.name)}</option>`
+    }
+    html += '</optgroup>'
+  }
+  $modelSelect.innerHTML = html
+  const currentModel = store.state.get('model')
+  if (filtered.find(m => m.id === currentModel)) {
+    $modelSelect.value = currentModel
+  } else {
+    $modelSelect.value = filtered[0].id
+    store.setModel(filtered[0].id, filtered[0].provider)
+  }
+}
+
+function renderTools() {
+  const tools = store.state.get('tools') || []
+  $toolsPanel.innerHTML = ''
+  tools.forEach((tool, i) => {
+    const card = document.createElement('div')
+    card.className = 'tool-card'
+    card.innerHTML = `
+      <div class="tool-card-header">
+        <input class="tool-name-input" value="${esc(tool.name)}" placeholder="toolName" data-idx="${i}" data-field="name">
+        <button class="btn btn-sm btn-danger" data-remove="${i}">×</button>
+      </div>
+      <input class="tool-desc-input" value="${esc(tool.description)}" placeholder="Tool description..." data-idx="${i}" data-field="description">
+      <div class="tool-section-label">schema (zod)</div>
+      <textarea class="tool-editor" rows="3" placeholder="z.object({&#10;  query: z.string().describe('The search query')&#10;})" data-idx="${i}" data-field="schema">${esc(tool.schema)}</textarea>
+      <div class="tool-section-label">handler</div>
+      <textarea class="tool-editor" rows="4" placeholder="// args has the parsed schema fields&#10;return { result: 'hello' }" data-idx="${i}" data-field="handler">${esc(tool.handler)}</textarea>
+    `
+    // Bind events on the card
+    card.querySelectorAll('[data-idx][data-field]').forEach(input => {
+      input.addEventListener('input', () => store.updateTool(Number(input.dataset.idx), input.dataset.field, input.value))
+    })
+    card.querySelector('[data-remove]').addEventListener('click', () => store.removeTool(i))
+    $toolsPanel.appendChild(card)
+  })
+}
+
+function appendMessage(type, text) {
+  const el = document.createElement('div')
+  const cls = type === 'user' ? 'msg-user' : type === 'tool' ? 'msg-tool' : type === 'error' ? 'msg-error' : 'msg-assistant'
+  el.className = `msg ${cls}`
+  if (type === 'system') {
+    el.style.cssText = 'align-self:center;color:var(--text-dim);font-size:10px;background:var(--surface);border:1px solid var(--border);'
+  }
+  el.innerHTML = type === 'assistant' || type === 'system'
+    ? `<div class="msg-label">${type}</div><pre class="msg-body">${esc(text)}</pre>`
+    : esc(text)
+  $chatMessages.appendChild(el)
+  scrollChat()
+}
+
+function scrollChat() {
+  $chatMessages.scrollTop = $chatMessages.scrollHeight
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Boot — expose on window and start
+// ═══════════════════════════════════════════════════════════════════════════
+window.app = app
+window.luca = container
+
+await app.start()
 </script>
 </body>
 </html>

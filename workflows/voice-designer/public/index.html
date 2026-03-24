@@ -663,469 +663,728 @@
 <div class="status-bar" id="status"></div>
 
 <script type="module">
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
   const API = window.location.origin
-  let assistants = []
-  let currentAssistant = null
-  let currentConfig = null
-  let dirty = false
-  let audioCtx = null
-  let currentAudio = null
 
-  const selectEl = document.getElementById('assistant-select')
-  const settingsPanel = document.getElementById('settings-panel')
-  const phrasesPanel = document.getElementById('phrases-panel')
-  const statusEl = document.getElementById('status')
-
-  // ── Boot ────────────────────────────────
-  async function boot() {
-    try {
-      const res = await fetch(`${API}/api/assistants`)
-      const data = await res.json()
-      assistants = data.assistants || []
-
-      selectEl.innerHTML = ''
-      if (!assistants.length) {
-        selectEl.innerHTML = '<option value="">No voice assistants found</option>'
-        return
-      }
-
-      for (const a of assistants) {
-        const opt = document.createElement('option')
-        opt.value = a.name
-        opt.textContent = a.name
-        selectEl.appendChild(opt)
-      }
-
-      selectEl.addEventListener('change', () => loadAssistant(selectEl.value))
-      loadAssistant(assistants[0].name)
-    } catch (err) {
-      setStatus(`Failed to load: ${err.message}`, 'error')
-    }
-  }
-
-  function loadAssistant(name) {
-    const a = assistants.find(x => x.name === name)
-    if (!a) return
-    currentAssistant = a
-    currentConfig = structuredClone(a.voiceConfig)
-    dirty = false
-    renderSettings()
-    renderPhrases()
-    setStatus('')
-  }
-
-  // ── Render Settings ─────────────────────
-  function renderSettings() {
-    const cfg = currentConfig
-    const vs = cfg.voiceSettings || {}
-
-    const sliders = [
-      { key: 'stability', label: 'Stability', desc: 'How consistent the voice sounds across generations', min: 0, max: 1, step: 0.01, default: 0.5 },
-      { key: 'similarityBoost', label: 'Similarity Boost', desc: 'How close to the original trained voice', min: 0, max: 1, step: 0.01, default: 0.75 },
-      { key: 'style', label: 'Style', desc: 'Style exaggeration — higher values are more expressive', min: 0, max: 1, step: 0.01, default: 0 },
-      { key: 'speed', label: 'Speed', desc: 'Playback speed multiplier', min: 0.5, max: 2, step: 0.05, default: 1.0 },
-    ]
-
-    settingsPanel.innerHTML = `
-      <div class="setting-group">
-        <div class="setting-group-title">Identity</div>
-        <div class="field">
-          <label>Voice ID</label>
-          <input type="text" id="setting-voiceId" value="${esc(cfg.voiceId || '')}" placeholder="ElevenLabs voice ID" />
-        </div>
-        <div class="field">
-          <label>Model</label>
-          <select id="setting-modelId">
-            <option value="eleven_v3" ${(cfg.modelId || 'eleven_v3') === 'eleven_v3' ? 'selected' : ''}>eleven_v3</option>
-            <option value="eleven_multilingual_v2" ${cfg.modelId === 'eleven_multilingual_v2' ? 'selected' : ''}>eleven_multilingual_v2</option>
-            <option value="eleven_turbo_v2_5" ${cfg.modelId === 'eleven_turbo_v2_5' ? 'selected' : ''}>eleven_turbo_v2_5</option>
-          </select>
-        </div>
-        <div class="field">
-          <label>Conversation Mode Prefix</label>
-          <input type="text" id="setting-prefix" value="${esc(cfg.conversationModePrefix || '')}" placeholder='e.g. [fast paced english narrator]' />
-        </div>
-        <div class="field">
-          <label>Aliases</label>
-          <input type="text" id="setting-aliases" value="${esc((cfg.aliases || []).join(', '))}" placeholder="Wake words, comma separated" />
-        </div>
-      </div>
-
-      <div class="setting-group">
-        <div class="setting-group-title">Voice Quality</div>
-        ${sliders.map(s => `
-          <div class="setting">
-            <div class="setting-header">
-              <span class="setting-label">${s.label}</span>
-              <span class="setting-value" id="val-${s.key}">${(vs[s.key] ?? s.default).toFixed(2)}</span>
-            </div>
-            <div class="setting-desc">${s.desc}</div>
-            <input type="range" id="slider-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${vs[s.key] ?? s.default}" />
-          </div>
-        `).join('')}
-
-        <div class="toggle-row">
-          <div>
-            <div class="toggle-label">Speaker Boost</div>
-            <div class="toggle-desc">Enhance speaker clarity and presence</div>
-          </div>
-          <label class="toggle">
-            <input type="checkbox" id="toggle-speakerBoost" ${vs.useSpeakerBoost !== false ? 'checked' : ''} />
-            <span class="toggle-track"></span>
-            <span class="toggle-knob"></span>
-          </label>
-        </div>
-      </div>
-
-      <div class="test-actions">
-        <button class="btn btn-save" id="save-btn" disabled>Save to voice.yaml</button>
-      </div>
-    `
-
-    // Wire up sliders
-    for (const s of sliders) {
-      const slider = document.getElementById(`slider-${s.key}`)
-      const valEl = document.getElementById(`val-${s.key}`)
-      slider.addEventListener('input', () => {
-        valEl.textContent = parseFloat(slider.value).toFixed(2)
-        syncConfigFromUI()
-      })
-    }
-
-    // Wire up text fields and selects
-    for (const id of ['setting-voiceId', 'setting-prefix', 'setting-aliases']) {
-      document.getElementById(id).addEventListener('input', () => syncConfigFromUI())
-    }
-    document.getElementById('setting-modelId').addEventListener('change', () => syncConfigFromUI())
-
-    // Wire up toggle
-    document.getElementById('toggle-speakerBoost').addEventListener('change', () => syncConfigFromUI())
-
-    // Wire up save
-    document.getElementById('save-btn').addEventListener('click', saveConfig)
-  }
-
-  function syncConfigFromUI() {
-    currentConfig.voiceId = document.getElementById('setting-voiceId').value.trim()
-    currentConfig.modelId = document.getElementById('setting-modelId').value
-    currentConfig.conversationModePrefix = document.getElementById('setting-prefix').value.trim() || undefined
-    currentConfig.aliases = document.getElementById('setting-aliases').value
-      .split(',').map(s => s.trim()).filter(Boolean)
-
-    currentConfig.voiceSettings = {
-      stability: parseFloat(document.getElementById('slider-stability').value),
-      similarityBoost: parseFloat(document.getElementById('slider-similarityBoost').value),
-      style: parseFloat(document.getElementById('slider-style').value),
-      speed: parseFloat(document.getElementById('slider-speed').value),
-      useSpeakerBoost: document.getElementById('toggle-speakerBoost').checked,
-    }
-
-    dirty = true
-    const saveBtn = document.getElementById('save-btn')
-    if (saveBtn) saveBtn.disabled = false
-  }
-
-  // ── Render Phrases ──────────────────────
-  function renderPhrases() {
-    const phrases = currentConfig.phrases || {}
-    const tags = Object.keys(phrases)
-
-    let html = ''
-
-    for (const tag of tags) {
-      const items = phrases[tag] || []
-      html += `
-        <div class="phrase-tag" data-tag="${esc(tag)}">
-          <div class="phrase-tag-header">
-            <span class="phrase-tag-name">${esc(tag)}</span>
-            <button class="phrase-remove" title="Remove tag" onclick="removeTag('${esc(tag)}')">&times;</button>
-          </div>
-          ${items.map((item, i) => {
-            const text = typeof item === 'string' ? item : item.text
-            return `
-              <div class="phrase-item">
-                <input class="phrase-text" value="${esc(text)}" data-tag="${esc(tag)}" data-index="${i}"
-                       placeholder="Type a phrase..." />
-                <button class="phrase-play" data-tag="${esc(tag)}" data-index="${i}">Play</button>
-                <button class="phrase-remove" data-tag="${esc(tag)}" data-index="${i}">&times;</button>
-              </div>
-            `
-          }).join('')}
-          <div class="add-phrase-row">
-            <input type="text" placeholder="Add a ${esc(tag)} phrase..." data-add-tag="${esc(tag)}" />
-            <button class="add-phrase-btn" data-add-tag="${esc(tag)}">+</button>
-          </div>
-        </div>
-      `
-    }
-
-    html += `
-      <div class="add-tag-row">
-        <input type="text" class="add-phrase-row" id="new-tag-input" placeholder="New tag name..."
-               style="flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;outline:none" />
-        <button class="add-phrase-btn" id="add-tag-btn">+ Tag</button>
-      </div>
-
-      <div class="test-area">
-        <div class="setting-group-title">Test Any Phrase</div>
-        <textarea id="test-text" placeholder="Type anything to hear it spoken with current settings..."></textarea>
-        <div class="waveform" id="waveform">
-          ${Array.from({length: 16}, () => '<div class="waveform-bar"></div>').join('')}
-        </div>
-        <div class="test-actions">
-          <button class="btn btn-accent" id="test-btn" disabled>Speak</button>
-        </div>
-      </div>
-    `
-
-    phrasesPanel.innerHTML = html
-
-    // Wire up phrase text editing
-    phrasesPanel.querySelectorAll('.phrase-text').forEach(input => {
-      input.addEventListener('change', (e) => {
-        const tag = e.target.dataset.tag
-        const idx = parseInt(e.target.dataset.index)
-        const items = currentConfig.phrases[tag]
-        if (typeof items[idx] === 'string') {
-          items[idx] = e.target.value.trim()
-        } else {
-          items[idx].text = e.target.value.trim()
-        }
-        syncConfigFromUI()
-      })
-    })
-
-    // Wire up play buttons
-    phrasesPanel.querySelectorAll('.phrase-play').forEach(btn => {
-      btn.addEventListener('click', async (e) => {
-        const tag = e.target.dataset.tag
-        const idx = parseInt(e.target.dataset.index)
-        const items = currentConfig.phrases[tag]
-        const text = typeof items[idx] === 'string' ? items[idx] : items[idx].text
-        await synthesizeAndPlay(text, e.target)
-      })
-    })
-
-    // Wire up remove phrase buttons
-    phrasesPanel.querySelectorAll('.phrase-item .phrase-remove').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const tag = e.target.dataset.tag
-        const idx = parseInt(e.target.dataset.index)
-        currentConfig.phrases[tag].splice(idx, 1)
-        if (currentConfig.phrases[tag].length === 0) {
-          delete currentConfig.phrases[tag]
-        }
-        syncConfigFromUI()
-        renderPhrases()
-      })
-    })
-
-    // Wire up add phrase
-    phrasesPanel.querySelectorAll('[data-add-tag].add-phrase-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const tag = btn.dataset.addTag
-        const input = phrasesPanel.querySelector(`input[data-add-tag="${tag}"]`)
-        if (input.value.trim()) {
-          currentConfig.phrases[tag].push(input.value.trim())
-          input.value = ''
-          syncConfigFromUI()
-          renderPhrases()
-        }
-      })
-    })
-
-    phrasesPanel.querySelectorAll('input[data-add-tag]').forEach(input => {
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && input.value.trim()) {
-          const tag = input.dataset.addTag
-          currentConfig.phrases[tag].push(input.value.trim())
-          input.value = ''
-          syncConfigFromUI()
-          renderPhrases()
-        }
-      })
-    })
-
-    // Wire up add tag
-    document.getElementById('add-tag-btn')?.addEventListener('click', addNewTag)
-    document.getElementById('new-tag-input')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') addNewTag()
-    })
-
-    // Wire up test area
-    const testText = document.getElementById('test-text')
-    const testBtn = document.getElementById('test-btn')
-    testText?.addEventListener('input', () => {
-      testBtn.disabled = !testText.value.trim()
-    })
-    testBtn?.addEventListener('click', () => {
-      synthesizeAndPlay(testText.value.trim(), testBtn)
-    })
-    testText?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && e.metaKey && testText.value.trim()) {
-        e.preventDefault()
-        synthesizeAndPlay(testText.value.trim(), testBtn)
-      }
-    })
-  }
-
-  // ── Tag management ──────────────────────
-  window.removeTag = function(tag) {
-    delete currentConfig.phrases[tag]
-    syncConfigFromUI()
-    renderPhrases()
-  }
-
-  function addNewTag() {
-    const input = document.getElementById('new-tag-input')
-    const tag = input.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
-    if (!tag) return
-    if (!currentConfig.phrases) currentConfig.phrases = {}
-    if (currentConfig.phrases[tag]) {
-      setStatus(`Tag "${tag}" already exists`, 'error')
-      return
-    }
-    currentConfig.phrases[tag] = []
-    input.value = ''
-    syncConfigFromUI()
-    renderPhrases()
-  }
-
-  // ── Synthesize & play ───────────────────
-  async function synthesizeAndPlay(text, triggerBtn) {
-    if (!text || !currentConfig.voiceId) {
-      setStatus('Need text and a voice ID to synthesize', 'error')
-      return
-    }
-
-    // Stop current playback
-    if (currentAudio) {
-      currentAudio.pause()
-      currentAudio = null
-    }
-
-    triggerBtn.disabled = true
-    const origText = triggerBtn.textContent
-    triggerBtn.textContent = 'Generating...'
-    triggerBtn.classList.remove('playing')
-    setStatus('Synthesizing...', 'busy')
-
-    const waveform = document.getElementById('waveform')
-    let animFrame = null
-
-    try {
-      const res = await fetch(`${API}/api/synthesize`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text,
-          voiceId: currentConfig.voiceId,
-          modelId: currentConfig.modelId || 'eleven_v3',
-          voiceSettings: currentConfig.voiceSettings,
-          conversationModePrefix: currentConfig.conversationModePrefix,
-        }),
-      })
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Synthesis failed' }))
-        throw new Error(err.error || `HTTP ${res.status}`)
-      }
-
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
-      currentAudio = audio
-
-      // Waveform animation
-      const bars = waveform.querySelectorAll('.waveform-bar')
-      waveform.classList.add('active')
-      function animateBars() {
-        for (const bar of bars) {
-          bar.style.height = `${4 + Math.random() * 16}px`
-        }
-        animFrame = requestAnimationFrame(animateBars)
-      }
-
-      audio.addEventListener('play', () => {
-        triggerBtn.textContent = 'Playing...'
-        triggerBtn.classList.add('playing')
-        setStatus('Playing audio', 'success')
-        animateBars()
-      })
-
-      audio.addEventListener('ended', () => {
-        cleanup()
-        URL.revokeObjectURL(url)
-      })
-
-      audio.addEventListener('error', () => {
-        cleanup()
-        setStatus('Audio playback error', 'error')
-      })
-
-      function cleanup() {
-        triggerBtn.disabled = false
-        triggerBtn.textContent = origText
-        triggerBtn.classList.remove('playing')
-        waveform.classList.remove('active')
-        if (animFrame) cancelAnimationFrame(animFrame)
-        for (const bar of bars) bar.style.height = '4px'
-        currentAudio = null
-        setStatus('')
-      }
-
-      await audio.play()
-    } catch (err) {
-      triggerBtn.disabled = false
-      triggerBtn.textContent = origText
-      triggerBtn.classList.remove('playing')
-      waveform.classList.remove('active')
-      if (animFrame) cancelAnimationFrame(animFrame)
-      setStatus(`Error: ${err.message}`, 'error')
-    }
-  }
-
-  // ── Save config ─────────────────────────
-  async function saveConfig() {
-    const saveBtn = document.getElementById('save-btn')
-    saveBtn.disabled = true
-    saveBtn.textContent = 'Saving...'
-    setStatus('Saving voice.yaml...', 'busy')
-
-    try {
-      const res = await fetch(`${API}/api/assistants/${currentAssistant.name}/voice`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentConfig),
-      })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Save failed')
-
-      dirty = false
-      setStatus('Saved to voice.yaml', 'success')
-      setTimeout(() => { if (!dirty) setStatus('') }, 3000)
-    } catch (err) {
-      setStatus(`Save failed: ${err.message}`, 'error')
-    } finally {
-      saveBtn.textContent = 'Save to voice.yaml'
-      saveBtn.disabled = !dirty
-    }
-  }
-
-  // ── Utils ───────────────────────────────
-  function setStatus(msg, cls) {
-    statusEl.textContent = msg
-    statusEl.className = 'status-bar' + (cls ? ` ${cls}` : '')
-  }
-
+  // ── Utility ──
   function esc(str) {
     const d = document.createElement('div')
     d.textContent = String(str ?? '')
     return d.innerHTML
   }
 
-  boot()
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 1: VoiceApi — wraps all fetch() calls to backend endpoints
+  // ═══════════════════════════════════════════════════════════════════
+  class VoiceApi extends Feature {
+    static shortcut = 'features.voiceApi'
+
+    static optionsSchema = {
+      apiBase: { type: 'string', default: '', describe: 'Base URL for API calls (defaults to window.location.origin)' },
+    }
+
+    static eventsSchema = {
+      'error': { args: ['error'], describe: 'Fired on any API error' },
+    }
+
+    static { Feature.register(this, 'voiceApi') }
+
+    get base() { return this.options?.apiBase || API }
+
+    /** Fetch all voice-enabled assistants */
+    async fetchAssistants() {
+      const res = await fetch(`${this.base}/api/assistants`)
+      const data = await res.json()
+      return data.assistants || []
+    }
+
+    /** Save a voice config for the named assistant */
+    async saveVoiceConfig(name, config) {
+      const res = await fetch(`${this.base}/api/assistants/${name}/voice`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+      return data
+    }
+
+    /** Synthesize text to audio via ElevenLabs, returns a Blob */
+    async synthesize({ text, voiceId, modelId, voiceSettings, conversationModePrefix }) {
+      const res = await fetch(`${this.base}/api/synthesize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voiceId, modelId, voiceSettings, conversationModePrefix }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Synthesis failed' }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      return await res.blob()
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 2: VoiceStore — manages loaded data, current selection,
+  //            config editing, dirty tracking
+  // ═══════════════════════════════════════════════════════════════════
+  class VoiceStore extends Feature {
+    static shortcut = 'features.voiceStore'
+
+    static stateSchema = {
+      assistants:       { type: 'array',   default: [],    describe: 'All loaded voice-enabled assistants' },
+      currentAssistant: { type: 'object',  default: null,  describe: 'Currently selected assistant object' },
+      currentConfig:    { type: 'object',  default: null,  describe: 'Deep clone of the selected assistant voiceConfig, edited in place' },
+      dirty:            { type: 'boolean', default: false,  describe: 'True when config has unsaved changes' },
+      loading:          { type: 'boolean', default: false,  describe: 'True while fetching assistants' },
+    }
+
+    static eventsSchema = {
+      'assistants:loaded':  { args: ['assistants'],  describe: 'Fired after assistants are fetched' },
+      'assistant:selected': { args: ['assistant'],   describe: 'Fired when an assistant is selected' },
+      'config:changed':     { args: ['config'],      describe: 'Fired when the working config changes' },
+      'config:saved':       { args: ['config'],      describe: 'Fired after config is persisted to disk' },
+      'error':              { args: ['error'],       describe: 'Fired on any store error' },
+    }
+
+    static { Feature.register(this, 'voiceStore') }
+
+    get api() { return this.container.feature('voiceApi') }
+
+    /** Load all assistants from the API */
+    async loadAssistants() {
+      this.state.set('loading', true)
+      try {
+        const assistants = await this.api.fetchAssistants()
+        this.state.set('assistants', assistants)
+        this.state.set('loading', false)
+        this.emit('assistants:loaded', assistants)
+        return assistants
+      } catch (err) {
+        this.state.set('loading', false)
+        this.emit('error', err)
+        throw err
+      }
+    }
+
+    /** Select an assistant by name, deep-cloning its config for editing */
+    selectAssistant(name) {
+      const assistants = this.state.get('assistants')
+      const a = assistants.find(x => x.name === name)
+      if (!a) return null
+      this.state.set('currentAssistant', a)
+      this.state.set('currentConfig', structuredClone(a.voiceConfig))
+      this.state.set('dirty', false)
+      this.emit('assistant:selected', a)
+      return a
+    }
+
+    /** Update the working config and mark dirty */
+    updateConfig(config) {
+      this.state.set('currentConfig', config)
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+    }
+
+    /** Read the current working config from DOM inputs and update state */
+    syncFromUI() {
+      const config = this.state.get('currentConfig')
+      if (!config) return
+
+      config.voiceId = document.getElementById('setting-voiceId').value.trim()
+      config.modelId = document.getElementById('setting-modelId').value
+      config.conversationModePrefix = document.getElementById('setting-prefix').value.trim() || undefined
+      config.aliases = document.getElementById('setting-aliases').value
+        .split(',').map(s => s.trim()).filter(Boolean)
+
+      config.voiceSettings = {
+        stability: parseFloat(document.getElementById('slider-stability').value),
+        similarityBoost: parseFloat(document.getElementById('slider-similarityBoost').value),
+        style: parseFloat(document.getElementById('slider-style').value),
+        speed: parseFloat(document.getElementById('slider-speed').value),
+        useSpeakerBoost: document.getElementById('toggle-speakerBoost').checked,
+      }
+
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+
+      const saveBtn = document.getElementById('save-btn')
+      if (saveBtn) saveBtn.disabled = false
+    }
+
+    /** Persist current config to voice.yaml via the API */
+    async saveConfig() {
+      const assistant = this.state.get('currentAssistant')
+      const config = this.state.get('currentConfig')
+      if (!assistant || !config) return
+
+      await this.api.saveVoiceConfig(assistant.name, config)
+      this.state.set('dirty', false)
+      this.emit('config:saved', config)
+    }
+
+    /** Add a phrase to a tag */
+    addPhrase(tag, text) {
+      const config = this.state.get('currentConfig')
+      if (!config.phrases) config.phrases = {}
+      if (!config.phrases[tag]) config.phrases[tag] = []
+      config.phrases[tag].push(text)
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+    }
+
+    /** Remove a phrase by tag and index */
+    removePhrase(tag, index) {
+      const config = this.state.get('currentConfig')
+      config.phrases[tag].splice(index, 1)
+      if (config.phrases[tag].length === 0) delete config.phrases[tag]
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+    }
+
+    /** Update a phrase's text */
+    updatePhrase(tag, index, text) {
+      const config = this.state.get('currentConfig')
+      const items = config.phrases[tag]
+      if (typeof items[index] === 'string') {
+        items[index] = text
+      } else {
+        items[index].text = text
+      }
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+    }
+
+    /** Add a new tag (returns false if already exists) */
+    addTag(rawName) {
+      const tag = rawName.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+      if (!tag) return false
+      const config = this.state.get('currentConfig')
+      if (!config.phrases) config.phrases = {}
+      if (config.phrases[tag]) return false
+      config.phrases[tag] = []
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+      return true
+    }
+
+    /** Remove an entire tag */
+    removeTag(tag) {
+      const config = this.state.get('currentConfig')
+      delete config.phrases[tag]
+      this.state.set('dirty', true)
+      this.emit('config:changed', config)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 3: AudioPlayer — synthesize, play audio, waveform animation
+  // ═══════════════════════════════════════════════════════════════════
+  class AudioPlayer extends Feature {
+    static shortcut = 'features.audioPlayer'
+
+    static stateSchema = {
+      playing:      { type: 'boolean', default: false,  describe: 'True while audio is playing' },
+      synthesizing: { type: 'boolean', default: false,  describe: 'True while waiting for TTS response' },
+    }
+
+    static eventsSchema = {
+      'play:start':  { args: ['text'],  describe: 'Audio playback started' },
+      'play:end':    { args: [],        describe: 'Audio playback ended' },
+      'play:error':  { args: ['error'], describe: 'Audio playback or synthesis error' },
+    }
+
+    static { Feature.register(this, 'audioPlayer') }
+
+    _currentAudio = null
+    _animFrame = null
+
+    get api() { return this.container.feature('voiceApi') }
+
+    /** Stop any currently playing audio */
+    stop() {
+      if (this._currentAudio) {
+        this._currentAudio.pause()
+        this._currentAudio = null
+      }
+      this._stopWaveform()
+      this.state.set('playing', false)
+    }
+
+    /** Synthesize text with the given voice config and play it */
+    async synthesizeAndPlay(text, voiceConfig, triggerBtn) {
+      if (!text || !voiceConfig.voiceId) {
+        this.emit('play:error', new Error('Need text and a voice ID to synthesize'))
+        return
+      }
+
+      this.stop()
+
+      const origText = triggerBtn?.textContent
+      if (triggerBtn) {
+        triggerBtn.disabled = true
+        triggerBtn.textContent = 'Generating...'
+        triggerBtn.classList.remove('playing')
+      }
+
+      this.state.set('synthesizing', true)
+
+      try {
+        const blob = await this.api.synthesize({
+          text,
+          voiceId: voiceConfig.voiceId,
+          modelId: voiceConfig.modelId || 'eleven_v3',
+          voiceSettings: voiceConfig.voiceSettings,
+          conversationModePrefix: voiceConfig.conversationModePrefix,
+        })
+
+        this.state.set('synthesizing', false)
+
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        this._currentAudio = audio
+
+        const waveform = document.getElementById('waveform')
+        const bars = waveform?.querySelectorAll('.waveform-bar')
+
+        const cleanup = () => {
+          if (triggerBtn) {
+            triggerBtn.disabled = false
+            triggerBtn.textContent = origText
+            triggerBtn.classList.remove('playing')
+          }
+          this._stopWaveform()
+          this._currentAudio = null
+          this.state.set('playing', false)
+          this.emit('play:end')
+        }
+
+        audio.addEventListener('play', () => {
+          if (triggerBtn) {
+            triggerBtn.textContent = 'Playing...'
+            triggerBtn.classList.add('playing')
+          }
+          this.state.set('playing', true)
+          this.emit('play:start', text)
+          this._startWaveform(bars, waveform)
+        })
+
+        audio.addEventListener('ended', () => { cleanup(); URL.revokeObjectURL(url) })
+        audio.addEventListener('error', () => { cleanup(); this.emit('play:error', new Error('Audio playback error')) })
+
+        await audio.play()
+      } catch (err) {
+        this.state.set('synthesizing', false)
+        if (triggerBtn) {
+          triggerBtn.disabled = false
+          triggerBtn.textContent = origText
+          triggerBtn.classList.remove('playing')
+        }
+        this._stopWaveform()
+        this.emit('play:error', err)
+      }
+    }
+
+    _startWaveform(bars, waveform) {
+      if (!bars || !waveform) return
+      waveform.classList.add('active')
+      const animate = () => {
+        for (const bar of bars) bar.style.height = `${4 + Math.random() * 16}px`
+        this._animFrame = requestAnimationFrame(animate)
+      }
+      animate()
+    }
+
+    _stopWaveform() {
+      const waveform = document.getElementById('waveform')
+      if (waveform) {
+        waveform.classList.remove('active')
+        for (const bar of waveform.querySelectorAll('.waveform-bar')) bar.style.height = '4px'
+      }
+      if (this._animFrame) { cancelAnimationFrame(this._animFrame); this._animFrame = null }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 4: VoiceDesigner — central orchestrator
+  // ═══════════════════════════════════════════════════════════════════
+  class VoiceDesigner extends Feature {
+    static shortcut = 'features.voiceDesigner'
+
+    static stateSchema = {
+      ready:  { type: 'boolean', default: false, describe: 'True after all sub-features have initialized' },
+    }
+
+    static eventsSchema = {
+      'ready':            { args: [],                  describe: 'All features initialized and data loaded' },
+      'status':           { args: ['message', 'type'], describe: 'Status bar update (type: success|error|busy|"")' },
+      'action:complete':  { args: ['action', 'result'], describe: 'A high-level user action completed' },
+    }
+
+    static { Feature.register(this, 'voiceDesigner') }
+
+    // ── Composed features ──
+    get store()  { return this.container.feature('voiceStore') }
+    get player() { return this.container.feature('audioPlayer') }
+    get api()    { return this.container.feature('voiceApi') }
+
+    // ── DOM refs ──
+    get selectEl()      { return document.getElementById('assistant-select') }
+    get settingsPanel() { return document.getElementById('settings-panel') }
+    get phrasesPanel()  { return document.getElementById('phrases-panel') }
+    get statusEl()      { return document.getElementById('status') }
+
+    /** Boot the app: load assistants, select the first one, bind UI */
+    async start() {
+      try {
+        const assistants = await this.store.loadAssistants()
+
+        this.selectEl.innerHTML = ''
+        if (!assistants.length) {
+          this.selectEl.innerHTML = '<option value="">No voice assistants found</option>'
+          return
+        }
+
+        for (const a of assistants) {
+          const opt = document.createElement('option')
+          opt.value = a.name
+          opt.textContent = a.name
+          this.selectEl.appendChild(opt)
+        }
+
+        this.selectEl.addEventListener('change', () => this.selectAssistant(this.selectEl.value))
+        this.selectAssistant(assistants[0].name)
+
+        this.state.set('ready', true)
+        this.emit('ready')
+      } catch (err) {
+        this.setStatus(`Failed to load: ${err.message}`, 'error')
+      }
+    }
+
+    /** Select an assistant by name and render both panels */
+    selectAssistant(name) {
+      const a = this.store.selectAssistant(name)
+      if (!a) return null
+      this.renderSettings()
+      this.renderPhrases()
+      this.setStatus('')
+      this.emit('action:complete', 'selectAssistant', a)
+      return a
+    }
+
+    /** Save the current config to voice.yaml */
+    async saveConfig() {
+      const saveBtn = document.getElementById('save-btn')
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Saving...' }
+      this.setStatus('Saving voice.yaml...', 'busy')
+
+      try {
+        await this.store.saveConfig()
+        this.setStatus('Saved to voice.yaml', 'success')
+        setTimeout(() => { if (!this.store.state.get('dirty')) this.setStatus('') }, 3000)
+      } catch (err) {
+        this.setStatus(`Save failed: ${err.message}`, 'error')
+      } finally {
+        if (saveBtn) {
+          saveBtn.textContent = 'Save to voice.yaml'
+          saveBtn.disabled = !this.store.state.get('dirty')
+        }
+      }
+    }
+
+    /** Synthesize and play a phrase with current voice settings */
+    async speak(text, triggerBtn) {
+      const config = this.store.state.get('currentConfig')
+      if (!config) return
+
+      this.setStatus('Synthesizing...', 'busy')
+      try {
+        await this.player.synthesizeAndPlay(text, config, triggerBtn)
+      } catch (err) {
+        this.setStatus(`Error: ${err.message}`, 'error')
+      }
+    }
+
+    /** Update the status bar */
+    setStatus(msg, cls) {
+      this.statusEl.textContent = msg
+      this.statusEl.className = 'status-bar' + (cls ? ` ${cls}` : '')
+      this.emit('status', msg, cls)
+    }
+
+    /** Get a full state snapshot (useful for assistants and debugging) */
+    snapshot() {
+      const config = this.store.state.get('currentConfig')
+      return {
+        ready: this.state.get('ready'),
+        assistantCount: this.store.state.get('assistants').length,
+        currentAssistant: this.store.state.get('currentAssistant')?.name || null,
+        dirty: this.store.state.get('dirty'),
+        playing: this.player.state.get('playing'),
+        synthesizing: this.player.state.get('synthesizing'),
+        config: config ? {
+          voiceId: config.voiceId,
+          modelId: config.modelId,
+          aliases: config.aliases,
+          phraseTags: config.phrases ? Object.keys(config.phrases) : [],
+        } : null,
+      }
+    }
+
+    // ── Render Settings Panel ──
+    renderSettings() {
+      const cfg = this.store.state.get('currentConfig')
+      const vs = cfg.voiceSettings || {}
+      const store = this.store
+
+      const sliders = [
+        { key: 'stability', label: 'Stability', desc: 'How consistent the voice sounds across generations', min: 0, max: 1, step: 0.01, default: 0.5 },
+        { key: 'similarityBoost', label: 'Similarity Boost', desc: 'How close to the original trained voice', min: 0, max: 1, step: 0.01, default: 0.75 },
+        { key: 'style', label: 'Style', desc: 'Style exaggeration — higher values are more expressive', min: 0, max: 1, step: 0.01, default: 0 },
+        { key: 'speed', label: 'Speed', desc: 'Playback speed multiplier', min: 0.5, max: 2, step: 0.05, default: 1.0 },
+      ]
+
+      this.settingsPanel.innerHTML = `
+        <div class="setting-group">
+          <div class="setting-group-title">Identity</div>
+          <div class="field">
+            <label>Voice ID</label>
+            <input type="text" id="setting-voiceId" value="${esc(cfg.voiceId || '')}" placeholder="ElevenLabs voice ID" />
+          </div>
+          <div class="field">
+            <label>Model</label>
+            <select id="setting-modelId">
+              <option value="eleven_v3" ${(cfg.modelId || 'eleven_v3') === 'eleven_v3' ? 'selected' : ''}>eleven_v3</option>
+              <option value="eleven_multilingual_v2" ${cfg.modelId === 'eleven_multilingual_v2' ? 'selected' : ''}>eleven_multilingual_v2</option>
+              <option value="eleven_turbo_v2_5" ${cfg.modelId === 'eleven_turbo_v2_5' ? 'selected' : ''}>eleven_turbo_v2_5</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Conversation Mode Prefix</label>
+            <input type="text" id="setting-prefix" value="${esc(cfg.conversationModePrefix || '')}" placeholder='e.g. [fast paced english narrator]' />
+          </div>
+          <div class="field">
+            <label>Aliases</label>
+            <input type="text" id="setting-aliases" value="${esc((cfg.aliases || []).join(', '))}" placeholder="Wake words, comma separated" />
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <div class="setting-group-title">Voice Quality</div>
+          ${sliders.map(s => `
+            <div class="setting">
+              <div class="setting-header">
+                <span class="setting-label">${s.label}</span>
+                <span class="setting-value" id="val-${s.key}">${(vs[s.key] ?? s.default).toFixed(2)}</span>
+              </div>
+              <div class="setting-desc">${s.desc}</div>
+              <input type="range" id="slider-${s.key}" min="${s.min}" max="${s.max}" step="${s.step}" value="${vs[s.key] ?? s.default}" />
+            </div>
+          `).join('')}
+
+          <div class="toggle-row">
+            <div>
+              <div class="toggle-label">Speaker Boost</div>
+              <div class="toggle-desc">Enhance speaker clarity and presence</div>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="toggle-speakerBoost" ${vs.useSpeakerBoost !== false ? 'checked' : ''} />
+              <span class="toggle-track"></span>
+              <span class="toggle-knob"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="test-actions">
+          <button class="btn btn-save" id="save-btn" disabled>Save to voice.yaml</button>
+        </div>
+      `
+
+      // Wire up sliders
+      for (const s of sliders) {
+        const slider = document.getElementById(`slider-${s.key}`)
+        const valEl = document.getElementById(`val-${s.key}`)
+        slider.addEventListener('input', () => {
+          valEl.textContent = parseFloat(slider.value).toFixed(2)
+          store.syncFromUI()
+        })
+      }
+
+      // Wire up text fields and selects
+      for (const id of ['setting-voiceId', 'setting-prefix', 'setting-aliases']) {
+        document.getElementById(id).addEventListener('input', () => store.syncFromUI())
+      }
+      document.getElementById('setting-modelId').addEventListener('change', () => store.syncFromUI())
+      document.getElementById('toggle-speakerBoost').addEventListener('change', () => store.syncFromUI())
+      document.getElementById('save-btn').addEventListener('click', () => this.saveConfig())
+    }
+
+    // ── Render Phrases Panel ──
+    renderPhrases() {
+      const cfg = this.store.state.get('currentConfig')
+      const phrases = cfg.phrases || {}
+      const tags = Object.keys(phrases)
+      const app = this
+
+      let html = ''
+
+      for (const tag of tags) {
+        const items = phrases[tag] || []
+        html += `
+          <div class="phrase-tag" data-tag="${esc(tag)}">
+            <div class="phrase-tag-header">
+              <span class="phrase-tag-name">${esc(tag)}</span>
+              <button class="phrase-remove remove-tag-btn" data-tag="${esc(tag)}" title="Remove tag">&times;</button>
+            </div>
+            ${items.map((item, i) => {
+              const text = typeof item === 'string' ? item : item.text
+              return `
+                <div class="phrase-item">
+                  <input class="phrase-text" value="${esc(text)}" data-tag="${esc(tag)}" data-index="${i}"
+                         placeholder="Type a phrase..." />
+                  <button class="phrase-play" data-tag="${esc(tag)}" data-index="${i}">Play</button>
+                  <button class="phrase-remove" data-tag="${esc(tag)}" data-index="${i}">&times;</button>
+                </div>
+              `
+            }).join('')}
+            <div class="add-phrase-row">
+              <input type="text" placeholder="Add a ${esc(tag)} phrase..." data-add-tag="${esc(tag)}" />
+              <button class="add-phrase-btn" data-add-tag="${esc(tag)}">+</button>
+            </div>
+          </div>
+        `
+      }
+
+      html += `
+        <div class="add-tag-row">
+          <input type="text" class="add-phrase-row" id="new-tag-input" placeholder="New tag name..."
+                 style="flex:1;background:var(--input-bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:13px;padding:8px 10px;outline:none" />
+          <button class="add-phrase-btn" id="add-tag-btn">+ Tag</button>
+        </div>
+
+        <div class="test-area">
+          <div class="setting-group-title">Test Any Phrase</div>
+          <textarea id="test-text" placeholder="Type anything to hear it spoken with current settings..."></textarea>
+          <div class="waveform" id="waveform">
+            ${Array.from({length: 16}, () => '<div class="waveform-bar"></div>').join('')}
+          </div>
+          <div class="test-actions">
+            <button class="btn btn-accent" id="test-btn" disabled>Speak</button>
+          </div>
+        </div>
+      `
+
+      this.phrasesPanel.innerHTML = html
+
+      // Wire up phrase text editing
+      this.phrasesPanel.querySelectorAll('.phrase-text').forEach(input => {
+        input.addEventListener('change', (e) => {
+          this.store.updatePhrase(e.target.dataset.tag, parseInt(e.target.dataset.index), e.target.value.trim())
+        })
+      })
+
+      // Wire up play buttons
+      this.phrasesPanel.querySelectorAll('.phrase-play').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const tag = e.target.dataset.tag
+          const idx = parseInt(e.target.dataset.index)
+          const items = cfg.phrases[tag]
+          const text = typeof items[idx] === 'string' ? items[idx] : items[idx].text
+          await app.speak(text, e.target)
+        })
+      })
+
+      // Wire up remove phrase buttons
+      this.phrasesPanel.querySelectorAll('.phrase-item .phrase-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          this.store.removePhrase(e.target.dataset.tag, parseInt(e.target.dataset.index))
+          this.renderPhrases()
+        })
+      })
+
+      // Wire up remove tag buttons
+      this.phrasesPanel.querySelectorAll('.remove-tag-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          this.store.removeTag(btn.dataset.tag)
+          this.renderPhrases()
+        })
+      })
+
+      // Wire up add phrase
+      this.phrasesPanel.querySelectorAll('[data-add-tag].add-phrase-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tag = btn.dataset.addTag
+          const input = this.phrasesPanel.querySelector(`input[data-add-tag="${tag}"]`)
+          if (input.value.trim()) {
+            this.store.addPhrase(tag, input.value.trim())
+            input.value = ''
+            this.renderPhrases()
+          }
+        })
+      })
+
+      this.phrasesPanel.querySelectorAll('input[data-add-tag]').forEach(input => {
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' && input.value.trim()) {
+            this.store.addPhrase(input.dataset.addTag, input.value.trim())
+            input.value = ''
+            this.renderPhrases()
+          }
+        })
+      })
+
+      // Wire up add tag
+      document.getElementById('add-tag-btn')?.addEventListener('click', () => this._addNewTag())
+      document.getElementById('new-tag-input')?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') this._addNewTag()
+      })
+
+      // Wire up test area
+      const testText = document.getElementById('test-text')
+      const testBtn = document.getElementById('test-btn')
+      testText?.addEventListener('input', () => { testBtn.disabled = !testText.value.trim() })
+      testBtn?.addEventListener('click', () => { app.speak(testText.value.trim(), testBtn) })
+      testText?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && e.metaKey && testText.value.trim()) {
+          e.preventDefault()
+          app.speak(testText.value.trim(), testBtn)
+        }
+      })
+    }
+
+    _addNewTag() {
+      const input = document.getElementById('new-tag-input')
+      const ok = this.store.addTag(input.value)
+      if (!ok) {
+        this.setStatus(`Tag "${input.value.trim()}" already exists or is invalid`, 'error')
+        return
+      }
+      input.value = ''
+      this.renderPhrases()
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Boot — wire up status events from player, then start the app
+  // ═══════════════════════════════════════════════════════════════════
+  const app = container.feature('voiceDesigner')
+  const player = container.feature('audioPlayer')
+
+  // Forward player events to status bar
+  player.on('play:start', () => app.setStatus('Playing audio', 'success'))
+  player.on('play:end',   () => app.setStatus(''))
+  player.on('play:error', (err) => app.setStatus(`Error: ${err.message}`, 'error'))
+
+  // Expose for automation and debugging
+  window.app = app
+  window.luca = container
+
+  await app.start()
 </script>
 </body>
 </html>

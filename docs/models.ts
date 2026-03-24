@@ -115,9 +115,10 @@ export const Prompt = defineModel("Prompt", {
 		repeatable: z.boolean().describe('A prompt can be repeatable false, and have lastRanAt set so it wont run').default(true),
 		lastRanAt: z.number().optional().describe('a timestamp for when this prompt was ran last. Set to mark a repeatable prompt as not repeatable in the agentic loop'),
 	  inputs: z.record(
-				z.string(), 
-				z.object({ 
-					type: z.enum(['string','number']).default('string'), 
+				z.string(),
+				z.object({
+					type: z.enum(['string','number','input']).default('string'),
+					description: z.string().optional().describe("Description of the input, shown as placeholder text"),
 					question: z.string().optional().describe("The question to ask the user for input, otherwise the key is used as the question"),
 				})
 			).describe('inputs will be replaced in the prompt, where {{double}} brackets are used to match the name').optional()

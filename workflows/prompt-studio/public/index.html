@@ -678,9 +678,37 @@
 
 <!-- Queue Inputs Modal (used for add + edit) -->
 <div class="modal-overlay" id="queue-inputs-modal">
-  <div class="modal" style="width:420px;">
+  <div class="modal" style="width:480px;">
     <h2 id="queue-inputs-title">Queue Prompt</h2>
     <div id="queue-inputs-fields"></div>
+    <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:8px;">
+      <div id="queue-options-toggle" style="font-size:10px;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-dim);cursor:pointer;user-select:none;display:flex;align-items:center;gap:4px;">
+        <span style="font-size:8px;transition:transform 0.15s;" id="options-chevron">&#9654;</span> Options
+      </div>
+      <div id="queue-options-fields" style="display:none;margin-top:8px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="modal-field"><label>Model</label><input type="text" id="qo-model" placeholder="(from frontmatter)" /></div>
+          <div class="modal-field"><label>Permission Mode</label>
+            <select id="qo-permission-mode" class="meta-select" style="width:100%;padding:8px 12px;font-size:13px;border-radius:6px;background:var(--bg);border:1px solid var(--border);">
+              <option value="bypassPermissions">Bypass</option>
+              <option value="acceptEdits">Accept Edits</option>
+              <option value="default">Default</option>
+              <option value="plan">Plan</option>
+            </select>
+          </div>
+          <div class="modal-field"><label>In Folder</label><input type="text" id="qo-in-folder" placeholder="(cwd)" /></div>
+          <div class="modal-field"><label>Out File</label><input type="text" id="qo-out-file" placeholder="(none)" /></div>
+          <div class="modal-field" style="grid-column:1/-1;"><label>Exclude Sections</label><input type="text" id="qo-exclude-sections" placeholder="Comma-separated section names" /></div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px;">
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="qo-skip-eval" /> Skip Eval</label>
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="qo-chrome" /> Chrome</label>
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="qo-include-output" /> Include Output</label>
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="qo-dry-run" /> Dry Run</label>
+          <label style="font-size:11px;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" id="qo-local" /> Local</label>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" id="queue-inputs-cancel">Cancel</button>
       <button class="btn btn-purple" id="queue-inputs-add">Add to Queue</button>
@@ -785,9 +813,9 @@
       return p?.inputs || {}
     }
 
-    addToQueue(slug, title, inputs = {}, agent = null) {
+    addToQueue(slug, title, inputs = {}, agent = null, options = {}) {
       const id = ++this._idCounter
-      const item = { id, slug, title, agent: agent || this.state.get('selectedAgent') || 'claude', inputs, status: 'queued', output: '', controller: null }
+      const item = { id, slug, title, agent: agent || this.state.get('selectedAgent') || 'claude', inputs, options, status: 'queued', output: '', controller: null }
       this._queue.push(item)
       this.state.set('queueLength', this._queue.length)
       this.emit('queue:added', item)
@@ -847,7 +875,7 @@
       try {
         const res = await fetch(`${API}/api/run-prompt/${item.slug}`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ agent: item.agent, inputs: item.inputs }),
+          body: JSON.stringify({ agent: item.agent, inputs: item.inputs, options: item.options || {} }),
           signal: controller.signal,
         })
 
@@ -1045,7 +1073,46 @@
   // ── Inputs Modal (add + edit queue items) ──
   let modalMode = 'add', modalSlug = null, modalTitle = null, modalEditId = null
 
-  function showInputsModal(slug, existingInputs = null, editId = null) {
+  // Options toggle
+  const optionsToggle = el('queue-options-toggle')
+  const optionsFields = el('queue-options-fields')
+  const optionsChevron = el('options-chevron')
+  let optionsOpen = false
+  optionsToggle.addEventListener('click', () => {
+    optionsOpen = !optionsOpen
+    optionsFields.style.display = optionsOpen ? 'block' : 'none'
+    optionsChevron.style.transform = optionsOpen ? 'rotate(90deg)' : ''
+  })
+
+  function getModalOptions() {
+    const opts = {}
+    const model = el('qo-model').value.trim(); if (model) opts.model = model
+    const pm = el('qo-permission-mode').value; if (pm !== 'bypassPermissions') opts.permissionMode = pm
+    const inf = el('qo-in-folder').value.trim(); if (inf) opts.inFolder = inf
+    const outf = el('qo-out-file').value.trim(); if (outf) opts.outFile = outf
+    const exc = el('qo-exclude-sections').value.trim(); if (exc) opts.excludeSections = exc
+    if (el('qo-skip-eval').checked) opts.skipEval = true
+    if (el('qo-chrome').checked) opts.chrome = true
+    if (el('qo-include-output').checked) opts.includeOutput = true
+    if (el('qo-dry-run').checked) opts.dryRun = true
+    if (el('qo-local').checked) opts.local = true
+    return opts
+  }
+
+  function setModalOptions(opts = {}) {
+    el('qo-model').value = opts.model || ''
+    el('qo-permission-mode').value = opts.permissionMode || 'bypassPermissions'
+    el('qo-in-folder').value = opts.inFolder || ''
+    el('qo-out-file').value = opts.outFile || ''
+    el('qo-exclude-sections').value = opts.excludeSections || ''
+    el('qo-skip-eval').checked = !!opts.skipEval
+    el('qo-chrome').checked = !!opts.chrome
+    el('qo-include-output').checked = !!opts.includeOutput
+    el('qo-dry-run').checked = !!opts.dryRun
+    el('qo-local').checked = !!opts.local
+  }
+
+  function showInputsModal(slug, existingInputs = null, editId = null, existingOptions = null) {
     const p = studio.prompts.find(pr => pr.slug === slug)
     if (!p) return
     const inputsDef = p.inputs || {}; modalSlug = slug; modalTitle = p.title
@@ -1056,9 +1123,10 @@
       modalMode = 'add'; modalEditId = null
       queueInputsTitle.textContent = `Queue: ${p.title}`; queueInputsAddBtn.textContent = 'Add to Queue'
     }
+    setModalOptions(existingOptions || {})
     queueInputsFields.innerHTML = ''
     const keys = Object.keys(inputsDef)
-    if (keys.length === 0 && modalMode === 'add') { studio.addToQueue(slug, p.title, {}, agentSelect.value); return }
+    if (keys.length === 0 && modalMode === 'add' && !optionsOpen) { studio.addToQueue(slug, p.title, {}, agentSelect.value, {}); return }
     for (const key of keys) {
       const spec = inputsDef[key], val = existingInputs?.[key] || '', field = document.createElement('div'); field.className = 'modal-field'
       field.innerHTML = `<label>${esc(key)}</label><input type="text" data-qi-key="${esc(key)}" placeholder="${esc(spec.description || spec.question || key)}" value="${esc(val)}" />`
@@ -1075,8 +1143,9 @@
   queueInputsAddBtn.addEventListener('click', () => {
     const inputs = {}
     queueInputsFields.querySelectorAll('input[data-qi-key]').forEach(i => { if (i.value.trim()) inputs[i.dataset.qiKey] = i.value.trim() })
-    if (modalMode === 'edit' && modalEditId !== null) studio.updateQueueItem(modalEditId, { inputs })
-    else studio.addToQueue(modalSlug, modalTitle, inputs, agentSelect.value)
+    const options = getModalOptions()
+    if (modalMode === 'edit' && modalEditId !== null) studio.updateQueueItem(modalEditId, { inputs, options })
+    else studio.addToQueue(modalSlug, modalTitle, inputs, agentSelect.value, options)
     queueInputsModal.classList.remove('open')
   })
 
@@ -1123,7 +1192,7 @@
         const id = parseInt(b.dataset.editId), item = studio.queue.find(q => q.id === id)
         if (!item) return
         const isRerun = b.textContent.includes('Rerun')
-        showInputsModal(item.slug, item.inputs, id)
+        showInputsModal(item.slug, item.inputs, id, item.options)
         if (isRerun) {
           // After modal closes via submit, also trigger rerun
           const orig = queueInputsAddBtn.onclick

@@ -437,46 +437,414 @@
   </div>
 </div>
 
-<script>
-// ── Config ────────────────────────────────────────────────────────
-const MAX_EVENTS = 300
-const MAX_LOGS = 500
-const RENDER_INTERVAL = 250
-const REFRESH_INTERVAL = 5000
-const RECONNECT_DELAY = 3000
-
-// ── Color palette for log sources ─────────────────────────────────
-const SOURCE_COLORS = [
-  '#4ECDC4', '#FF6B6B', '#FFD166', '#06D6A0', '#118AB2',
-  '#EF476F', '#73D2DE', '#FCB69F', '#A8E6CF', '#FDCB6E',
-  '#6C5CE7', '#00B894', '#E17055', '#0984E3', '#FDCB6E', '#E84393',
-]
-const MODEL_COLORS = [
-  '#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2',
-  '#EF476F', '#73D2DE', '#6C5CE7', '#00B894', '#E17055',
-  '#FDCB6E', '#E84393',
-]
-const sourceColorMap = {}
-let nextColorIdx = 0
-
-function getSourceColor(source) {
-  if (!sourceColorMap[source]) {
-    sourceColorMap[source] = SOURCE_COLORS[nextColorIdx % SOURCE_COLORS.length]
-    nextColorIdx++
-  }
-  return sourceColorMap[source]
+<script type="module">
+// ── Helpers (used by render code and features) ────────────────────
+function esc(str) {
+  if (!str) return ''
+  const d = document.createElement('div')
+  d.textContent = String(str)
+  return d.innerHTML
 }
 
-// ── State ─────────────────────────────────────────────────────────
-let ws = null
-let status = null
-let events = []
-let logs = []
-let needsRender = true
-let connected = false
-let reconnectTimer = null
+function formatUptime(secs) {
+  const s = Math.floor(secs)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ${s % 60}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
 
-// ── DOM refs ──────────────────────────────────────────────────────
+// ── Load Luca browser container ───────────────────────────────────
+const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+// ═══════════════════════════════════════════════════════════════════
+// Feature 1: DashboardConnection
+// Manages WebSocket lifecycle, reconnection, and config fetch.
+// ═══════════════════════════════════════════════════════════════════
+class DashboardConnection extends Feature {
+  static shortcut = 'features.dashboardConnection'
+
+  static stateSchema = {
+    connected: { type: 'boolean', default: false, describe: 'True when WebSocket is open' },
+    wsUrl: { type: 'string', default: '', describe: 'Resolved WebSocket URL from /api/config' },
+    reconnecting: { type: 'boolean', default: false, describe: 'True during reconnect countdown' },
+    countdown: { type: 'number', default: 0, describe: 'Seconds until next reconnect attempt' },
+  }
+
+  static optionsSchema = {
+    defaultWsUrl: { type: 'string', default: 'ws://localhost:4410', describe: 'Fallback WS URL if /api/config fails' },
+    reconnectDelay: { type: 'number', default: 3000, describe: 'Milliseconds before reconnect attempt' },
+    refreshInterval: { type: 'number', default: 5000, describe: 'Milliseconds between query refreshes' },
+  }
+
+  static eventsSchema = {
+    'connected':     { args: [],          describe: 'WebSocket connection established' },
+    'disconnected':  { args: [],          describe: 'WebSocket connection lost' },
+    'message':       { args: ['msg'],     describe: 'Raw parsed message from WebSocket' },
+    'state':         { args: ['data'],    describe: 'State/response message received' },
+    'event':         { args: ['evt'],     describe: 'Event-type message received' },
+    'log':           { args: ['entry'],   describe: 'Log-type message received' },
+  }
+
+  static { Feature.register(this, 'dashboardConnection') }
+
+  _ws = null
+  _reconnectTimer = null
+  _countdownTimer = null
+  _refreshTimer = null
+
+  /** Fetch config and open WebSocket */
+  async connect() {
+    const defaultUrl = this.options?.defaultWsUrl || 'ws://localhost:4410'
+    let wsUrl = defaultUrl
+
+    try {
+      const res = await fetch('/api/config')
+      if (res.ok) {
+        const cfg = await res.json()
+        wsUrl = cfg.wsUrl || defaultUrl
+      }
+    } catch {}
+
+    this.state.set('wsUrl', wsUrl)
+
+    if (this._ws) {
+      try { this._ws.close() } catch {}
+    }
+
+    const ws = new WebSocket(wsUrl)
+    this._ws = ws
+
+    ws.onopen = () => {
+      this.state.set('connected', true)
+      this.state.set('reconnecting', false)
+      this.emit('connected')
+      ws.send(JSON.stringify({ type: 'query', id: 'init' }))
+      this._startRefreshLoop()
+    }
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        this.emit('message', msg)
+
+        if (msg.type === 'state' || msg.type === 'response') {
+          this.emit('state', msg.data)
+        } else if (msg.type === 'event') {
+          this.emit('event', msg)
+        } else if (msg.type === 'log') {
+          this.emit('log', msg)
+        }
+      } catch {}
+    }
+
+    ws.onerror = () => {}
+
+    ws.onclose = () => {
+      this.state.set('connected', false)
+      this._stopRefreshLoop()
+      this.emit('disconnected')
+      this._scheduleReconnect()
+    }
+  }
+
+  /** Send a JSON message over the WebSocket */
+  send(msg) {
+    if (this._ws && this._ws.readyState === WebSocket.OPEN) {
+      this._ws.send(JSON.stringify(msg))
+    }
+  }
+
+  /** Request a state refresh */
+  refresh() {
+    this.send({ type: 'query', id: 'refresh' })
+  }
+
+  _startRefreshLoop() {
+    this._stopRefreshLoop()
+    const interval = this.options?.refreshInterval || 5000
+    this._refreshTimer = setInterval(() => this.refresh(), interval)
+  }
+
+  _stopRefreshLoop() {
+    if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null }
+  }
+
+  _scheduleReconnect() {
+    const delay = this.options?.reconnectDelay || 3000
+    let secs = Math.ceil(delay / 1000)
+
+    this.state.set('reconnecting', true)
+    this.state.set('countdown', secs)
+
+    if (this._reconnectTimer) clearTimeout(this._reconnectTimer)
+    if (this._countdownTimer) clearInterval(this._countdownTimer)
+
+    this._countdownTimer = setInterval(() => {
+      secs--
+      this.state.set('countdown', Math.max(0, secs))
+      if (secs <= 0) clearInterval(this._countdownTimer)
+    }, 1000)
+
+    this._reconnectTimer = setTimeout(() => {
+      clearInterval(this._countdownTimer)
+      this.connect()
+    }, delay)
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Feature 2: DashboardStore
+// Accumulates status snapshots, events, and logs. Provides data
+// access, capping, and color assignment for log sources.
+// ═══════════════════════════════════════════════════════════════════
+class DashboardStore extends Feature {
+  static shortcut = 'features.dashboardStore'
+
+  static stateSchema = {
+    status: { type: 'object', default: null, describe: 'Latest system status snapshot from WS' },
+    eventCount: { type: 'number', default: 0, describe: 'Total events accumulated' },
+    logCount: { type: 'number', default: 0, describe: 'Total log entries accumulated' },
+    dirty: { type: 'boolean', default: false, describe: 'True when new data arrived since last render' },
+  }
+
+  static optionsSchema = {
+    maxEvents: { type: 'number', default: 300, describe: 'Max event entries to keep' },
+    maxLogs: { type: 'number', default: 500, describe: 'Max log entries to keep' },
+  }
+
+  static eventsSchema = {
+    'status:updated': { args: ['status'],  describe: 'New status snapshot received' },
+    'event:added':    { args: ['evt'],     describe: 'New event entry added' },
+    'log:added':      { args: ['entry'],   describe: 'New log entry added' },
+    'data:changed':   { args: [],          describe: 'Any data changed (status, event, or log)' },
+  }
+
+  static { Feature.register(this, 'dashboardStore') }
+
+  static SOURCE_COLORS = [
+    '#4ECDC4', '#FF6B6B', '#FFD166', '#06D6A0', '#118AB2',
+    '#EF476F', '#73D2DE', '#FCB69F', '#A8E6CF', '#FDCB6E',
+    '#6C5CE7', '#00B894', '#E17055', '#0984E3', '#FDCB6E', '#E84393',
+  ]
+
+  static MODEL_COLORS = [
+    '#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2',
+    '#EF476F', '#73D2DE', '#6C5CE7', '#00B894', '#E17055',
+    '#FDCB6E', '#E84393',
+  ]
+
+  _events = []
+  _logs = []
+  _sourceColorMap = {}
+  _nextColorIdx = 0
+
+  /** Get all accumulated events */
+  get events() { return this._events }
+
+  /** Get all accumulated logs */
+  get logs() { return this._logs }
+
+  /** Get the latest status snapshot */
+  get status() { return this.state.get('status') }
+
+  /** Assign a stable color to a log source name */
+  getSourceColor(source) {
+    if (!this._sourceColorMap[source]) {
+      this._sourceColorMap[source] = DashboardStore.SOURCE_COLORS[this._nextColorIdx % DashboardStore.SOURCE_COLORS.length]
+      this._nextColorIdx++
+    }
+    return this._sourceColorMap[source]
+  }
+
+  /** Get a model color by index */
+  getModelColor(index) {
+    return DashboardStore.MODEL_COLORS[index % DashboardStore.MODEL_COLORS.length]
+  }
+
+  /** Classify an event for display styling */
+  classifyEvent(evt) {
+    const e = evt.event || ''
+    if (e.includes('error') || e.includes('FAIL') || e.includes('crash')) return 'err'
+    if (e.includes('complete') || e.includes('started')) return 'ok'
+    if (e.includes('skipped')) return 'warn'
+    return 'neutral'
+  }
+
+  /** Handle a status/response message */
+  handleStatus(data) {
+    const maxEvents = this.options?.maxEvents || 300
+    const maxLogs = this.options?.maxLogs || 500
+
+    this.state.set('status', data)
+
+    // Seed from initial snapshot
+    if (data?.recentLogs?.length && this._logs.length === 0) {
+      this._logs = data.recentLogs.slice(-maxLogs)
+      this.state.set('logCount', this._logs.length)
+    }
+    if (data?.recentEvents?.length && this._events.length === 0) {
+      this._events = data.recentEvents.slice(-maxEvents)
+      this.state.set('eventCount', this._events.length)
+    }
+
+    this.state.set('dirty', true)
+    this.emit('status:updated', data)
+    this.emit('data:changed')
+  }
+
+  /** Add an event entry */
+  addEvent(evt) {
+    const max = this.options?.maxEvents || 300
+    this._events.push(evt)
+    if (this._events.length > max) this._events.shift()
+    this.state.set('eventCount', this._events.length)
+    this.state.set('dirty', true)
+    this.emit('event:added', evt)
+    this.emit('data:changed')
+  }
+
+  /** Add a log entry */
+  addLog(entry) {
+    const max = this.options?.maxLogs || 500
+    this._logs.push(entry)
+    if (this._logs.length > max) this._logs.shift()
+    this.state.set('logCount', this._logs.length)
+    this.state.set('dirty', true)
+    this.emit('log:added', entry)
+    this.emit('data:changed')
+  }
+
+  /** Mark data as rendered */
+  clearDirty() {
+    this.state.set('dirty', false)
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Feature 3: DashboardApp (Orchestrator)
+// Composes Connection + Store. Manages render loop. Provides the
+// toolable high-level API exposed on window.app.
+// ═══════════════════════════════════════════════════════════════════
+class DashboardApp extends Feature {
+  static shortcut = 'features.dashboardApp'
+
+  static stateSchema = {
+    ready: { type: 'boolean', default: false, describe: 'True after connection established and first data received' },
+  }
+
+  static optionsSchema = {
+    renderInterval: { type: 'number', default: 250, describe: 'Milliseconds between render ticks' },
+  }
+
+  static eventsSchema = {
+    'ready':          { args: [],         describe: 'First status data received and rendered' },
+    'render':         { args: [],         describe: 'A render tick executed' },
+  }
+
+  static { Feature.register(this, 'dashboardApp') }
+
+  _renderTimer = null
+
+  /** Access the connection feature */
+  get connection() { return this.container.feature('dashboardConnection') }
+
+  /** Access the data store feature */
+  get store() { return this.container.feature('dashboardStore') }
+
+  /**
+   * Boot the dashboard: wire features together, connect WS, start render loop
+   */
+  async start() {
+    const conn = this.connection
+    const store = this.store
+
+    // Wire connection events → store
+    conn.on('state', (data) => store.handleStatus(data))
+    conn.on('event', (evt) => store.addEvent(evt))
+    conn.on('log', (entry) => store.addLog(entry))
+
+    // Mark ready on first status
+    store.on('status:updated', () => {
+      if (!this.state.get('ready')) {
+        this.state.set('ready', true)
+        this.emit('ready')
+      }
+    })
+
+    // Start render loop
+    const interval = this.options?.renderInterval || 250
+    this._renderTimer = setInterval(() => {
+      if (store.state.get('dirty')) {
+        store.clearDirty()
+        this.emit('render')
+      }
+    }, interval)
+
+    // Connect
+    await conn.connect()
+  }
+
+  /**
+   * Get the full state snapshot (useful for assistants and debugging)
+   * @returns {object} Current state across all features
+   */
+  snapshot() {
+    const store = this.store
+    const conn = this.connection
+    const status = store.status
+
+    return {
+      ready: this.state.get('ready'),
+      connected: conn.state.get('connected'),
+      wsUrl: conn.state.get('wsUrl'),
+      eventCount: store.state.get('eventCount'),
+      logCount: store.state.get('logCount'),
+      status: status ? {
+        uptime: status.uptime,
+        pid: status.pid,
+        paused: status.paused,
+        subsystems: {
+          scheduler: status.scheduler?.running || false,
+          builder: status.builder?.watching || false,
+          voice: status.voice?.running || false,
+          windowManager: status.windowManager?.listening || false,
+          presenter: status.presenter?.running || false,
+          contentServer: status.contentServer?.running || false,
+        },
+        git: status.git ? {
+          branch: status.git.branch,
+          dirtyFiles: (status.git.modified?.length || 0) + (status.git.untracked?.length || 0) + (status.git.deleted?.length || 0),
+        } : null,
+        content: status.content || {},
+      } : null,
+    }
+  }
+
+  /**
+   * Request a manual state refresh from the authority
+   */
+  refresh() {
+    this.connection.refresh()
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Feature Instances
+// ═══════════════════════════════════════════════════════════════════
+const conn = container.feature('dashboardConnection')
+const store = container.feature('dashboardStore')
+const app = container.feature('dashboardApp')
+
+// Expose for debugging and browser-use automation
+window.app = app
+window.luca = container
+
+// ═══════════════════════════════════════════════════════════════════
+// UI Rendering (DOM bindings driven by feature events)
+// ═══════════════════════════════════════════════════════════════════
 const $indicators = document.getElementById('indicators')
 const $uptimeLabel = document.getElementById('uptimeLabel')
 const $pidLabel = document.getElementById('pidLabel')
@@ -490,92 +858,32 @@ const $logsBody = document.getElementById('logsBody')
 const $overlay = document.getElementById('overlay')
 const $countdown = document.getElementById('countdown')
 
-// ── WebSocket Connection ──────────────────────────────────────────
-async function connect() {
-  // Get the WS port from the server config endpoint
-  let wsUrl = 'ws://localhost:4410'
-  try {
-    const res = await fetch('/api/config')
-    if (res.ok) {
-      const cfg = await res.json()
-      wsUrl = cfg.wsUrl || wsUrl
-    }
-  } catch {}
+// ── Connection status → UI indicators ─────────────────────────────
+conn.on('connected', () => {
+  $wsIndicator.classList.add('connected')
+  $overlay.classList.remove('visible')
+})
 
-  if (ws) {
-    try { ws.close() } catch {}
-  }
-
-  ws = new WebSocket(wsUrl)
-
-  ws.onopen = () => {
-    connected = true
-    $wsIndicator.classList.add('connected')
-    $overlay.classList.remove('visible')
-    // Request initial state
-    ws.send(JSON.stringify({ type: 'query', id: 'init' }))
-  }
-
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data)
-
-      if (msg.type === 'state' || msg.type === 'response') {
-        status = msg.data
-        // Seed from initial snapshot
-        if (msg.data?.recentLogs?.length && logs.length === 0) {
-          logs = msg.data.recentLogs.slice(-MAX_LOGS)
-        }
-        if (msg.data?.recentEvents?.length && events.length === 0) {
-          events = msg.data.recentEvents.slice(-MAX_EVENTS)
-        }
-        needsRender = true
-      }
-
-      if (msg.type === 'event') {
-        events.push(msg)
-        if (events.length > MAX_EVENTS) events.shift()
-        needsRender = true
-      }
-
-      if (msg.type === 'log') {
-        logs.push(msg)
-        if (logs.length > MAX_LOGS) logs.shift()
-        needsRender = true
-      }
-    } catch {}
-  }
-
-  ws.onerror = () => {}
-
-  ws.onclose = () => {
-    connected = false
-    $wsIndicator.classList.remove('connected')
-    showDisconnected()
-  }
-}
-
-function showDisconnected() {
+conn.on('disconnected', () => {
+  $wsIndicator.classList.remove('connected')
   $overlay.classList.add('visible')
-  let secs = Math.ceil(RECONNECT_DELAY / 1000)
-  $countdown.textContent = secs
+})
 
-  if (reconnectTimer) clearInterval(reconnectTimer)
+// Update countdown display reactively
+let _countdownInterval = null
+conn.on('disconnected', () => {
+  if (_countdownInterval) clearInterval(_countdownInterval)
+  _countdownInterval = setInterval(() => {
+    $countdown.textContent = conn.state.get('countdown')
+  }, 200)
+})
+conn.on('connected', () => {
+  if (_countdownInterval) { clearInterval(_countdownInterval); _countdownInterval = null }
+})
 
-  const tick = setInterval(() => {
-    secs--
-    $countdown.textContent = Math.max(0, secs)
-    if (secs <= 0) clearInterval(tick)
-  }, 1000)
-
-  reconnectTimer = setTimeout(() => {
-    clearInterval(tick)
-    connect()
-  }, RECONNECT_DELAY)
-}
-
-// ── Render ────────────────────────────────────────────────────────
-function render() {
+// ── Render on data changes ────────────────────────────────────────
+app.on('render', () => {
+  const status = store.status
   if (!status) return
 
   // Header
@@ -583,37 +891,22 @@ function render() {
   $pidLabel.textContent = `pid ${status.pid}`
   $pausedTag.classList.toggle('visible', !!status.paused)
 
-  // Subsystem indicators
-  renderIndicators()
-
-  // Stats (git + scheduler)
-  renderStats()
-
-  // Tasks
-  renderTasks()
-
-  // Content models
-  renderContent()
-
-  // Event log
+  renderIndicators(status)
+  renderStats(status)
+  renderTasks(status)
+  renderContent(status)
   renderEvents()
-
-  // Log stream
   renderLogs()
-}
+})
 
-function renderIndicators() {
+function renderIndicators(status) {
   const s = status
   const inds = []
 
-  // Scheduler
   const schedRunning = s.scheduler?.running
   inds.push(ind(schedRunning, 'scheduler', schedRunning ? `${s.scheduler.taskCount}t` : ''))
-
-  // Builder
   inds.push(ind(s.builder?.watching, 'builder'))
 
-  // Voice
   const voice = s.voice || {}
   if (voice.disabled) {
     inds.push(ind(false, 'voice', 'disabled', true))
@@ -621,7 +914,6 @@ function renderIndicators() {
     inds.push(ind(voice.running, 'voice', voice.running ? (voice.clientConnected ? 'connected' : 'waiting') : '', !voice.running))
   }
 
-  // Window Manager
   const wm = s.windowManager || {}
   if (wm.listening) {
     const wmDetail = wm.clientConnected ? 'connected' + (wm.windowCount ? ` ${wm.windowCount}w` : '') : 'waiting'
@@ -630,7 +922,6 @@ function renderIndicators() {
     inds.push(ind(false, 'wm'))
   }
 
-  // Presenter
   const pres = s.presenter || {}
   if (pres.running) {
     inds.push(ind(true, 'presenter', `http:${pres.expressPort} ws:${pres.linkPort}`))
@@ -638,7 +929,6 @@ function renderIndicators() {
     inds.push(ind(false, 'presenter', '', true))
   }
 
-  // Content server
   const cs = s.contentServer || {}
   inds.push(ind(cs.running, 'content', cs.running ? `:${cs.port}` : ''))
 
@@ -651,7 +941,7 @@ function ind(on, label, detail, isWarn) {
   return `<span class="ind"><span class="dot ${dotClass}"></span><span class="ind-label">${esc(label)}</span>${detailHtml}</span>`
 }
 
-function renderStats() {
+function renderStats(status) {
   const g = status.git
   const sched = status.scheduler
   let html = ''
@@ -673,7 +963,6 @@ function renderStats() {
       if (totalD) parts.push(`<span class="stat-deleted">-${totalD} deleted</span>`)
       html += `<div class="stat-row"><span class="stat-value">${total} files dirty: </span>${parts.join(' <span class="stat-label">&middot;</span> ')}</div>`
 
-      // Folder breakdown
       const dirs = Object.entries(g.summary || {}).sort((a, b) =>
         (b[1].added + b[1].modified + b[1].deleted) - (a[1].added + a[1].modified + a[1].deleted)
       )
@@ -688,7 +977,6 @@ function renderStats() {
       html += `<div class="stat-row" style="color:var(--text-faint)">working tree clean</div>`
     }
 
-    // Recent commits
     if (g.recentCommits?.length) {
       html += `<div class="spacer-row"></div>`
       for (const title of g.recentCommits) {
@@ -697,7 +985,6 @@ function renderStats() {
     }
   }
 
-  // Scheduler stats
   if (sched?.inProgress?.length) {
     html += `<div class="spacer-row"></div>`
     html += `<div class="stat-row"><span class="stat-changed">${sched.inProgress.length} task(s) running</span> <span class="stat-label">${sched.dueOneOff} one-off due, ${sched.dueScheduled} scheduled due</span></div>`
@@ -706,7 +993,7 @@ function renderStats() {
   $statsBody.innerHTML = html || '<div class="loading-msg">Waiting for data</div>'
 }
 
-function renderTasks() {
+function renderTasks(status) {
   const sched = status.scheduler || {}
   const builder = status.builder || {}
   const rows = []
@@ -721,7 +1008,7 @@ function renderTasks() {
   $tasksBody.innerHTML = rows.length ? rows.join('') : '<div class="task-none">none</div>'
 }
 
-function renderContent() {
+function renderContent(status) {
   const counts = status.content || {}
   const names = Object.keys(counts)
 
@@ -732,7 +1019,7 @@ function renderContent() {
 
   let html = '<div class="content-grid">'
   names.forEach((name, i) => {
-    const color = MODEL_COLORS[i % MODEL_COLORS.length]
+    const color = store.getModelColor(i)
     html += `<div class="content-item"><span class="content-name" style="color:${color}">${esc(name)}</span><span class="content-count">${counts[name]}</span></div>`
   })
   html += '</div>'
@@ -743,12 +1030,12 @@ function renderEvents() {
   const body = $eventsBody
   const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40
 
-  const visible = events.slice(-200)
+  const visible = store.events.slice(-200)
   let html = ''
   for (const evt of visible) {
     const time = new Date(evt.ts).toISOString().slice(11, 19)
     const key = `${evt.source}:${evt.event}`
-    const evtClass = classifyEvent(evt)
+    const evtClass = store.classifyEvent(evt)
 
     let detail = ''
     if (evt.data?.taskId) detail = evt.data.taskId
@@ -764,63 +1051,25 @@ function renderEvents() {
   if (atBottom) body.scrollTop = body.scrollHeight
 }
 
-function classifyEvent(evt) {
-  const e = evt.event || ''
-  if (e.includes('error') || e.includes('FAIL') || e.includes('crash')) return 'err'
-  if (e.includes('complete') || e.includes('started')) return 'ok'
-  if (e.includes('skipped')) return 'warn'
-  return 'neutral'
-}
-
 function renderLogs() {
   const body = $logsBody
   const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40
 
-  const visible = logs.slice(-300)
+  const visible = store.logs.slice(-300)
   let html = ''
   for (const entry of visible) {
     const time = new Date(entry.ts).toISOString().slice(11, 19)
-    const color = getSourceColor(entry.source)
+    const color = store.getSourceColor(entry.source)
     html += `<div class="log-row"><span class="log-time">${time}</span><span class="log-source" style="color:${color}">[${esc(entry.source)}]</span><span class="log-text">${esc(entry.text || '')}</span></div>`
   }
   body.innerHTML = html
   if (atBottom) body.scrollTop = body.scrollHeight
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
-function formatUptime(secs) {
-  const s = Math.floor(secs)
-  if (s < 60) return `${s}s`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ${s % 60}s`
-  const h = Math.floor(m / 60)
-  return `${h}h ${m % 60}m`
-}
-
-function esc(str) {
-  if (!str) return ''
-  const d = document.createElement('div')
-  d.textContent = String(str)
-  return d.innerHTML
-}
-
-// ── Render Loop ───────────────────────────────────────────────────
-setInterval(() => {
-  if (needsRender) {
-    needsRender = false
-    render()
-  }
-}, RENDER_INTERVAL)
-
-// ── Periodic Refresh ──────────────────────────────────────────────
-setInterval(() => {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'query', id: 'refresh' }))
-  }
-}, REFRESH_INTERVAL)
-
-// ── Boot ──────────────────────────────────────────────────────────
-connect()
+// ═══════════════════════════════════════════════════════════════════
+// Boot — all event bindings in place, now start
+// ═══════════════════════════════════════════════════════════════════
+await app.start()
 </script>
 </body>
 </html>

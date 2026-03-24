@@ -5,9 +5,9 @@ export const tags = ['prompt-studio']
 export async function post(_params: any, ctx: any) {
   const { container } = ctx.request.app.locals
   const slug = ctx.request.params.slug
-  const { agent = 'claude', inputs = {} } = ctx.request.body || {}
+  const { agent = 'claude', inputs = {}, options = {} } = ctx.request.body || {}
 
-  console.log(`[run-prompt] slug=${slug} agent=${agent} inputs=${JSON.stringify(inputs)}`)
+  console.log(`[run-prompt] slug=${slug} agent=${agent} inputs=${JSON.stringify(inputs)} options=${JSON.stringify(options)}`)
 
   // Set up SSE headers
   ctx.response.writeHead(200, {
@@ -42,6 +42,18 @@ export async function post(_params: any, ctx: any) {
       await fs.writeFile(inputsFile, JSON.stringify(inputs, null, 2))
       args.push('--inputs-file', inputsFile)
     }
+
+    // Forward options from the UI
+    if (options.model) args.push('--model', options.model)
+    if (options.permissionMode) args.splice(args.indexOf('--permission-mode'), 2, '--permission-mode', options.permissionMode)
+    if (options.inFolder) args.push('--in-folder', options.inFolder)
+    if (options.outFile) args.push('--out-file', options.outFile)
+    if (options.excludeSections) args.push('--exclude-sections', options.excludeSections)
+    if (options.skipEval) args.push('--skip-eval')
+    if (options.includeOutput) args.push('--include-output')
+    if (options.chrome) args.push('--chrome')
+    if (options.dryRun) args.push('--dry-run')
+    if (options.local) args.push('--local')
 
     console.log(`[run-prompt] spawning: luca ${args.join(' ')}`)
     send('status', { message: `Running: luca ${args.join(' ')}` })
