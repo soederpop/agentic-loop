@@ -20,6 +20,7 @@
     --accent: #00fff7;
     --accent-dim: #00fff720;
     --assistant: #c084fc;
+    --assistant-dim: #c084fc18;
     --success: #39ff14;
     --error: #ff003c;
     --warning: #f59e0b;
@@ -38,7 +39,7 @@
   body {
     display: flex;
     flex-direction: column;
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
     padding: 16px 20px;
     height: 100vh;
@@ -73,6 +74,47 @@
   .header-meta .count {
     color: var(--accent);
     font-weight: 600;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .header-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .header-btn:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+  }
+
+  .header-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .header-btn.chat-btn.active {
+    border-color: var(--assistant);
+    color: var(--assistant);
+    background: var(--assistant-dim);
   }
 
   /* ── Filters ─────────────────────────── */
@@ -150,7 +192,7 @@
     margin: 0 4px;
   }
 
-  .goal-select {
+  .goal-select, .assistant-select {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 4px;
@@ -163,7 +205,7 @@
     max-width: 200px;
   }
 
-  .goal-select:focus { border-color: var(--accent); }
+  .goal-select:focus, .assistant-select:focus { border-color: var(--accent); }
 
   .tag-filter {
     display: flex;
@@ -198,6 +240,32 @@
   }
 
   .clear-filters:hover { color: var(--text-dim); }
+
+  /* ── Summary bar ─────────────────────── */
+  .summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+
+  .summary-stat {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .summary-stat .num {
+    font-weight: 700;
+  }
+
+  .summary-stat.spark .num { color: var(--text-dim); }
+  .summary-stat.exploring .num { color: var(--accent); }
+  .summary-stat.ready .num { color: var(--success); }
+  .summary-stat.parked .num { color: var(--warning); }
+  .summary-stat.promoted .num { color: var(--assistant); }
 
   /* ── Main layout ─────────────────────── */
   .main {
@@ -360,113 +428,314 @@
   .detail-body::-webkit-scrollbar { width: 4px; }
   .detail-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  .detail-body h2 {
-    font-size: 14px;
+  .detail-body h2 { font-size: 14px; font-weight: 700; color: var(--accent); margin: 20px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .detail-body h2:first-child { margin-top: 0; }
+  .detail-body h3 { font-size: 13px; font-weight: 700; color: var(--text); margin: 16px 0 6px; }
+  .detail-body p { margin-bottom: 10px; }
+  .detail-body ul, .detail-body ol { margin-bottom: 10px; padding-left: 20px; }
+  .detail-body li { margin-bottom: 4px; }
+  .detail-body code { background: var(--bg); padding: 1px 4px; border-radius: 3px; font-size: 12px; color: var(--accent); }
+  .detail-body pre { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; overflow-x: auto; margin-bottom: 10px; font-size: 12px; line-height: 1.5; }
+  .detail-body pre code { background: none; padding: 0; color: var(--text); }
+  .detail-body strong { color: var(--text); font-weight: 700; }
+  .detail-body a { color: var(--accent); text-decoration: none; }
+  .detail-body a:hover { text-decoration: underline; }
+  .detail-body table { width: 100%; border-collapse: collapse; margin-bottom: 10px; font-size: 12px; }
+  .detail-body table th, .detail-body table td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; }
+  .detail-body table th { background: var(--surface-2); color: var(--text-dim); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .detail-body blockquote { border-left: 3px solid var(--accent); margin: 0 0 10px; padding: 4px 12px; color: var(--text-dim); }
+  .detail-body hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  /* ── Chat panel ──────────────────────── */
+  .chat-panel {
+    width: 380px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    display: none;
+    flex-direction: column;
+  }
+
+  .chat-panel.open {
+    display: flex;
+  }
+
+  .chat-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+
+  .chat-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chat-header-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--assistant);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .chat-header-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .chat-action-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text-faint);
+    font-family: inherit;
+    font-size: 10px;
+    padding: 2px 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .chat-action-btn:hover { color: var(--text-dim); border-color: var(--border-hover); }
+
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .chat-msg {
+    max-width: 90%;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.6;
+    animation: fadeIn 0.15s ease-out;
+    word-break: break-word;
+  }
+
+  .chat-msg.user {
+    align-self: flex-end;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    color: var(--text);
+  }
+
+  .chat-msg.assistant {
+    align-self: flex-start;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+  }
+
+  .chat-msg.assistant .msg-content h2 { font-size: 13px; font-weight: 700; color: var(--assistant); margin: 12px 0 6px; }
+  .chat-msg.assistant .msg-content h3 { font-size: 12px; font-weight: 700; color: var(--text); margin: 10px 0 4px; }
+  .chat-msg.assistant .msg-content p { margin-bottom: 8px; }
+  .chat-msg.assistant .msg-content ul { margin-bottom: 8px; padding-left: 16px; }
+  .chat-msg.assistant .msg-content li { margin-bottom: 2px; }
+  .chat-msg.assistant .msg-content code { background: var(--bg); padding: 1px 3px; border-radius: 2px; font-size: 11px; color: var(--accent); }
+  .chat-msg.assistant .msg-content strong { color: var(--text); font-weight: 700; }
+  .chat-msg.assistant .msg-content a { color: var(--accent); }
+
+  .chat-msg.system {
+    align-self: center;
+    background: none;
+    color: var(--text-faint);
+    font-size: 10px;
+    text-align: center;
+    padding: 4px;
+  }
+
+  .chat-msg .tool-indicator {
+    font-size: 10px;
+    color: var(--text-faint);
+    padding: 3px 6px;
+    background: var(--bg);
+    border-radius: 3px;
+    margin-top: 4px;
+    display: inline-block;
+  }
+
+  .chat-typing {
+    align-self: flex-start;
+    color: var(--text-faint);
+    font-size: 11px;
+    padding: 4px 12px;
+    display: none;
+  }
+
+  .chat-typing.visible {
+    display: block;
+  }
+
+  .chat-typing span {
+    animation: blink 1.2s infinite;
+  }
+  .chat-typing span:nth-child(2) { animation-delay: 0.2s; }
+  .chat-typing span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes blink {
+    0%, 60%, 100% { opacity: 0.2; }
+    30% { opacity: 1; }
+  }
+
+  .chat-input-area {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .chat-input {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 8px 10px;
+    outline: none;
+    resize: none;
+    min-height: 36px;
+    max-height: 100px;
+  }
+
+  .chat-input:focus { border-color: var(--assistant); }
+
+  .chat-input::placeholder { color: var(--text-faint); }
+
+  .chat-send-btn {
+    background: var(--assistant-dim);
+    border: 1px solid var(--assistant);
+    border-radius: 6px;
+    color: var(--assistant);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 8px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    align-self: flex-end;
+  }
+
+  .chat-send-btn:hover { background: #c084fc30; }
+  .chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── Status panel ────────────────────── */
+  .status-panel {
+    display: none;
+    flex-shrink: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .status-panel.open {
+    display: block;
+  }
+
+  .status-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 12px;
+  }
+
+  .status-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+  }
+
+  .status-card-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-faint);
+    margin-bottom: 8px;
+  }
+
+  .status-card-value {
+    font-size: 24px;
     font-weight: 700;
     color: var(--accent);
-    margin: 20px 0 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--border);
-  }
-
-  .detail-body h2:first-child {
-    margin-top: 0;
-  }
-
-  .detail-body h3 {
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--text);
-    margin: 16px 0 6px;
-  }
-
-  .detail-body p {
-    margin-bottom: 10px;
-  }
-
-  .detail-body ul, .detail-body ol {
-    margin-bottom: 10px;
-    padding-left: 20px;
-  }
-
-  .detail-body li {
+    line-height: 1;
     margin-bottom: 4px;
   }
 
-  .detail-body code {
-    background: var(--bg);
-    padding: 1px 4px;
-    border-radius: 3px;
-    font-size: 12px;
-    color: var(--accent);
-  }
-
-  .detail-body pre {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    overflow-x: auto;
-    margin-bottom: 10px;
-    font-size: 12px;
-    line-height: 1.5;
-  }
-
-  .detail-body pre code {
-    background: none;
-    padding: 0;
-    color: var(--text);
-  }
-
-  .detail-body strong {
-    color: var(--text);
-    font-weight: 700;
-  }
-
-  .detail-body a {
-    color: var(--accent);
-    text-decoration: none;
-  }
-
-  .detail-body a:hover {
-    text-decoration: underline;
-  }
-
-  .detail-body table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-bottom: 10px;
-    font-size: 12px;
-  }
-
-  .detail-body table th,
-  .detail-body table td {
-    border: 1px solid var(--border);
-    padding: 4px 8px;
-    text-align: left;
-  }
-
-  .detail-body table th {
-    background: var(--surface-2);
+  .status-card-detail {
+    font-size: 11px;
     color: var(--text-dim);
+    line-height: 1.4;
+  }
+
+  .status-commits {
+    margin-top: 6px;
+  }
+
+  .status-commit {
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 3px 0;
+    display: flex;
+    gap: 6px;
+  }
+
+  .status-commit .hash {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .status-commit .ago {
+    color: var(--text-faint);
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .status-projects {
+    margin-top: 4px;
+  }
+
+  .status-project {
+    font-size: 11px;
+    padding: 3px 0;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .status-project-status {
+    font-size: 9px;
     font-weight: 700;
-    font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    flex-shrink: 0;
   }
 
-  .detail-body blockquote {
-    border-left: 3px solid var(--accent);
-    margin: 0 0 10px;
-    padding: 4px 12px;
-    color: var(--text-dim);
-  }
-
-  .detail-body hr {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 16px 0;
-  }
+  .status-project-status.building { color: var(--accent); background: var(--accent-dim); }
+  .status-project-status.in_progress { color: var(--warning); background: #f59e0b18; }
+  .status-project-status.completed { color: var(--success); background: #39ff1418; }
+  .status-project-status.draft { color: var(--text-dim); background: #8a8aa220; }
+  .status-project-status.approved { color: var(--assistant); background: var(--assistant-dim); }
 
   /* ── Empty / loading states ──────────── */
   .empty-state {
@@ -489,32 +758,6 @@
     font-size: 13px;
   }
 
-  /* ── Summary bar ─────────────────────── */
-  .summary-bar {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 12px;
-    flex-shrink: 0;
-  }
-
-  .summary-stat {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-
-  .summary-stat .num {
-    font-weight: 700;
-  }
-
-  .summary-stat.spark .num { color: var(--text-dim); }
-  .summary-stat.exploring .num { color: var(--accent); }
-  .summary-stat.ready .num { color: var(--success); }
-  .summary-stat.parked .num { color: var(--warning); }
-  .summary-stat.promoted .num { color: var(--assistant); }
-
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
@@ -523,6 +766,7 @@
   @media (max-width: 800px) {
     .main { flex-direction: column; }
     .detail-panel { width: 100%; max-height: 50vh; }
+    .chat-panel { width: 100%; max-height: 50vh; }
   }
 </style>
 </head>
@@ -534,7 +778,13 @@
     <span><span class="count" id="total-count">-</span> ideas</span>
     <span id="filter-info"></span>
   </div>
+  <div class="header-actions">
+    <button class="header-btn status-btn" id="toggle-status">STATUS</button>
+    <button class="header-btn chat-btn" id="toggle-chat">CHAT</button>
+  </div>
 </div>
+
+<div class="status-panel" id="status-panel"></div>
 
 <div class="filters" id="filters">
   <input type="text" class="search-input" id="search" placeholder="Search ideas...">
@@ -557,6 +807,27 @@
   </div>
   <div class="detail-panel empty" id="detail-panel">
     <div class="empty-state">Select an idea to view details</div>
+  </div>
+  <div class="chat-panel" id="chat-panel">
+    <div class="chat-header">
+      <div class="chat-header-left">
+        <span class="chat-header-title">CHAT</span>
+        <select class="assistant-select" id="assistant-select"></select>
+      </div>
+      <div class="chat-header-actions">
+        <button class="chat-action-btn" id="chat-clear" title="Clear conversation">clear</button>
+      </div>
+    </div>
+    <div class="chat-messages" id="chat-messages">
+      <div class="chat-msg system">Ask anything about your ideas, goals, or next steps.</div>
+    </div>
+    <div class="chat-typing" id="chat-typing">
+      <span>.</span><span>.</span><span>.</span>
+    </div>
+    <div class="chat-input-area">
+      <textarea class="chat-input" id="chat-input" placeholder="Message the assistant..." rows="1"></textarea>
+      <button class="chat-send-btn" id="chat-send">Send</button>
+    </div>
   </div>
 </div>
 
@@ -627,6 +898,40 @@
       this.emit('ideas:fetched', data)
       return data
     }
+
+    /** Fetch available assistants */
+    async fetchAssistants() {
+      const res = await fetch(`${API}/api/assistants`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    }
+
+    /** Fetch status data */
+    async fetchStatus() {
+      const res = await fetch(`${API}/api/status`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return res.json()
+    }
+
+    /** Send a chat message and return an SSE reader */
+    async sendMessage(message, assistantName) {
+      const res = await fetch(`${API}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, assistant: assistantName }),
+      })
+      return res
+    }
+
+    /** Clear chat for an assistant */
+    async clearChat(assistantName) {
+      const res = await fetch(`${API}/api/chat`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistant: assistantName }),
+      })
+      return res.json()
+    }
   }
 
   // ═══════════════════════════════════════════
@@ -651,7 +956,6 @@
     get selectedId() { return this._selectedId }
     get filters() { return this._filters }
 
-    /** Load raw data from the API response */
     setData(data) {
       this._ideas = data.ideas || []
       this._goals = data.goals || []
@@ -660,14 +964,12 @@
         for (const t of idea.tags) tagSet.add(t)
       }
       this._tags = [...tagSet].sort()
-
       this.state.set('totalCount', this._ideas.length)
       this.state.set('goalCount', this._goals.length)
       this.state.set('tagCount', this._tags.length)
       this.emit('data:loaded')
     }
 
-    /** Get status counts across all ideas */
     statusCounts() {
       const counts = {}
       for (const idea of this._ideas) {
@@ -676,7 +978,6 @@
       return counts
     }
 
-    /** Get filtered and sorted ideas */
     getFiltered() {
       const f = this._filters
       return this._ideas
@@ -693,20 +994,17 @@
         .sort((a, b) => (IdeasStore.STATUS_ORDER[a.status] ?? 5) - (IdeasStore.STATUS_ORDER[b.status] ?? 5))
     }
 
-    /** Check whether any filter is active */
     hasActiveFilters() {
       const f = this._filters
       return !!(f.search || f.statuses.size > 0 || f.goal || f.tag)
     }
 
-    /** Update a single filter field and emit */
     setFilter(key, value) {
       this._filters[key] = value
       this.state.set('hasFilters', this.hasActiveFilters())
       this.emit('filters:changed')
     }
 
-    /** Toggle a status in the status set */
     toggleStatus(status) {
       if (this._filters.statuses.has(status)) {
         this._filters.statuses.delete(status)
@@ -718,7 +1016,6 @@
       return this._filters.statuses.has(status)
     }
 
-    /** Reset all filters */
     clearFilters() {
       this._filters = { search: '', statuses: new Set(), goal: '', tag: '' }
       this.state.set('hasFilters', false)
@@ -726,7 +1023,6 @@
       this.emit('filters:changed')
     }
 
-    /** Select an idea by id */
     selectIdea(id) {
       this._selectedId = id
       const idea = this._ideas.find(i => i.id === id)
@@ -735,12 +1031,10 @@
       return idea
     }
 
-    /** Find an idea by id */
     findById(id) {
       return this._ideas.find(i => i.id === id)
     }
 
-    /** Navigate to next/previous idea in the filtered list */
     navigate(direction) {
       const filtered = this.getFiltered()
       if (filtered.length === 0) return null
@@ -756,6 +1050,127 @@
   }
 
   // ═══════════════════════════════════════════
+  // Feature: ChatManager — manages chat state
+  // ═══════════════════════════════════════════
+  class ChatManager extends Feature {
+    static shortcut = 'features.chatManager'
+    static { Feature.register(this, 'chatManager') }
+
+    _messages = []
+    _assistants = []
+    _currentAssistant = 'chiefOfStaff'
+    _sending = false
+
+    get messages() { return this._messages }
+    get assistants() { return this._assistants }
+    get currentAssistant() { return this._currentAssistant }
+    get sending() { return this._sending }
+
+    get api() { return this.container.feature('ideasApi') }
+
+    async loadAssistants() {
+      try {
+        const data = await this.api.fetchAssistants()
+        this._assistants = data.assistants || []
+        this._currentAssistant = data.default || this._assistants[0]?.name || 'chiefOfStaff'
+        this.emit('assistants:loaded')
+      } catch (err) {
+        console.error('Failed to load assistants:', err)
+      }
+    }
+
+    setAssistant(name) {
+      if (name !== this._currentAssistant) {
+        this._currentAssistant = name
+        this._messages = []
+        this.emit('assistant:changed')
+        this.emit('messages:updated')
+      }
+    }
+
+    async sendMessage(text) {
+      if (this._sending || !text.trim()) return
+
+      this._sending = true
+      this._messages.push({ role: 'user', content: text })
+      this.emit('messages:updated')
+      this.emit('sending:start')
+
+      try {
+        const res = await this.api.sendMessage(text, this._currentAssistant)
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+          this._messages.push({ role: 'assistant', content: err.error || 'Request failed' })
+          this.emit('messages:updated')
+          return
+        }
+
+        // Parse SSE stream
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let assistantText = ''
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              const event = line.slice(7)
+              continue
+            }
+            if (line.startsWith('data: ')) {
+              const raw = line.slice(6)
+              try {
+                const parsed = JSON.parse(raw)
+                // Determine the event from the previous line context
+                if (parsed.text !== undefined) {
+                  assistantText += parsed.text
+                  this.emit('chunk', assistantText)
+                } else if (parsed.response !== undefined) {
+                  assistantText = parsed.response
+                } else if (parsed.name && parsed.args !== undefined) {
+                  this.emit('tool:call', parsed)
+                } else if (parsed.name && parsed.result !== undefined) {
+                  this.emit('tool:result', parsed)
+                } else if (parsed.message) {
+                  // error event
+                  assistantText = `Error: ${parsed.message}`
+                }
+              } catch {}
+            }
+          }
+        }
+
+        if (assistantText) {
+          this._messages.push({ role: 'assistant', content: assistantText })
+        }
+        this.emit('messages:updated')
+      } catch (err) {
+        this._messages.push({ role: 'assistant', content: `Error: ${err.message}` })
+        this.emit('messages:updated')
+      } finally {
+        this._sending = false
+        this.emit('sending:done')
+      }
+    }
+
+    async clearConversation() {
+      try {
+        await this.api.clearChat(this._currentAssistant)
+      } catch {}
+      this._messages = []
+      this.emit('messages:updated')
+    }
+  }
+
+  // ═══════════════════════════════════════════
   // Feature: IdeasApp — central orchestrator
   // ═══════════════════════════════════════════
   class IdeasApp extends Feature {
@@ -764,12 +1179,14 @@
 
     get api() { return this.container.feature('ideasApi') }
     get store() { return this.container.feature('ideasStore') }
+    get chat() { return this.container.feature('chatManager') }
 
     async afterInitialize() {
       this.state.set('ready', false)
+      this.state.set('chatOpen', false)
+      this.state.set('statusOpen', false)
     }
 
-    /** Load ideas from the API and populate the store */
     async load() {
       try {
         const data = await this.api.fetchIdeas()
@@ -781,44 +1198,47 @@
       }
     }
 
-    /** Reload data (e.g. on tab focus) */
     async refresh() {
       await this.load()
     }
 
-    /** Select an idea by id */
-    selectIdea(id) {
-      return this.store.selectIdea(id)
+    selectIdea(id) { return this.store.selectIdea(id) }
+    navigate(direction) { return this.store.navigate(direction) }
+    setFilter(key, value) { this.store.setFilter(key, value) }
+    toggleStatus(status) { return this.store.toggleStatus(status) }
+    clearFilters() { this.store.clearFilters() }
+
+    toggleChat() {
+      const open = !this.state.get('chatOpen')
+      this.state.set('chatOpen', open)
+      this.emit('chat:toggled', open)
     }
 
-    /** Navigate to next or previous idea */
-    navigate(direction) {
-      return this.store.navigate(direction)
+    toggleStatusPanel() {
+      const open = !this.state.get('statusOpen')
+      this.state.set('statusOpen', open)
+      this.emit('status:toggled', open)
+      if (open) this.loadStatus()
     }
 
-    /** Set a filter and trigger re-render */
-    setFilter(key, value) {
-      this.store.setFilter(key, value)
+    async loadStatus() {
+      try {
+        const data = await this.api.fetchStatus()
+        this.emit('status:loaded', data)
+      } catch (err) {
+        console.error('Failed to load status:', err)
+      }
     }
 
-    /** Toggle a status filter */
-    toggleStatus(status) {
-      return this.store.toggleStatus(status)
-    }
-
-    /** Clear all filters */
-    clearFilters() {
-      this.store.clearFilters()
-    }
-
-    /** Start the app — call after UI bindings are in place */
     async start() {
-      await this.load()
+      await Promise.all([
+        this.load(),
+        this.chat.loadAssistants(),
+      ])
       this.state.set('ready', true)
       this.emit('ready')
     }
 
-    /** Return a snapshot of current app state for debugging/automation */
     snapshot() {
       const store = this.store
       const filtered = store.getFiltered()
@@ -836,6 +1256,8 @@
         statusCounts: store.statusCounts(),
         goalCount: store.goals.length,
         tagCount: store.tags.length,
+        chatOpen: this.state.get('chatOpen'),
+        statusOpen: this.state.get('statusOpen'),
       }
     }
   }
@@ -845,6 +1267,7 @@
   // ═══════════════════════════════════════════
   const app = container.feature('ideasApp')
   const store = container.feature('ideasStore')
+  const chat = container.feature('chatManager')
 
   window.app = app
   window.luca = container
@@ -925,7 +1348,6 @@
   }
 
   function buildFilterUI() {
-    // Status buttons
     const statusContainer = document.getElementById('status-filters')
     statusContainer.innerHTML = IdeasStore.STATUSES.map(s => `
       <button class="filter-btn ${s}" data-status="${s}">${s}</button>
@@ -938,7 +1360,6 @@
       btn.classList.toggle('active', isActive)
     })
 
-    // Goal dropdown
     const goalSelect = document.getElementById('goal-filter')
     goalSelect.innerHTML = '<option value="">All goals</option>'
     for (const g of store.goals) {
@@ -951,7 +1372,6 @@
       app.setFilter('goal', goalSelect.value)
     })
 
-    // Tag buttons (top 12)
     const tagContainer = document.getElementById('tag-filters')
     const displayTags = store.tags.slice(0, 12)
     tagContainer.innerHTML = displayTags.map(t => `
@@ -972,18 +1392,95 @@
       }
     })
 
-    // Search
     document.getElementById('search').addEventListener('input', (e) => {
       app.setFilter('search', e.target.value.toLowerCase())
     })
 
-    // Clear
     document.getElementById('clear-filters').addEventListener('click', () => {
       app.clearFilters()
       document.getElementById('search').value = ''
       document.getElementById('goal-filter').value = ''
       document.querySelectorAll('.filter-btn, .tag-btn').forEach(b => b.classList.remove('active'))
     })
+  }
+
+  // ── Chat rendering ─────────────────────
+
+  function renderChatMessages() {
+    const el = document.getElementById('chat-messages')
+    const msgs = chat.messages
+
+    if (msgs.length === 0) {
+      el.innerHTML = '<div class="chat-msg system">Ask anything about your ideas, goals, or next steps.</div>'
+      return
+    }
+
+    el.innerHTML = msgs.map(m => {
+      if (m.role === 'user') {
+        return `<div class="chat-msg user">${esc(m.content)}</div>`
+      }
+      return `<div class="chat-msg assistant"><div class="msg-content">${renderMarkdown(m.content)}</div></div>`
+    }).join('')
+
+    el.scrollTop = el.scrollHeight
+  }
+
+  function renderAssistantSelect() {
+    const select = document.getElementById('assistant-select')
+    select.innerHTML = chat.assistants.map(a =>
+      `<option value="${esc(a.name)}" ${a.name === chat.currentAssistant ? 'selected' : ''}>${esc(a.name)}</option>`
+    ).join('')
+  }
+
+  function renderStatusPanel(data) {
+    const panel = document.getElementById('status-panel')
+
+    const projectsHtml = (data.projects || []).map(p => `
+      <div class="status-project">
+        <span class="status-project-status ${p.status}">${p.status}</span>
+        <span>${esc(p.title)}</span>
+      </div>
+    `).join('') || '<span style="color:var(--text-faint)">None yet</span>'
+
+    const commitsHtml = (data.recentCommits || []).map(c => `
+      <div class="status-commit">
+        <span class="hash">${esc(c.hash)}</span>
+        <span>${esc(c.message)}</span>
+        <span class="ago">${esc(c.timeAgo)}</span>
+      </div>
+    `).join('') || '<span style="color:var(--text-faint)">No recent commits</span>'
+
+    const ideasByStatus = data.ideasByStatus || {}
+
+    panel.innerHTML = `
+      <div class="status-grid">
+        <div class="status-card">
+          <div class="status-card-title">Ideas</div>
+          <div class="status-card-value">${data.counts?.ideas || 0}</div>
+          <div class="status-card-detail">
+            ${['exploring', 'spark', 'ready', 'parked', 'promoted'].map(s =>
+              `<span style="color:var(--${s === 'exploring' ? 'accent' : s === 'spark' ? 'text-dim' : s === 'ready' ? 'success' : s === 'parked' ? 'warning' : 'assistant'})">${ideasByStatus[s] || 0} ${s}</span>`
+            ).join(' &middot; ')}
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="status-card-title">Goals</div>
+          <div class="status-card-value">${data.counts?.goals || 0}</div>
+          <div class="status-card-detail">
+            ${(data.goals || []).map(g => esc(g.title)).join(', ') || 'None yet'}
+          </div>
+        </div>
+        <div class="status-card">
+          <div class="status-card-title">Projects</div>
+          <div class="status-card-value">${data.counts?.projects || 0}</div>
+          <div class="status-projects">${projectsHtml}</div>
+        </div>
+        <div class="status-card">
+          <div class="status-card-title">Recent Activity</div>
+          <div class="status-commits">${commitsHtml}</div>
+        </div>
+      </div>
+    `
   }
 
   // ── Bind feature events to UI ───────────
@@ -1007,7 +1504,6 @@
 
   store.on('idea:selected', (idea) => {
     renderDetail(idea)
-    // Update selected row in list
     const list = document.getElementById('ideas-list')
     list.querySelectorAll('.idea-row').forEach(r => {
       r.classList.toggle('selected', r.dataset.id === store.selectedId)
@@ -1020,10 +1516,105 @@
       '<div class="empty-state">Failed to load ideas</div>'
   })
 
+  // ── Chat events ────────────────────────
+
+  chat.on('assistants:loaded', renderAssistantSelect)
+  chat.on('messages:updated', renderChatMessages)
+
+  chat.on('chunk', (partialText) => {
+    // Live update the last assistant message (or add a streaming one)
+    const el = document.getElementById('chat-messages')
+    let streamMsg = el.querySelector('.chat-msg.assistant.streaming')
+    if (!streamMsg) {
+      streamMsg = document.createElement('div')
+      streamMsg.className = 'chat-msg assistant streaming'
+      el.appendChild(streamMsg)
+    }
+    streamMsg.innerHTML = `<div class="msg-content">${renderMarkdown(partialText)}</div>`
+    el.scrollTop = el.scrollHeight
+  })
+
+  chat.on('sending:start', () => {
+    document.getElementById('chat-typing').classList.add('visible')
+    document.getElementById('chat-send').disabled = true
+    // Remove any leftover streaming message
+    const el = document.getElementById('chat-messages')
+    el.querySelectorAll('.streaming').forEach(s => s.remove())
+  })
+
+  chat.on('sending:done', () => {
+    document.getElementById('chat-typing').classList.remove('visible')
+    document.getElementById('chat-send').disabled = false
+    // Remove streaming class from completed message
+    const el = document.getElementById('chat-messages')
+    el.querySelectorAll('.streaming').forEach(s => s.remove())
+  })
+
+  // ── Chat toggle ────────────────────────
+
+  app.on('chat:toggled', (open) => {
+    const panel = document.getElementById('chat-panel')
+    const btn = document.getElementById('toggle-chat')
+    panel.classList.toggle('open', open)
+    btn.classList.toggle('active', open)
+    if (open) {
+      document.getElementById('chat-input').focus()
+    }
+  })
+
+  // ── Status toggle ──────────────────────
+
+  app.on('status:toggled', (open) => {
+    const panel = document.getElementById('status-panel')
+    const btn = document.getElementById('toggle-status')
+    panel.classList.toggle('open', open)
+    btn.classList.toggle('active', open)
+  })
+
+  app.on('status:loaded', renderStatusPanel)
+
+  // ── UI bindings ────────────────────────
+
+  document.getElementById('toggle-chat').addEventListener('click', () => app.toggleChat())
+  document.getElementById('toggle-status').addEventListener('click', () => app.toggleStatusPanel())
+
+  document.getElementById('assistant-select').addEventListener('change', (e) => {
+    chat.setAssistant(e.target.value)
+  })
+
+  document.getElementById('chat-clear').addEventListener('click', () => {
+    chat.clearConversation()
+  })
+
+  const chatInput = document.getElementById('chat-input')
+  const chatSend = document.getElementById('chat-send')
+
+  chatSend.addEventListener('click', () => {
+    const text = chatInput.value.trim()
+    if (text) {
+      chatInput.value = ''
+      chatInput.style.height = 'auto'
+      chat.sendMessage(text)
+    }
+  })
+
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      chatSend.click()
+    }
+  })
+
+  // Auto-resize textarea
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto'
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px'
+  })
+
   // ── Keyboard nav ────────────────────────
 
   document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return
 
     if (e.key === 'ArrowDown' || e.key === 'j') {
       e.preventDefault()
@@ -1038,6 +1629,10 @@
       document.getElementById('search').blur()
       app.setFilter('search', '')
       document.getElementById('search').value = ''
+    } else if (e.key === 'c' && !e.metaKey && !e.ctrlKey) {
+      app.toggleChat()
+    } else if (e.key === 's' && !e.metaKey && !e.ctrlKey) {
+      app.toggleStatusPanel()
     }
   })
 

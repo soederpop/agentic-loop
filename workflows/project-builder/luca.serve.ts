@@ -85,16 +85,30 @@ export default async function setup(server: any) {
     }
   }
 
+  function extractMarkdownSection(content: string, heading: string): string {
+    const pattern = new RegExp(`^## ${heading}\\s*\\n`, 'mi')
+    const match = content.match(pattern)
+    if (!match || match.index === undefined) return ''
+    const start = match.index + match[0].length
+    const rest = content.slice(start)
+    const nextHeading = rest.match(/^## /m)
+    const section = nextHeading && nextHeading.index !== undefined
+      ? rest.slice(0, nextHeading.index)
+      : rest
+    return section.trim()
+  }
+
   function serializeProject(project: any, plans: any[]) {
+    const rawContent = project.document?.content || ''
     return {
       id: project.id,
       slug: project.id.replace(/^projects\//, ''),
       title: project.title,
       status: project.meta.status,
       goal: project.meta.goal,
-      content: project.document?.content || '',
+      content: rawContent,
       sections: {
-        overview: project.sections?.overview || '',
+        overview: extractMarkdownSection(rawContent, 'Overview'),
         execution: project.sections?.execution || '',
       },
       plans: plans.map(serializePlan),

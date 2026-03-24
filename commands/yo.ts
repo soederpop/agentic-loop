@@ -55,6 +55,18 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
 
   const isChief = target === 'chief' || target === 'chiefofstaff'
 
+  // Check assistantsManager first — arbitrary assistants bypass the authority relay
+  const assistantsManager = await container.feature('assistantsManager').discover()
+  const matchedAssistant = assistantsManager.available.find(
+    (name: string) => name.toLowerCase() === target
+  )
+
+  if (matchedAssistant) {
+	const mgr = await assistantsManager.create(matchedAssistant)
+	await mgr.ask(text).then((r: string) => ui.print(ui.markdown(r)))
+	return
+  }
+
   // Check if luca main authority is running — if so, relay through it
   const instanceRegistry = container.feature('instanceRegistry')
   const networking = container.feature('networking')
@@ -66,14 +78,6 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
     console.log(ui.colors.dim('(relaying through luca main)'))
     await relayThroughAuthority(container, mainPort, target, text, ui)
     return
-  }
-
-  const assistantsManager = await container.feature('assistantsManager').discover()
-
-  if (assistantsManager.available.indexOf(target) > -1 ) {
-	const mgr = await assistantsManager.create(target) 
-	await mgr.ask(text).then(r => ui.print(ui.markdown(r)))
-	return 
   }
 
 
@@ -128,7 +132,7 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
     const response = await chiefChat.ask(text)
     console.log()
     console.log(`${ui.colors.blue('Chief')} ${ui.colors.dim('>')} ${response}`)
-  } else if (assistant) {
+  } else {
     // Friday / default path: route through voice router
     await routeThroughRouter(router, text, voiceService, ui)
   }

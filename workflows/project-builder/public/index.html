@@ -524,6 +524,13 @@
   .overview-section h2::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
   .overview-text { font-size: 13px; color: var(--text); line-height: 1.7; max-width: 720px; }
+  .overview-text h2, .overview-text h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent); margin: 20px 0 8px; font-weight: 700; }
+  .overview-text h2:first-child, .overview-text h3:first-child { margin-top: 0; }
+  .overview-text ul, .overview-text ol { padding-left: 20px; margin: 8px 0; }
+  .overview-text li { margin-bottom: 4px; }
+  .overview-text p { margin-bottom: 8px; }
+  .overview-text code { background: var(--surface-3); padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--purple); }
+  .overview-text strong { color: var(--text); }
 
   /* ── Plan detail cards ──────────────── */
   .plan-card {

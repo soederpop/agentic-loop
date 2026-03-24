@@ -1,0 +1,2058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Playbook Designer</title>
+  <style>
+    :root {
+      --bg: #151520;
+      --surface: #1c1c28;
+      --surface-2: #23232f;
+      --surface-3: #2a2a38;
+      --border: #2e2e42;
+      --text: #e0e0e8;
+      --text-dim: #8a8aa2;
+      --text-faint: #56566e;
+      --accent: #00fff7;
+      --accent-dim: #00fff720;
+      --accent-glow: #00fff740;
+      --success: #39ff14;
+      --success-dim: #39ff1420;
+      --warning: #f59e0b;
+      --warning-dim: #f59e0b20;
+      --error: #ff003c;
+      --error-dim: #ff003c20;
+      --purple: #c084fc;
+      --blue: #60a5fa;
+      --blue-dim: #60a5fa20;
+      --gray: #6b7280;
+      --gray-dim: #6b728020;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.5;
+    }
+
+    header {
+      padding: 24px 32px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+      cursor: pointer;
+    }
+
+    .header-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .refresh-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .refresh-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      padding: 12px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 12px;
+      align-items: center;
+    }
+
+    .stat {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-dim);
+    }
+
+    .stat-value {
+      color: var(--text);
+      font-weight: 600;
+    }
+
+    .stat-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    /* --- Filter bar --- */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    .filter-bar input {
+      font-family: inherit;
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 10px;
+      color: var(--text);
+      outline: none;
+      width: 180px;
+    }
+    .filter-bar input:focus { border-color: var(--accent-glow); }
+    .filter-bar input::placeholder { color: var(--text-faint); }
+
+    .filter-bar select {
+      font-family: inherit;
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      color: var(--text);
+      outline: none;
+      cursor: pointer;
+    }
+
+    main {
+      padding: 24px 32px;
+      max-width: 1200px;
+    }
+
+    .schedule-group { margin-bottom: 32px; }
+
+    .schedule-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .schedule-header h2 {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--purple);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .schedule-count {
+      font-size: 11px;
+      color: var(--text-faint);
+      background: var(--surface-2);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .schedule-interval {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-left: auto;
+    }
+
+    .plays-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 12px;
+    }
+
+    .play-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      transition: border-color 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .play-card:hover {
+      border-color: var(--accent-glow);
+      background: var(--surface-2);
+    }
+
+    .play-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 3px;
+      height: 100%;
+    }
+
+    .play-card.status-running::before { background: var(--blue); }
+    .play-card.status-recent::before { background: var(--success); }
+    .play-card.status-overdue::before { background: var(--warning); }
+    .play-card.status-skipped::before { background: var(--warning); }
+    .play-card.status-errored::before { background: var(--error); }
+    .play-card.status-never::before { background: var(--gray); }
+
+    .card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .play-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .status-badges {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .status-badge {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .status-badge.running { color: var(--blue); background: var(--blue-dim); }
+    .status-badge.recent { color: var(--success); background: var(--success-dim); }
+    .status-badge.overdue { color: var(--warning); background: var(--warning-dim); }
+    .status-badge.skipped { color: var(--warning); background: var(--warning-dim); }
+    .status-badge.errored { color: var(--error); background: var(--error-dim); }
+    .status-badge.never { color: var(--gray); background: var(--gray-dim); }
+    .status-badge.manual { color: var(--purple); background: #c084fc20; }
+
+    @keyframes runPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .status-badge.running { animation: runPulse 1.5s ease-in-out infinite; }
+
+    .card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-bottom: 10px;
+    }
+
+    .meta-item { display: flex; align-items: center; gap: 4px; }
+    .meta-label { color: var(--text-faint); }
+
+    .card-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+    }
+
+    .last-ran { color: var(--text-dim); }
+    .last-ran[title] { cursor: help; }
+    .next-run { color: var(--accent); font-weight: 500; }
+    .next-run.overdue { color: var(--warning); }
+
+    .tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px; }
+    .tag {
+      font-size: 10px;
+      color: var(--purple);
+      background: #c084fc15;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+
+    .empty-state h2 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: var(--text-faint);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--text-dim);
+    }
+
+    .loading::after {
+      content: '';
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid var(--accent-dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .play-card { animation: fadeIn 0.3s ease-out both; }
+
+    /* --- Buttons --- */
+    .btn {
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .btn:hover { border-color: var(--accent-glow); background: var(--surface-3); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-accent {
+      background: var(--accent-dim);
+      color: var(--accent);
+      border-color: var(--accent-glow);
+    }
+    .btn-accent:hover { background: var(--accent-glow); }
+    .btn-success {
+      background: var(--success-dim);
+      color: var(--success);
+      border-color: #39ff1440;
+    }
+    .btn-success:hover { background: #39ff1430; }
+    .btn-purple {
+      background: #c084fc20;
+      color: var(--purple);
+      border-color: #c084fc40;
+    }
+    .btn-purple:hover { background: #c084fc30; }
+    .btn-warning {
+      background: var(--warning-dim);
+      color: var(--warning);
+      border-color: #f59e0b40;
+    }
+    .btn-warning:hover { background: #f59e0b30; }
+
+    /* --- Editor view --- */
+    .editor-view {
+      display: none;
+      flex-direction: column;
+      height: calc(100vh - 70px);
+    }
+    .editor-view.active { display: flex; }
+
+    .editor-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .editor-toolbar .back-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: inherit;
+    }
+    .editor-toolbar .back-btn:hover { color: var(--accent); background: var(--surface-2); }
+
+    .editor-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      flex: 1;
+    }
+
+    .unsaved-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+      display: none;
+    }
+    .unsaved-dot.visible { display: inline-block; }
+
+    .save-status {
+      font-size: 11px;
+      color: var(--text-faint);
+    }
+
+    .editor-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+    }
+    .control-group label { color: var(--text-dim); }
+    .control-group select,
+    .control-group input {
+      font-family: inherit;
+      font-size: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 4px 8px;
+      color: var(--text);
+      outline: none;
+    }
+    .control-group select:focus,
+    .control-group input:focus { border-color: var(--accent-glow); }
+    .control-group select { cursor: pointer; }
+
+    .tags-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      min-width: 140px;
+    }
+    .tags-input-wrap:focus-within { border-color: var(--accent-glow); }
+    .tags-input-wrap .tag {
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .tags-input-wrap .tag:hover { text-decoration: line-through; }
+    .tags-input-wrap input {
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      outline: none;
+      min-width: 60px;
+      flex: 1;
+      padding: 2px 0;
+    }
+
+    .editor-body {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      flex-direction: column;
+    }
+
+    .editor-panes {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .editor-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .editor-pane + .editor-pane {
+      border-left: 1px solid var(--border);
+    }
+
+    .pane-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-faint);
+      padding: 6px 16px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .editor-pane textarea {
+      flex: 1;
+      resize: none;
+      background: var(--bg);
+      color: var(--text);
+      border: none;
+      padding: 16px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      outline: none;
+      tab-size: 2;
+    }
+
+    .preview-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 24px;
+      background: var(--bg);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .preview-content h1 { font-size: 20px; color: var(--accent); margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+    .preview-content h2 { font-size: 16px; color: var(--purple); margin: 20px 0 8px; }
+    .preview-content h3 { font-size: 14px; color: var(--text); margin: 16px 0 6px; }
+    .preview-content p { margin-bottom: 12px; color: var(--text-dim); }
+    .preview-content code {
+      font-family: inherit;
+      font-size: 12px;
+      background: var(--surface-2);
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: var(--accent);
+    }
+    .preview-content pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 12px;
+      overflow-x: auto;
+    }
+    .preview-content pre code { background: none; padding: 0; }
+    .preview-content ul, .preview-content ol { margin: 0 0 12px 24px; color: var(--text-dim); }
+    .preview-content li { margin-bottom: 4px; }
+    .preview-content blockquote {
+      border-left: 3px solid var(--purple);
+      padding-left: 12px;
+      color: var(--text-faint);
+      margin-bottom: 12px;
+    }
+
+    /* --- History Panel --- */
+    .history-panel {
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      max-height: 45vh;
+      overflow-y: auto;
+      display: none;
+    }
+    .history-panel.active { display: block; }
+
+    .history-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .history-header h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--blue);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      flex: 1;
+    }
+
+    .history-entry {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .history-entry:hover { background: var(--surface-2); }
+    .history-entry:last-child { border-bottom: none; }
+
+    .history-time {
+      color: var(--text-dim);
+      min-width: 100px;
+      cursor: help;
+    }
+    .history-meta {
+      color: var(--text-faint);
+      display: flex;
+      gap: 12px;
+      flex: 1;
+    }
+    .history-view-btn {
+      font-size: 11px;
+      color: var(--accent);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 2px 8px;
+      border-radius: 3px;
+    }
+    .history-view-btn:hover { background: var(--accent-dim); }
+
+    .history-empty {
+      padding: 24px;
+      text-align: center;
+      color: var(--text-faint);
+      font-size: 12px;
+    }
+
+    /* --- Log Viewer Modal --- */
+    .log-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      background: rgba(0,0,0,0.7);
+      padding: 32px;
+    }
+    .log-modal.active { display: flex; align-items: stretch; justify-content: center; }
+    .log-modal-inner {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      max-width: 1000px;
+      overflow: hidden;
+    }
+    .log-modal-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .log-modal-header h3 {
+      font-size: 13px;
+      color: var(--text);
+      flex: 1;
+      font-weight: 600;
+    }
+    .log-modal-header .close-btn {
+      background: none;
+      border: none;
+      color: var(--text-dim);
+      font-size: 18px;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .log-modal-header .close-btn:hover { color: var(--error); background: var(--error-dim); }
+    .log-modal-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* --- Create form --- */
+    .create-view {
+      display: none;
+      flex-direction: column;
+      height: calc(100vh - 70px);
+    }
+    .create-view.active { display: flex; }
+
+    .create-form {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 32px;
+      width: 100%;
+    }
+
+    .create-form h2 {
+      font-size: 18px;
+      color: var(--accent);
+      margin-bottom: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-dim);
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      font-family: inherit;
+      font-size: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      color: var(--text);
+      outline: none;
+    }
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus { border-color: var(--accent-glow); }
+    .form-group textarea {
+      min-height: 200px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+    .form-group .hint {
+      font-size: 11px;
+      color: var(--text-faint);
+      margin-top: 4px;
+    }
+    .slug-preview {
+      font-size: 11px;
+      color: var(--accent);
+      margin-top: 4px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 16px;
+    }
+    .form-row .form-group { flex: 1; }
+
+    .create-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+    }
+
+    .create-preview {
+      margin-top: 20px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+    .create-preview summary {
+      font-size: 12px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+    .create-preview pre {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--text-dim);
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      z-index: 100;
+      animation: fadeIn 0.2s ease-out;
+      transition: opacity 0.3s;
+    }
+    .toast.success { background: var(--success-dim); color: var(--success); border: 1px solid #39ff1440; }
+    .toast.error { background: var(--error-dim); color: var(--error); border: 1px solid #ff003c40; }
+
+    /* --- Condition Tester --- */
+    .conditions-panel {
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+      max-height: 50vh;
+      overflow-y: auto;
+      display: none;
+    }
+    .conditions-panel.active { display: block; }
+
+    .conditions-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .conditions-header h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--purple);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      flex: 1;
+    }
+    .conditions-header .aggregate {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 4px;
+    }
+    .conditions-header .aggregate.pass { color: var(--success); background: var(--success-dim); }
+    .conditions-header .aggregate.fail { color: var(--error); background: var(--error-dim); }
+    .conditions-header .aggregate.idle { color: var(--text-faint); background: var(--surface-3); }
+
+    .condition-block {
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+    }
+    .condition-block:last-child { border-bottom: none; }
+
+    .condition-block-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .condition-block-header .condition-index {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-faint);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .condition-block-header .condition-status {
+      font-size: 14px;
+      line-height: 1;
+    }
+    .condition-block-header .btn { margin-left: auto; }
+
+    .condition-code {
+      position: relative;
+    }
+    .condition-code textarea {
+      width: 100%;
+      min-height: 80px;
+      resize: vertical;
+      background: var(--bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      outline: none;
+      tab-size: 2;
+    }
+    .condition-code textarea:focus { border-color: var(--accent-glow); }
+
+    .condition-result {
+      margin-top: 8px;
+      font-size: 12px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .condition-result.pass {
+      background: var(--success-dim);
+      border: 1px solid #39ff1430;
+    }
+    .condition-result.fail {
+      background: var(--error-dim);
+      border: 1px solid #ff003c30;
+    }
+    .condition-result-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+    }
+    .condition-result.pass .condition-result-bar { color: var(--success); }
+    .condition-result.fail .condition-result-bar { color: var(--error); }
+    .condition-result-icon { font-size: 14px; }
+    .condition-result-text { flex: 1; }
+    .condition-result-duration { color: var(--text-faint); font-size: 11px; }
+
+    .condition-result-logs {
+      padding: 6px 12px 8px;
+      font-size: 11px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border);
+      white-space: pre-wrap;
+      font-family: inherit;
+    }
+
+    .condition-spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid var(--accent-dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+    }
+
+    .btn-small {
+      font-size: 11px;
+      padding: 3px 10px;
+    }
+    .btn-danger {
+      background: var(--error-dim);
+      color: var(--error);
+      border-color: #ff003c40;
+    }
+    .btn-danger:hover { background: #ff003c30; }
+
+    /* Hide timeline elements when in editor/create */
+    body.view-editor .stats-bar,
+    body.view-editor main,
+    body.view-create .stats-bar,
+    body.view-create main { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1 onclick="navigateTo('timeline')">Playbook Designer</h1>
+    <div class="header-meta">
+      <span id="play-count"></span>
+      <button class="btn btn-accent" id="new-play-btn" onclick="navigateTo('create')">+ New Play</button>
+      <div class="refresh-indicator" id="refresh-indicator">
+        <div class="refresh-dot"></div>
+        <span>live</span>
+      </div>
+    </div>
+  </header>
+  <div class="stats-bar" id="stats-bar">
+    <div class="filter-bar" id="filter-bar">
+      <input type="text" id="filter-search" placeholder="Search plays..." />
+      <select id="filter-schedule">
+        <option value="">All schedules</option>
+      </select>
+      <select id="filter-agent">
+        <option value="">All agents</option>
+        <option value="claude">claude</option>
+        <option value="codex">codex</option>
+      </select>
+    </div>
+  </div>
+  <main id="main">
+    <div class="loading">Loading plays</div>
+  </main>
+
+  <!-- Editor View -->
+  <div class="editor-view" id="editor-view">
+    <div class="editor-toolbar">
+      <button class="back-btn" onclick="navigateTo('timeline')" title="Back to timeline">&larr;</button>
+      <span class="editor-title" id="editor-title">Editing play</span>
+      <div class="unsaved-dot" id="unsaved-dot" title="Unsaved changes"></div>
+      <span class="save-status" id="save-status"></span>
+      <button class="btn btn-purple" id="run-now-btn" onclick="runPlayNow()">Run Now</button>
+      <button class="btn btn-success" id="save-btn" onclick="savePlay()">Save</button>
+    </div>
+    <div class="editor-controls">
+      <div class="control-group">
+        <label>Schedule</label>
+        <select id="ed-schedule"></select>
+      </div>
+      <div class="control-group">
+        <label>Agent</label>
+        <select id="ed-agent">
+          <option value="claude">claude</option>
+          <option value="codex">codex</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>Tags</label>
+        <div class="tags-input-wrap" id="ed-tags-wrap">
+          <input type="text" id="ed-tags-input" placeholder="add tag..." />
+        </div>
+      </div>
+    </div>
+    <div class="editor-body">
+      <div class="editor-panes">
+        <div class="editor-pane">
+          <div class="pane-label">Markdown</div>
+          <textarea id="editor-textarea" spellcheck="false"></textarea>
+        </div>
+        <div class="editor-pane">
+          <div class="pane-label">Preview</div>
+          <div class="preview-content" id="editor-preview"></div>
+        </div>
+      </div>
+      <!-- Condition Tester Panel -->
+      <div class="conditions-panel" id="conditions-panel">
+        <div class="conditions-header">
+          <h3>Conditions</h3>
+          <span class="aggregate idle" id="conditions-aggregate">not tested</span>
+          <button class="btn btn-small btn-accent" id="check-all-btn" onclick="checkAllConditions()">Check All</button>
+          <button class="btn btn-small" onclick="addConditionBlock()">+ Add Condition</button>
+        </div>
+        <div id="conditions-list"></div>
+      </div>
+      <!-- History Panel -->
+      <div class="history-panel" id="history-panel">
+        <div class="history-header">
+          <h3>Execution History</h3>
+          <span id="history-count" style="font-size:11px;color:var(--text-faint)"></span>
+          <button class="btn btn-small" onclick="fetchHistory()">Refresh</button>
+        </div>
+        <div id="history-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create View -->
+  <div class="create-view" id="create-view">
+    <div class="create-form">
+      <button class="btn" onclick="navigateTo('timeline')" style="margin-bottom: 20px">&larr; Back to timeline</button>
+      <h2>Create New Play</h2>
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="cr-title" placeholder="e.g. Review open pull requests" />
+        <div class="slug-preview" id="cr-slug-preview"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Schedule</label>
+          <select id="cr-schedule"></select>
+        </div>
+        <div class="form-group">
+          <label>Agent</label>
+          <select id="cr-agent">
+            <option value="claude">claude</option>
+            <option value="codex">codex</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Tags</label>
+        <input type="text" id="cr-tags" placeholder="comma-separated, e.g. maintenance, github" />
+        <div class="hint">Optional. Separate with commas.</div>
+      </div>
+      <div class="form-group">
+        <label>Prompt Body</label>
+        <textarea id="cr-body" placeholder="Describe what this play should do when it runs..."></textarea>
+      </div>
+      <details class="create-preview">
+        <summary>Preview generated markdown</summary>
+        <pre id="cr-preview-content"></pre>
+      </details>
+      <div class="create-actions">
+        <button class="btn btn-success" id="cr-submit" onclick="createPlay()">Create Play</button>
+        <button class="btn" onclick="navigateTo('timeline')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log Viewer Modal -->
+  <div class="log-modal" id="log-modal" onclick="closeLogModal(event)">
+    <div class="log-modal-inner" onclick="event.stopPropagation()">
+      <div class="log-modal-header">
+        <h3 id="log-modal-title">Log</h3>
+        <button class="close-btn" onclick="closeLogModal()">&times;</button>
+      </div>
+      <div class="log-modal-content" id="log-modal-content">Loading...</div>
+    </div>
+  </div>
+
+  <script>
+    // ─── State ────────────────────────────────────────────
+    const REFRESH_INTERVAL = 10_000  // 10s for live updates
+    let scheduleMap = {}
+    let refreshTimer = null
+    let currentView = 'timeline'
+    let currentSlug = null
+    let editorDirty = false
+    let originalBody = ''
+    let originalMeta = {}
+    let editorTags = []
+    let allPlays = []  // cached for filtering
+
+    // ─── Navigation ───────────────────────────────────────
+    function navigateTo(view, slug) {
+      if (currentView === 'editor' && editorDirty && view !== 'editor') {
+        if (!confirm('You have unsaved changes. Discard them?')) return
+      }
+
+      currentView = view
+      document.body.className = view === 'timeline' ? '' : `view-${view}`
+
+      document.getElementById('editor-view').classList.toggle('active', view === 'editor')
+      document.getElementById('create-view').classList.toggle('active', view === 'create')
+      document.getElementById('refresh-indicator').style.display = view === 'timeline' ? '' : 'none'
+      document.getElementById('new-play-btn').style.display = view === 'timeline' ? '' : 'none'
+
+      if (view === 'timeline') {
+        startRefresh()
+        fetchPlays()
+      } else {
+        stopRefresh()
+      }
+
+      if (view === 'editor' && slug) {
+        loadEditor(slug)
+      }
+    }
+
+    function startRefresh() {
+      stopRefresh()
+      refreshTimer = setInterval(fetchPlays, REFRESH_INTERVAL)
+    }
+
+    function stopRefresh() {
+      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
+    }
+
+    // ─── Toast ────────────────────────────────────────────
+    function showToast(msg, type = 'success') {
+      const existing = document.querySelector('.toast')
+      if (existing) existing.remove()
+      const el = document.createElement('div')
+      el.className = `toast ${type}`
+      el.textContent = msg
+      document.body.appendChild(el)
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300) }, 2500)
+    }
+
+    // ─── Data Fetching ────────────────────────────────────
+    async function fetchSchedules() {
+      try {
+        const res = await fetch('/api/schedules')
+        const data = await res.json()
+        for (const s of data.schedules) {
+          scheduleMap[s.name] = { intervalMs: s.intervalMs, label: s.label }
+        }
+        populateScheduleDropdowns()
+      } catch (e) {
+        console.error('Failed to fetch schedules:', e)
+      }
+    }
+
+    function populateScheduleDropdowns() {
+      const html = Object.entries(scheduleMap)
+        .map(([name, info]) => `<option value="${name}">${info.label}</option>`)
+        .join('')
+      document.getElementById('ed-schedule').innerHTML = html
+      document.getElementById('cr-schedule').innerHTML = html
+
+      // Populate filter dropdown
+      const filterHtml = '<option value="">All schedules</option>' +
+        Object.entries(scheduleMap).map(([name, info]) => `<option value="${name}">${info.label}</option>`).join('')
+      document.getElementById('filter-schedule').innerHTML = filterHtml
+    }
+
+    async function fetchPlays() {
+      try {
+        const res = await fetch('/api/plays')
+        const data = await res.json()
+        allPlays = data.plays
+        renderFilteredTimeline()
+      } catch (e) {
+        console.error('Failed to fetch plays:', e)
+        document.getElementById('main').innerHTML =
+          '<div class="empty-state"><h2>Failed to load plays</h2><p>Check the server console for errors.</p></div>'
+      }
+    }
+
+    function getFilteredPlays() {
+      const search = document.getElementById('filter-search').value.toLowerCase().trim()
+      const scheduleFilter = document.getElementById('filter-schedule').value
+      const agentFilter = document.getElementById('filter-agent').value
+
+      return allPlays.filter(p => {
+        if (search) {
+          const haystack = [p.title, p.agent, ...(p.tags || [])].join(' ').toLowerCase()
+          if (!haystack.includes(search)) return false
+        }
+        if (scheduleFilter && p.schedule !== scheduleFilter) return false
+        if (agentFilter && p.agent !== agentFilter) return false
+        return true
+      })
+    }
+
+    function renderFilteredTimeline() {
+      const filtered = getFilteredPlays()
+      renderTimeline(filtered, allPlays)
+    }
+
+    // ─── Editor ───────────────────────────────────────────
+    async function loadEditor(slug) {
+      currentSlug = slug
+      editorDirty = false
+      document.getElementById('unsaved-dot').classList.remove('visible')
+      document.getElementById('save-status').textContent = ''
+      document.getElementById('editor-textarea').value = 'Loading...'
+      document.getElementById('editor-preview').innerHTML = ''
+      document.getElementById('run-now-btn').disabled = false
+      document.getElementById('run-now-btn').textContent = 'Run Now'
+
+      try {
+        const res = await fetch(`/api/plays/${encodeURIComponent(slug)}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const play = await res.json()
+
+        document.getElementById('editor-title').textContent = play.title
+        document.getElementById('ed-schedule').value = play.schedule
+        document.getElementById('ed-agent').value = play.agent
+
+        // Set tags
+        editorTags = play.tags || []
+        renderEditorTags()
+
+        // Set body
+        originalBody = play.body
+        originalMeta = { schedule: play.schedule, agent: play.agent, tags: [...editorTags] }
+        document.getElementById('editor-textarea').value = play.body
+
+        updatePreview(play.body)
+        loadConditionsForEditor(play.body)
+
+        // If running, update the Run Now button
+        if (play.running) {
+          document.getElementById('run-now-btn').disabled = true
+          document.getElementById('run-now-btn').textContent = 'Running...'
+        }
+      } catch (e) {
+        console.error('Failed to load play:', e)
+        document.getElementById('editor-textarea').value = `Error loading play: ${e.message}`
+      }
+
+      // Load history
+      fetchHistory()
+    }
+
+    function renderEditorTags() {
+      const wrap = document.getElementById('ed-tags-wrap')
+      const input = document.getElementById('ed-tags-input')
+      wrap.querySelectorAll('.tag').forEach(t => t.remove())
+      for (const tag of editorTags) {
+        const span = document.createElement('span')
+        span.className = 'tag'
+        span.textContent = tag
+        span.title = 'Click to remove'
+        span.onclick = () => { editorTags = editorTags.filter(t => t !== tag); renderEditorTags(); markDirty() }
+        wrap.insertBefore(span, input)
+      }
+    }
+
+    function markDirty() {
+      editorDirty = true
+      document.getElementById('unsaved-dot').classList.add('visible')
+      document.getElementById('save-status').textContent = 'unsaved changes'
+    }
+
+    function checkDirty() {
+      const body = document.getElementById('editor-textarea').value
+      const schedule = document.getElementById('ed-schedule').value
+      const agent = document.getElementById('ed-agent').value
+
+      const changed = body !== originalBody
+        || schedule !== originalMeta.schedule
+        || agent !== originalMeta.agent
+        || JSON.stringify(editorTags) !== JSON.stringify(originalMeta.tags)
+
+      if (changed) {
+        markDirty()
+      } else {
+        editorDirty = false
+        document.getElementById('unsaved-dot').classList.remove('visible')
+        document.getElementById('save-status').textContent = ''
+      }
+    }
+
+    async function savePlay() {
+      if (!currentSlug) return
+      const btn = document.getElementById('save-btn')
+      btn.disabled = true
+      btn.textContent = 'Saving...'
+
+      const body = document.getElementById('editor-textarea').value
+      const schedule = document.getElementById('ed-schedule').value
+      const agent = document.getElementById('ed-agent').value
+
+      try {
+        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body, schedule, agent, tags: editorTags })
+        })
+
+        if (!res.ok) {
+          const data = await res.json()
+          throw new Error(data.error || `HTTP ${res.status}`)
+        }
+
+        originalBody = body
+        originalMeta = { schedule, agent, tags: [...editorTags] }
+        editorDirty = false
+        document.getElementById('unsaved-dot').classList.remove('visible')
+        document.getElementById('save-status').textContent = 'saved'
+        showToast('Play saved')
+      } catch (e) {
+        showToast(`Save failed: ${e.message}`, 'error')
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Save'
+      }
+    }
+
+    // ─── Run Now ─────────────────────────────────────────
+    async function runPlayNow() {
+      if (!currentSlug) return
+      const btn = document.getElementById('run-now-btn')
+      btn.disabled = true
+      btn.innerHTML = '<span class="condition-spinner"></span> Triggering...'
+
+      try {
+        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+
+        showToast(data.message)
+        btn.textContent = 'Running...'
+        // Keep disabled while running — poll will re-enable when done
+        pollRunStatus()
+      } catch (e) {
+        showToast(`Trigger failed: ${e.message}`, 'error')
+        btn.disabled = false
+        btn.textContent = 'Run Now'
+      }
+    }
+
+    async function pollRunStatus() {
+      // Poll the play status to detect when it finishes running
+      const check = async () => {
+        try {
+          const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}`)
+          if (!res.ok) return
+          const play = await res.json()
+          if (!play.running) {
+            document.getElementById('run-now-btn').disabled = false
+            document.getElementById('run-now-btn').textContent = 'Run Now'
+            fetchHistory()
+            return
+          }
+        } catch {}
+        setTimeout(check, 5000)
+      }
+      setTimeout(check, 5000)
+    }
+
+    // ─── Execution History ──────────────────────────────
+    async function fetchHistory() {
+      if (!currentSlug) return
+
+      const panel = document.getElementById('history-panel')
+      panel.classList.add('active')
+
+      try {
+        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/history`)
+        const data = await res.json()
+        renderHistory(data.history, data.total)
+      } catch (e) {
+        document.getElementById('history-list').innerHTML =
+          '<div class="history-empty">Failed to load history</div>'
+      }
+    }
+
+    function renderHistory(history, total) {
+      const countEl = document.getElementById('history-count')
+      countEl.textContent = total > 0 ? `${total} total runs` : ''
+
+      if (!history || history.length === 0) {
+        document.getElementById('history-list').innerHTML =
+          '<div class="history-empty">No execution history found for this play</div>'
+        return
+      }
+
+      const html = history.map(entry => {
+        const time = entry.timestamp ? relativeTime(entry.timestamp) : 'unknown'
+        const absTime = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : ''
+        const sizeKb = entry.sizeBytes ? `${(entry.sizeBytes / 1024).toFixed(1)}KB` : '-'
+
+        return `
+          <div class="history-entry" onclick="viewLog('${esc(entry.filename)}')">
+            <span class="history-time" title="${absTime}">${time}</span>
+            <span class="history-meta">
+              <span>${entry.lineCount} lines</span>
+              <span>${sizeKb}</span>
+            </span>
+            <button class="history-view-btn">View log</button>
+          </div>
+        `
+      }).join('')
+
+      document.getElementById('history-list').innerHTML = html
+    }
+
+    // ─── Log Viewer ─────────────────────────────────────
+    async function viewLog(filename) {
+      const modal = document.getElementById('log-modal')
+      const content = document.getElementById('log-modal-content')
+      const title = document.getElementById('log-modal-title')
+
+      modal.classList.add('active')
+      title.textContent = filename
+      content.textContent = 'Loading...'
+
+      try {
+        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/logs/${encodeURIComponent(filename)}`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to load log')
+        content.textContent = data.content
+      } catch (e) {
+        content.textContent = `Error: ${e.message}`
+      }
+    }
+
+    function closeLogModal(event) {
+      if (event && event.target !== document.getElementById('log-modal')) return
+      document.getElementById('log-modal').classList.remove('active')
+    }
+
+    // ─── Markdown Preview (lightweight) ───────────────────
+    function updatePreview(md) {
+      document.getElementById('editor-preview').innerHTML = renderMarkdown(md)
+    }
+
+    function renderMarkdown(md) {
+      if (!md) return '<p style="color:var(--text-faint)">Nothing to preview</p>'
+      let html = esc(md)
+      html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+        `<pre><code>${code.trim()}</code></pre>`)
+      html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+      html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+      html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+      html = html.replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+      html = html.replace(/<\/ul>\s*<ul>/g, '')
+      html = html.split('\n').map(line => {
+        const trimmed = line.trim()
+        if (!trimmed) return ''
+        if (/^<[hupblo]/.test(trimmed)) return trimmed
+        return `<p>${trimmed}</p>`
+      }).join('\n')
+      return html
+    }
+
+    // ─── Create Play ──────────────────────────────────────
+    function toKebabCase(str) {
+      return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    }
+
+    function buildCreatePreview() {
+      const title = document.getElementById('cr-title').value.trim()
+      const schedule = document.getElementById('cr-schedule').value
+      const agent = document.getElementById('cr-agent').value
+      const tagsRaw = document.getElementById('cr-tags').value
+      const body = document.getElementById('cr-body').value
+
+      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+
+      let fm = `---\nagent: ${agent}\nschedule: ${schedule}\n`
+      if (tags.length) fm += `tags:\n${tags.map(t => `  - ${t}`).join('\n')}\n`
+      fm += '---'
+
+      const md = `${fm}\n\n# ${title || 'Untitled'}\n\n${body}`
+      document.getElementById('cr-preview-content').textContent = md
+
+      const slug = toKebabCase(title)
+      document.getElementById('cr-slug-preview').textContent = slug ? `slug: ${slug}` : ''
+      document.getElementById('cr-submit').disabled = !title
+    }
+
+    async function createPlay() {
+      const title = document.getElementById('cr-title').value.trim()
+      if (!title) return
+
+      const btn = document.getElementById('cr-submit')
+      btn.disabled = true
+      btn.textContent = 'Creating...'
+
+      const schedule = document.getElementById('cr-schedule').value
+      const agent = document.getElementById('cr-agent').value
+      const tagsRaw = document.getElementById('cr-tags').value
+      const body = document.getElementById('cr-body').value
+      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+
+      try {
+        const res = await fetch('/api/plays', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title, schedule, agent, tags, body })
+        })
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          throw new Error(data.error || `HTTP ${res.status}`)
+        }
+
+        showToast(`Play "${data.title}" created`)
+        document.getElementById('cr-title').value = ''
+        document.getElementById('cr-tags').value = ''
+        document.getElementById('cr-body').value = ''
+        document.getElementById('cr-slug-preview').textContent = ''
+        document.getElementById('cr-preview-content').textContent = ''
+
+        navigateTo('editor', data.slug)
+      } catch (e) {
+        showToast(`Create failed: ${e.message}`, 'error')
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Create Play'
+      }
+    }
+
+    // ─── Timeline Rendering ───────────────────────────────
+    function relativeTime(ts) {
+      if (!ts) return 'never'
+      const diff = Date.now() - ts
+      const mins = Math.floor(diff / 60000)
+      if (mins < 1) return 'just now'
+      if (mins < 60) return `${mins}m ago`
+      const hrs = Math.floor(mins / 60)
+      if (hrs < 24) return `${hrs}h ${mins % 60}m ago`
+      const days = Math.floor(hrs / 24)
+      return `${days}d ago`
+    }
+
+    function estimateNextRun(play) {
+      if (!play.lastRanAt) return 'unknown'
+      const interval = scheduleMap[play.schedule]?.intervalMs
+      if (!interval) return 'unknown'
+      const next = play.lastRanAt + interval
+      const diff = next - Date.now()
+      if (diff <= 0) return 'overdue'
+      const mins = Math.floor(diff / 60000)
+      if (mins < 60) return `in ${mins}m`
+      const hrs = Math.floor(mins / 60)
+      return `in ${hrs}h ${mins % 60}m`
+    }
+
+    function isOverdue(play) {
+      if (play.running || !play.lastRanAt) return false
+      const interval = scheduleMap[play.schedule]?.intervalMs
+      if (!interval) return false
+      return (Date.now() - play.lastRanAt) > interval
+    }
+
+    function getStatus(play) {
+      if (play.running) return 'running'
+      if (!play.lastRanAt) return 'never'
+      const interval = scheduleMap[play.schedule]?.intervalMs || 3600000
+      const age = Date.now() - play.lastRanAt
+      if (age > interval && age < interval * 5) return 'overdue'
+      if (age < interval * 2) return 'recent'
+      if (age > interval * 5) return 'skipped'
+      return 'recent'
+    }
+
+    function formatDuration(ms) {
+      if (!ms) return '-'
+      if (ms < 1000) return `${ms}ms`
+      const secs = Math.floor(ms / 1000)
+      if (secs < 60) return `${secs}s`
+      const mins = Math.floor(secs / 60)
+      return `${mins}m ${secs % 60}s`
+    }
+
+    function formatTokens(n) {
+      if (!n) return '-'
+      if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+      return String(n)
+    }
+
+    function groupBySchedule(plays) {
+      const order = [
+        'every-five-minutes', 'every-ten-minutes', 'every-half-hour',
+        'hourly', 'daily', 'beginning-of-day', 'end-of-day', 'weekly'
+      ]
+      const groups = {}
+      for (const p of plays) {
+        const key = p.schedule || 'unknown'
+        if (!groups[key]) groups[key] = []
+        groups[key].push(p)
+      }
+      const sorted = []
+      for (const key of order) {
+        if (groups[key]) sorted.push([key, groups[key]])
+        delete groups[key]
+      }
+      for (const [key, val] of Object.entries(groups)) {
+        sorted.push([key, val])
+      }
+      return sorted
+    }
+
+    function renderStats(filteredPlays, allPlaysArr) {
+      const plays = allPlaysArr || filteredPlays
+      const running = plays.filter(p => p.running).length
+      const recent = plays.filter(p => !p.running && p.lastRanAt && getStatus(p) === 'recent').length
+      const overdue = plays.filter(p => getStatus(p) === 'overdue').length
+      const never = plays.filter(p => !p.lastRanAt).length
+
+      document.getElementById('play-count').textContent = `${plays.length} plays`
+
+      // Build stats HTML, keep filter bar
+      const statsHtml = `
+        <div class="stat">
+          <div class="stat-dot" style="background: var(--blue)"></div>
+          Running: <span class="stat-value">${running}</span>
+        </div>
+        <div class="stat">
+          <div class="stat-dot" style="background: var(--success)"></div>
+          Recent: <span class="stat-value">${recent}</span>
+        </div>
+        ${overdue > 0 ? `
+        <div class="stat">
+          <div class="stat-dot" style="background: var(--warning)"></div>
+          Overdue: <span class="stat-value">${overdue}</span>
+        </div>
+        ` : ''}
+        <div class="stat">
+          <div class="stat-dot" style="background: var(--gray)"></div>
+          Never: <span class="stat-value">${never}</span>
+        </div>
+      `
+
+      const statsBar = document.getElementById('stats-bar')
+      // Preserve the filter bar, replace only the stat divs
+      const filterBar = document.getElementById('filter-bar')
+      statsBar.innerHTML = statsHtml
+      statsBar.appendChild(filterBar)
+    }
+
+    function renderCard(play, index) {
+      const status = getStatus(play)
+      const delay = index * 50
+      const tagsHtml = (play.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')
+      const overdueFlag = isOverdue(play)
+      const absTime = play.lastRanAt ? new Date(play.lastRanAt).toLocaleString() : ''
+      const nextRun = estimateNextRun(play)
+
+      return `
+        <div class="play-card status-${status}" style="animation-delay: ${delay}ms"
+             onclick="navigateTo('editor', '${play.slug}')">
+          <div class="card-top">
+            <div class="play-title">${esc(play.title)}</div>
+            <div class="status-badges">
+              <div class="status-badge ${status}">${status}</div>
+            </div>
+          </div>
+          ${tagsHtml ? `<div class="tags">${tagsHtml}</div>` : ''}
+          <div class="card-meta">
+            <div class="meta-item">
+              <span class="meta-label">agent:</span> ${esc(play.agent)}
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">duration:</span> ${formatDuration(play.durationMs)}
+            </div>
+            <div class="meta-item">
+              <span class="meta-label">tokens:</span> ${formatTokens(play.outputTokens)}
+            </div>
+            ${play.hasConditions ? '<div class="meta-item"><span class="meta-label">has conditions</span></div>' : ''}
+          </div>
+          <div class="card-footer">
+            <span class="last-ran" title="${absTime}">ran ${relativeTime(play.lastRanAt)}</span>
+            <span class="next-run ${nextRun === 'overdue' ? 'overdue' : ''}">next: ${nextRun}</span>
+          </div>
+        </div>
+      `
+    }
+
+    function renderTimeline(plays, allPlaysArr) {
+      renderStats(plays, allPlaysArr)
+      const groups = groupBySchedule(plays)
+
+      if (plays.length === 0) {
+        const hasFilter = document.getElementById('filter-search').value
+          || document.getElementById('filter-schedule').value
+          || document.getElementById('filter-agent').value
+        document.getElementById('main').innerHTML = hasFilter
+          ? '<div class="empty-state"><h2>No matching plays</h2><p>Try adjusting your filters.</p></div>'
+          : '<div class="empty-state"><h2>No plays found</h2><p>Create your first play with the + New Play button above.</p></div>'
+        return
+      }
+
+      let cardIndex = 0
+      const html = groups.map(([schedule, groupPlays]) => {
+        const info = scheduleMap[schedule] || {}
+        const intervalLabel = info.intervalMs ? `every ${formatDuration(info.intervalMs)}` : ''
+        const cards = groupPlays.map(p => renderCard(p, cardIndex++)).join('')
+
+        return `
+          <div class="schedule-group">
+            <div class="schedule-header">
+              <h2>${info.label || schedule}</h2>
+              <span class="schedule-count">${groupPlays.length} play${groupPlays.length !== 1 ? 's' : ''}</span>
+              ${intervalLabel ? `<span class="schedule-interval">${intervalLabel}</span>` : ''}
+            </div>
+            <div class="plays-grid">${cards}</div>
+          </div>
+        `
+      }).join('')
+
+      document.getElementById('main').innerHTML = html
+    }
+
+    function esc(str) {
+      const div = document.createElement('div')
+      div.textContent = str || ''
+      return div.innerHTML
+    }
+
+    // ─── Condition Tester ─────────────────────────────────
+    let conditionBlocks = []
+
+    function parseConditionsFromBody(body) {
+      const sectionPattern = /^##\s+(?:Conditions|Only\s+When|Only\s+If|Run\s+Condition)\s*$/im
+      const match = body.match(sectionPattern)
+      if (!match) return []
+
+      const sectionStart = match.index + match[0].length
+      const rest = body.slice(sectionStart)
+      const nextH2 = rest.match(/^## /m)
+      const sectionBody = nextH2 ? rest.slice(0, nextH2.index) : rest
+
+      const blocks = []
+      const codeBlockPattern = /```(?:ts|typescript)\s*\n([\s\S]*?)```/g
+      let m
+      while ((m = codeBlockPattern.exec(sectionBody)) !== null) {
+        blocks.push(m[1].trim())
+      }
+      return blocks
+    }
+
+    function loadConditionsForEditor(body) {
+      const codes = parseConditionsFromBody(body)
+      conditionBlocks = codes.map(code => ({ code, result: null }))
+
+      const panel = document.getElementById('conditions-panel')
+      if (conditionBlocks.length > 0) {
+        panel.classList.add('active')
+      } else {
+        panel.classList.remove('active')
+      }
+
+      renderConditionBlocks()
+      updateConditionsAggregate()
+    }
+
+    function renderConditionBlocks() {
+      const container = document.getElementById('conditions-list')
+      container.innerHTML = conditionBlocks.map((block, i) => {
+        const resultHtml = renderConditionResult(block.result)
+        return `
+          <div class="condition-block" data-index="${i}">
+            <div class="condition-block-header">
+              <span class="condition-index">Condition ${i + 1}</span>
+              <span class="condition-status" id="cond-status-${i}"></span>
+              <button class="btn btn-small btn-danger" onclick="removeConditionBlock(${i})">Remove</button>
+              <button class="btn btn-small btn-accent" id="cond-run-${i}" onclick="runCondition(${i})">Run</button>
+            </div>
+            <div class="condition-code">
+              <textarea id="cond-code-${i}" spellcheck="false" oninput="onConditionCodeChange(${i})">${esc(block.code)}</textarea>
+            </div>
+            <div id="cond-result-${i}">${resultHtml}</div>
+          </div>
+        `
+      }).join('')
+    }
+
+    function renderConditionResult(result) {
+      if (!result) return ''
+      const cls = result.passed ? 'pass' : 'fail'
+      const icon = result.passed ? '&#10003;' : '&#10007;'
+      const text = result.passed
+        ? (result.returnValue ? `Passed — returned: ${esc(result.returnValue)}` : 'Passed')
+        : (result.error ? `Failed — ${esc(result.error)}` : 'Failed — returned false')
+      const logsHtml = result.logs && result.logs.length
+        ? `<div class="condition-result-logs">${esc(result.logs.join('\n'))}</div>`
+        : ''
+      return `
+        <div class="condition-result ${cls}">
+          <div class="condition-result-bar">
+            <span class="condition-result-icon">${icon}</span>
+            <span class="condition-result-text">${text}</span>
+            <span class="condition-result-duration">${result.durationMs}ms</span>
+          </div>
+          ${logsHtml}
+        </div>
+      `
+    }
+
+    function updateConditionsAggregate() {
+      const el = document.getElementById('conditions-aggregate')
+      const tested = conditionBlocks.filter(b => b.result !== null)
+      if (tested.length === 0) {
+        el.className = 'aggregate idle'
+        el.textContent = conditionBlocks.length > 0 ? `${conditionBlocks.length} condition${conditionBlocks.length !== 1 ? 's' : ''} — not tested` : 'no conditions'
+        return
+      }
+      const allPassed = tested.every(b => b.result.passed)
+      const testedCount = tested.length
+      const total = conditionBlocks.length
+      if (allPassed && testedCount === total) {
+        el.className = 'aggregate pass'
+        el.textContent = `All ${total} passed`
+      } else if (allPassed) {
+        el.className = 'aggregate pass'
+        el.textContent = `${testedCount}/${total} tested — all passed`
+      } else {
+        const failCount = tested.filter(b => !b.result.passed).length
+        el.className = 'aggregate fail'
+        el.textContent = `${failCount} failed of ${testedCount} tested`
+      }
+    }
+
+    function onConditionCodeChange(index) {
+      const textarea = document.getElementById(`cond-code-${index}`)
+      conditionBlocks[index].code = textarea.value
+      conditionBlocks[index].result = null
+      document.getElementById(`cond-result-${index}`).innerHTML = ''
+      document.getElementById(`cond-status-${index}`).textContent = ''
+      updateConditionsAggregate()
+      syncConditionsToBody()
+    }
+
+    function syncConditionsToBody() {
+      const textarea = document.getElementById('editor-textarea')
+      let body = textarea.value
+
+      const sectionPattern = /^(##\s+(?:Conditions|Only\s+When|Only\s+If|Run\s+Condition)\s*$)/im
+      const match = body.match(sectionPattern)
+      const sectionHeading = match ? match[1] : '## Conditions'
+
+      const newSection = conditionBlocks.length > 0
+        ? '\n\n' + conditionBlocks.map(b => '```ts\n' + b.code + '\n```').join('\n\n') + '\n'
+        : ''
+
+      if (match) {
+        const sectionStart = match.index
+        const rest = body.slice(sectionStart + match[0].length)
+        const nextH2 = rest.match(/^## /m)
+        const sectionEnd = nextH2 ? sectionStart + match[0].length + nextH2.index : body.length
+
+        body = body.slice(0, sectionStart) + sectionHeading + newSection + body.slice(sectionEnd)
+      } else if (conditionBlocks.length > 0) {
+        body = body.trimEnd() + '\n\n' + sectionHeading + newSection
+      }
+
+      textarea.value = body
+      updatePreview(body)
+      markDirty()
+    }
+
+    async function runCondition(index) {
+      const block = conditionBlocks[index]
+      const btn = document.getElementById(`cond-run-${index}`)
+      const statusEl = document.getElementById(`cond-status-${index}`)
+      const resultEl = document.getElementById(`cond-result-${index}`)
+
+      btn.disabled = true
+      btn.innerHTML = '<span class="condition-spinner"></span>'
+      statusEl.textContent = ''
+      resultEl.innerHTML = ''
+
+      try {
+        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/eval-condition`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code: block.code, index })
+        })
+
+        const data = await res.json()
+        block.result = data
+        resultEl.innerHTML = renderConditionResult(data)
+        statusEl.textContent = data.passed ? '\u2713' : '\u2717'
+        statusEl.style.color = data.passed ? 'var(--success)' : 'var(--error)'
+      } catch (e) {
+        block.result = { passed: false, error: e.message, durationMs: 0, logs: [] }
+        resultEl.innerHTML = renderConditionResult(block.result)
+        statusEl.textContent = '\u2717'
+        statusEl.style.color = 'var(--error)'
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Run'
+        updateConditionsAggregate()
+      }
+    }
+
+    async function checkAllConditions() {
+      const btn = document.getElementById('check-all-btn')
+      btn.disabled = true
+      btn.innerHTML = '<span class="condition-spinner"></span> Checking...'
+
+      for (let i = 0; i < conditionBlocks.length; i++) {
+        await runCondition(i)
+      }
+
+      btn.disabled = false
+      btn.textContent = 'Check All'
+    }
+
+    function addConditionBlock() {
+      conditionBlocks.push({ code: '// New condition\n', result: null })
+      renderConditionBlocks()
+      syncConditionsToBody()
+      updateConditionsAggregate()
+
+      document.getElementById('conditions-panel').classList.add('active')
+
+      const lastIdx = conditionBlocks.length - 1
+      const textarea = document.getElementById(`cond-code-${lastIdx}`)
+      if (textarea) textarea.focus()
+    }
+
+    function removeConditionBlock(index) {
+      conditionBlocks.splice(index, 1)
+      renderConditionBlocks()
+      syncConditionsToBody()
+      updateConditionsAggregate()
+
+      if (conditionBlocks.length === 0) {
+        document.getElementById('conditions-panel').classList.remove('active')
+      }
+    }
+
+    // ─── Event Listeners ──────────────────────────────────
+    function setupListeners() {
+      const textarea = document.getElementById('editor-textarea')
+      textarea.addEventListener('input', () => {
+        updatePreview(textarea.value)
+        checkDirty()
+      })
+
+      document.getElementById('ed-schedule').addEventListener('change', checkDirty)
+      document.getElementById('ed-agent').addEventListener('change', checkDirty)
+
+      const tagsInput = document.getElementById('ed-tags-input')
+      tagsInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault()
+          const val = tagsInput.value.trim().replace(/,/g, '')
+          if (val && !editorTags.includes(val)) {
+            editorTags.push(val)
+            renderEditorTags()
+            markDirty()
+          }
+          tagsInput.value = ''
+        }
+        if (e.key === 'Backspace' && !tagsInput.value && editorTags.length) {
+          editorTags.pop()
+          renderEditorTags()
+          markDirty()
+        }
+      })
+
+      document.addEventListener('keydown', (e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+          e.preventDefault()
+          if (currentView === 'editor') savePlay()
+        }
+        // Escape closes log modal
+        if (e.key === 'Escape') {
+          document.getElementById('log-modal').classList.remove('active')
+        }
+      })
+
+      // Create form live preview
+      const crFields = ['cr-title', 'cr-schedule', 'cr-agent', 'cr-tags', 'cr-body']
+      for (const id of crFields) {
+        document.getElementById(id).addEventListener('input', buildCreatePreview)
+        document.getElementById(id).addEventListener('change', buildCreatePreview)
+      }
+
+      // Filter controls — re-render on change
+      document.getElementById('filter-search').addEventListener('input', renderFilteredTimeline)
+      document.getElementById('filter-schedule').addEventListener('change', renderFilteredTimeline)
+      document.getElementById('filter-agent').addEventListener('change', renderFilteredTimeline)
+    }
+
+    // ─── Init ─────────────────────────────────────────────
+    async function init() {
+      setupListeners()
+      await fetchSchedules()
+      await fetchPlays()
+      startRefresh()
+      buildCreatePreview()
+    }
+
+    init()
+  </script>
+</body>
+</html>
