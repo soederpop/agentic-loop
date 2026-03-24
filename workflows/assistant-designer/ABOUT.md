@@ -1,7 +1,6 @@
 ---
 title: Assistant Designer
 description: Interactive workbench for designing AI assistants — edit system prompts, define tools with schemas, chat live, and sample tool calls
-port: 9330
 tags:
   - assistants
   - design

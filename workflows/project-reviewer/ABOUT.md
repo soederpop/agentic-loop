@@ -1,7 +1,6 @@
 ---
 title: Project Reviewer
 description: Interactive project review with an AI assistant — deep-dive into project status, plans, and next steps
-port: 9310
 tags:
   - review
   - projects

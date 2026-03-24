@@ -569,53 +569,222 @@
 </div>
 
 <script type="module">
-  const API = window.location.origin
-  let refreshTimer = null
-  let data = null
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
 
-  // ── Date display ────────────────────────
+  // Get Feature base class from the registry
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+  const API = window.location.origin
+
+  // ── Utility ──
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ReviewApi — wraps all fetch() calls to the review backend
+  // ═══════════════════════════════════════════════════════════════════
+  class ReviewApi extends Feature {
+    static shortcut = 'features.reviewApi'
+    static { Feature.register(this, 'reviewApi') }
+
+    /** Fetch the full aggregated briefing from /api/status */
+    async fetchStatus() {
+      this.state.set('loading', true)
+      this.emit('request:start', 'status')
+      try {
+        const res = await fetch(`${API}/api/status`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Failed to load')
+        this.state.set('loading', false)
+        this.emit('request:complete', 'status')
+        return data
+      } catch (err) {
+        this.state.set('loading', false)
+        this.state.set('lastError', err.message)
+        this.emit('request:error', { endpoint: 'status', error: err.message })
+        throw err
+      }
+    }
+
+    /** Fetch ideas list from /api/ideas */
+    async fetchIdeas() {
+      const res = await fetch(`${API}/api/ideas`)
+      const data = await res.json()
+      return data.ideas || []
+    }
+
+    /** Fetch projects list from /api/projects */
+    async fetchProjects() {
+      const res = await fetch(`${API}/api/projects`)
+      const data = await res.json()
+      return data.projects || []
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ReviewStore — manages loaded briefing data and derived state
+  // ═══════════════════════════════════════════════════════════════════
+  class ReviewStore extends Feature {
+    static shortcut = 'features.reviewStore'
+    static { Feature.register(this, 'reviewStore') }
+
+    _briefing = null
+
+    get briefing() { return this._briefing }
+    get goals() { return this._briefing?.goals || [] }
+    get ideasByStatus() { return this._briefing?.ideasByStatus || {} }
+    get projects() { return this._briefing?.projects || [] }
+    get recentCommits() { return this._briefing?.recentCommits || [] }
+    get recentDocs() { return this._briefing?.recentDocs || [] }
+    get counts() { return this._briefing?.counts || { goals: 0, ideas: 0, projects: 0, plans: 0, total: 0 } }
+
+    /** Replace the stored briefing data and emit change events */
+    setBriefing(data) {
+      this._briefing = data
+      this.state.set('totalDocs', data.counts.total)
+      this.state.set('goalCount', data.goals.length)
+      this.state.set('ideaCount', data.counts.ideas)
+      this.state.set('projectCount', data.projects.length)
+      this.state.set('lastLoadedAt', new Date().toISOString())
+      this.emit('briefing:loaded', data)
+    }
+
+    /** Get ideas for a specific funnel status */
+    ideasForStatus(status) {
+      return this.ideasByStatus[status] || []
+    }
+
+    /** Get projects filtered by status */
+    projectsByStatus(status) {
+      return this.projects.filter(p => p.status === status)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // ReviewApp — central orchestrator, composes Api + Store
+  // ═══════════════════════════════════════════════════════════════════
+  class ReviewApp extends Feature {
+    static shortcut = 'features.reviewApp'
+    static { Feature.register(this, 'reviewApp') }
+
+    _refreshTimer = null
+    _refreshInterval = 30000
+
+    get api() { return container.feature('reviewApi') }
+    get store() { return container.feature('reviewStore') }
+
+    async afterInitialize() {
+      this.state.set('ready', false)
+      await this.refresh()
+      this._startAutoRefresh()
+      this.state.set('ready', true)
+      this.emit('ready')
+    }
+
+    /** Load the briefing from the API and push it into the store */
+    async refresh() {
+      this.state.set('refreshing', true)
+      this.emit('refresh:start')
+      try {
+        const data = await this.api.fetchStatus()
+        this.store.setBriefing(data)
+        this.emit('refresh:complete')
+      } catch (err) {
+        console.error('Briefing load failed:', err)
+        this.emit('refresh:error', err.message)
+      } finally {
+        this.state.set('refreshing', false)
+      }
+    }
+
+    /** Start the 30s auto-refresh interval + visibility/focus listeners */
+    _startAutoRefresh() {
+      this._refreshTimer = setInterval(() => this.refresh(), this._refreshInterval)
+
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) this.refresh()
+      })
+
+      window.addEventListener('focus', () => this.refresh())
+
+      window.addEventListener('message', (e) => {
+        if (e.data && e.data.type === 'stateChange') this.refresh()
+      })
+    }
+
+    /** Stop auto-refresh (cleanup) */
+    stopAutoRefresh() {
+      if (this._refreshTimer) {
+        clearInterval(this._refreshTimer)
+        this._refreshTimer = null
+      }
+    }
+
+    /** Return a serializable overview of the current state */
+    snapshot() {
+      const s = this.store
+      return {
+        ready: this.state.get('ready'),
+        refreshing: this.state.get('refreshing'),
+        counts: s.counts,
+        goalCount: s.goals.length,
+        projectCount: s.projects.length,
+        ideaFunnel: Object.fromEntries(
+          ['spark', 'exploring', 'ready', 'parked', 'promoted'].map(st => [st, s.ideasForStatus(st).length])
+        ),
+        recentCommits: s.recentCommits.length,
+        recentDocs: s.recentDocs.length,
+        lastLoadedAt: s.state.get('lastLoadedAt'),
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UI Rendering — listens to feature events, renders DOM
+  // ═══════════════════════════════════════════════════════════════════
+
+  // Date display
   const dateEl = document.getElementById('date-display')
   dateEl.textContent = new Date().toLocaleDateString('en-US', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
   })
 
-  // ── Fetch & render ──────────────────────
-  async function loadBriefing() {
-    const dot = document.getElementById('refresh-dot')
-    dot.classList.add('loading')
+  // Get feature instances (don't call afterInitialize yet — bind events first)
+  const api = container.feature('reviewApi')
+  const store = container.feature('reviewStore')
+  const app = container.feature('reviewApp')
 
-    try {
-      const res = await fetch(`${API}/api/status`)
-      data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to load')
-      render(data)
-    } catch (err) {
-      console.error('Briefing load failed:', err)
-    } finally {
-      dot.classList.remove('loading')
-    }
-  }
+  // ── Refresh indicator ──
+  app.on('refresh:start', () => {
+    document.getElementById('refresh-dot').classList.add('loading')
+  })
 
-  function render(d) {
-    document.getElementById('total-count').textContent = d.counts.total
+  app.on('refresh:complete', () => {
+    document.getElementById('refresh-dot').classList.remove('loading')
+  })
+
+  app.on('refresh:error', () => {
+    document.getElementById('refresh-dot').classList.remove('loading')
+  })
+
+  // ── Re-render on data load ──
+  store.on('briefing:loaded', (data) => {
+    document.getElementById('total-count').textContent = data.counts.total
 
     const content = document.getElementById('content')
     content.innerHTML = ''
+    content.appendChild(renderGoals(data.goals))
+    content.appendChild(renderIdeaFunnel(data.ideasByStatus, data.counts.ideas))
+    content.appendChild(renderProjects(data.projects))
+    content.appendChild(renderActivity(data.recentCommits, data.recentDocs))
+  })
 
-    // Goals
-    content.appendChild(renderGoals(d.goals))
+  // ── Render functions (pure DOM builders, read no global state) ──
 
-    // Idea funnel
-    content.appendChild(renderIdeaFunnel(d.ideasByStatus, d.counts.ideas))
-
-    // Projects
-    content.appendChild(renderProjects(d.projects))
-
-    // Activity
-    content.appendChild(renderActivity(d.recentCommits, d.recentDocs))
-  }
-
-  // ── Goals strip ─────────────────────────
   function renderGoals(goals) {
     const wrap = document.createElement('div')
 
@@ -653,7 +822,6 @@
     return wrap
   }
 
-  // ── Idea funnel ─────────────────────────
   function renderIdeaFunnel(ideasByStatus, totalIdeas) {
     const wrap = document.createElement('div')
 
@@ -703,7 +871,6 @@
     return wrap
   }
 
-  // ── Projects ────────────────────────────
   function renderProjects(projects) {
     const wrap = document.createElement('div')
 
@@ -764,7 +931,6 @@
     return wrap
   }
 
-  // ── Activity ────────────────────────────
   function renderActivity(commits, docs) {
     const wrap = document.createElement('div')
 
@@ -776,7 +942,6 @@
     const grid = document.createElement('div')
     grid.className = 'activity-grid'
 
-    // Commits panel
     const commitsPanel = document.createElement('div')
     commitsPanel.className = 'activity-panel'
     commitsPanel.innerHTML = `
@@ -793,7 +958,6 @@
     `
     grid.appendChild(commitsPanel)
 
-    // Docs panel
     const docsPanel = document.createElement('div')
     docsPanel.className = 'activity-panel'
     docsPanel.innerHTML = `
@@ -813,33 +977,15 @@
     return wrap
   }
 
-  // ── Utilities ───────────────────────────
-  function esc(str) {
-    const d = document.createElement('div')
-    d.textContent = String(str || '')
-    return d.innerHTML
-  }
+  // ── Expose on window for automation & debugging ──
+  window.app = app
+  window.luca = container
 
-  // ── Auto-refresh ────────────────────────
-  // Refresh every 30 seconds
-  refreshTimer = setInterval(loadBriefing, 30000)
-
-  // Refresh on window focus
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) loadBriefing()
-  })
-
-  window.addEventListener('focus', loadBriefing)
-
-  // Listen for containerLink stateChange events
-  window.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'stateChange') {
-      loadBriefing()
-    }
-  })
-
-  // ── Boot ────────────────────────────────
-  loadBriefing()
+  // ── Boot (triggers afterInitialize → first refresh) ──
+  // Feature instances are already created above; afterInitialize runs
+  // when the container boots them. The reviewApp.afterInitialize() calls
+  // refresh() which fetches data and the store emits briefing:loaded
+  // which triggers the UI render above.
 </script>
 </body>
 </html>

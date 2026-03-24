@@ -8,7 +8,7 @@
  * - Authority: luca main process on port 4410
  *
  * Usage:
- *   luca serve --setup workflows/setup/luca.serve.ts --staticDir workflows/setup/public --endpoints-dir workflows/setup/endpoints --port 9304 --no-open
+ *   luca serve --setup workflows/setup/luca.serve.ts --staticDir workflows/setup/public --endpoints-dir workflows/setup/endpoints --any-port --no-open
  */
 export default async function setup(server: any) {
   const container = server.container

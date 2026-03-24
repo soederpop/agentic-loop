@@ -339,164 +339,368 @@
   <div class="loading">Checking system capabilities</div>
 </div>
 
-<script>
-const GROUP_LABELS = {
-  required: 'Required',
-  voice: 'Optional — Voice',
-  native: 'Optional — Native App',
-  authority: 'Authority Process',
-}
+<script type="module">
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
 
-const GROUP_ORDER = ['required', 'voice', 'native', 'authority']
+  // ── SetupApi Feature — wraps all backend fetch calls ──
+  class SetupApi extends Feature {
+    static shortcut = 'features.setupApi'
+    static { Feature.register(this, 'setupApi') }
 
-let capabilities = []
-
-async function fetchStatus() {
-  const res = await fetch('/api/system-status')
-  if (!res.ok) throw new Error('Failed to fetch system status')
-  return res.json()
-}
-
-async function refresh() {
-  const btn = document.getElementById('refreshBtn')
-  btn.classList.add('spinning')
-  btn.textContent = 'checking...'
-  try {
-    const data = await fetchStatus()
-    capabilities = data.capabilities
-    render(data)
-  } catch (err) {
-    console.error(err)
-  } finally {
-    btn.classList.remove('spinning')
-    btn.textContent = 'recheck'
-  }
-}
-
-function render(data) {
-  const { ready, total, capabilities } = data
-  const pct = Math.round((ready / total) * 100)
-
-  document.getElementById('readyCount').innerHTML =
-    `<span class="count">${ready}</span> of <span class="count">${total}</span> ready`
-  document.getElementById('progressText').textContent =
-    ready === total ? 'All systems go' : `${ready} of ${total} capabilities ready`
-  document.getElementById('progressPct').textContent = `${pct}%`
-
-  const fill = document.getElementById('progressFill')
-  fill.style.width = `${pct}%`
-  fill.className = 'progress-fill' + (ready === total ? ' all-good' : '')
-
-  // Group capabilities
-  const groups = {}
-  for (const cap of capabilities) {
-    const g = cap.group || 'other'
-    if (!groups[g]) groups[g] = []
-    groups[g].push(cap)
-  }
-
-  let html = ''
-  for (const group of GROUP_ORDER) {
-    const items = groups[group]
-    if (!items || items.length === 0) continue
-    html += `<div class="section-group">`
-    html += `<div class="section-title">${GROUP_LABELS[group] || group}</div>`
-    for (const cap of items) {
-      const expanded = cap.status !== 'ok'
-      html += renderCard(cap, expanded)
+    static stateSchema = {
+      loading: { type: 'boolean', default: false },
+      lastError: { type: 'string', default: null },
     }
-    html += `</div>`
+
+    static eventsSchema = {
+      'status:fetched': 'System status data received from server',
+      'status:error': 'Error fetching system status',
+      'env:saved': 'Environment variable saved successfully',
+      'env:error': 'Error saving environment variable',
+    }
+
+    /** Fetch all system capabilities from the backend */
+    async fetchStatus() {
+      this.state.set('loading', true)
+      this.state.set('lastError', null)
+      try {
+        const res = await fetch('/api/system-status')
+        if (!res.ok) throw new Error('Failed to fetch system status')
+        const data = await res.json()
+        this.emit('status:fetched', data)
+        return data
+      } catch (err) {
+        this.state.set('lastError', err.message)
+        this.emit('status:error', err)
+        throw err
+      } finally {
+        this.state.set('loading', false)
+      }
+    }
+
+    /** Save an env key to the backend .env file */
+    async saveEnvKey(key, value) {
+      try {
+        const res = await fetch('/api/env', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, value }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          this.emit('env:error', { key, error: err.error })
+          return false
+        }
+        this.emit('env:saved', { key })
+        return true
+      } catch (err) {
+        this.emit('env:error', { key, error: err.message })
+        return false
+      }
+    }
   }
 
-  document.getElementById('content').innerHTML = html
+  // ── SetupStore Feature — manages capabilities data, grouping, progress ──
+  class SetupStore extends Feature {
+    static shortcut = 'features.setupStore'
+    static { Feature.register(this, 'setupStore') }
 
-  // Emit presenter event
-  if (typeof window !== 'undefined' && window.containerLink) {
-    containerLink.emit('setupProgress', { ready, total, capabilities })
+    static GROUP_LABELS = {
+      required: 'Required',
+      voice: 'Optional — Voice',
+      native: 'Optional — Native App',
+      authority: 'Authority Process',
+    }
+
+    static GROUP_ORDER = ['required', 'voice', 'native', 'authority']
+
+    static stateSchema = {
+      capabilities: { type: 'array', default: [] },
+      ready: { type: 'number', default: 0 },
+      total: { type: 'number', default: 0 },
+      pct: { type: 'number', default: 0 },
+    }
+
+    static eventsSchema = {
+      'data:updated': 'Capabilities data has been refreshed',
+    }
+
+    /** Update store with fresh status data from the API */
+    load(data) {
+      const { ready, total, capabilities } = data
+      this.state.set('capabilities', capabilities)
+      this.state.set('ready', ready)
+      this.state.set('total', total)
+      this.state.set('pct', total > 0 ? Math.round((ready / total) * 100) : 0)
+      this.emit('data:updated', data)
+    }
+
+    /** Get capabilities organized by group in display order */
+    getGrouped() {
+      const caps = this.state.get('capabilities') || []
+      const groups = {}
+      for (const cap of caps) {
+        const g = cap.group || 'other'
+        if (!groups[g]) groups[g] = []
+        groups[g].push(cap)
+      }
+      return SetupStore.GROUP_ORDER
+        .filter(g => groups[g]?.length > 0)
+        .map(g => ({
+          key: g,
+          label: SetupStore.GROUP_LABELS[g] || g,
+          items: groups[g],
+        }))
+    }
+
+    /** Find a capability by its key */
+    getCapability(capKey) {
+      return (this.state.get('capabilities') || []).find(c => c.capability === capKey)
+    }
+
+    /** Filter capabilities by status */
+    byStatus(status) {
+      return (this.state.get('capabilities') || []).filter(c => c.status === status)
+    }
+
+    get allGood() {
+      return this.state.get('ready') === this.state.get('total') && this.state.get('total') > 0
+    }
   }
-}
 
-function renderCard(cap, expanded) {
-  const cls = `card status-${cap.status}${expanded ? ' expanded' : ''}`
-  const statusLabel = cap.status === 'ok' ? 'ready' : cap.status === 'warning' ? 'warning' : 'missing'
+  // ── SetupApp Feature — central orchestrator ──
+  class SetupApp extends Feature {
+    static shortcut = 'features.setupApp'
+    static { Feature.register(this, 'setupApp') }
 
-  let bodyHtml = `<div class="card-description">${esc(cap.description)}</div>`
-  bodyHtml += `<div class="card-details">${esc(cap.details)}</div>`
+    static stateSchema = {
+      initialized: { type: 'boolean', default: false },
+      refreshing: { type: 'boolean', default: false },
+    }
 
-  // If it has an envKey, show input
-  if (cap.envKey && cap.status !== 'ok') {
-    bodyHtml += `
-      <div class="env-input-row">
-        <input type="password" class="env-input" id="env-${cap.envKey}"
-               placeholder="Paste ${cap.envKey}" onfocus="this.type='text'" onblur="this.type='password'">
-        <button class="save-btn" onclick="saveEnv('${cap.envKey}')">save</button>
-        <span class="save-ok" id="ok-${cap.envKey}">✓</span>
+    static eventsSchema = {
+      'ready': 'App fully initialized with first data load',
+      'refresh:start': 'Refresh cycle started',
+      'refresh:end': 'Refresh cycle completed',
+      'env:saved': 'Env key saved and recheck triggered',
+    }
+
+    get api() { return this.container.feature('setupApi') }
+    get store() { return this.container.feature('setupStore') }
+
+    /** Refresh system status from the server and update the store */
+    async refresh() {
+      this.state.set('refreshing', true)
+      this.emit('refresh:start')
+      try {
+        const data = await this.api.fetchStatus()
+        this.store.load(data)
+      } catch (err) {
+        console.error('[setup] refresh failed:', err)
+      } finally {
+        this.state.set('refreshing', false)
+        this.emit('refresh:end')
+      }
+    }
+
+    /** Save an environment variable and recheck after a short delay */
+    async saveEnv(key, value) {
+      const ok = await this.api.saveEnvKey(key, value)
+      if (ok) {
+        this.emit('env:saved', { key })
+        setTimeout(() => this.refresh(), 500)
+      }
+      return ok
+    }
+
+    /** Start the app — performs the initial status check */
+    async start() {
+      await this.refresh()
+      this.state.set('initialized', true)
+      this.emit('ready')
+    }
+
+    /** Return a snapshot of the entire app state for debugging / automation */
+    snapshot() {
+      return {
+        initialized: this.state.get('initialized'),
+        refreshing: this.state.get('refreshing'),
+        ready: this.store.state.get('ready'),
+        total: this.store.state.get('total'),
+        pct: this.store.state.get('pct'),
+        allGood: this.store.allGood,
+        groups: this.store.getGrouped().map(g => ({
+          key: g.key,
+          label: g.label,
+          count: g.items.length,
+        })),
+        missing: this.store.byStatus('missing').map(c => c.capability),
+        warnings: this.store.byStatus('warning').map(c => c.capability),
+      }
+    }
+  }
+
+  // ── Get feature instances ──
+  const app = container.feature('setupApp')
+  const store = container.feature('setupStore')
+
+  window.app = app
+  window.luca = container
+
+  // ── UI Helpers ──
+  function esc(str) {
+    if (!str) return ''
+    const d = document.createElement('div')
+    d.textContent = str
+    return d.innerHTML
+  }
+
+  function renderCard(cap, expanded) {
+    const cls = `card status-${cap.status}${expanded ? ' expanded' : ''}`
+    const statusLabel = cap.status === 'ok' ? 'ready' : cap.status === 'warning' ? 'warning' : 'missing'
+
+    let bodyHtml = `<div class="card-description">${esc(cap.description)}</div>`
+    bodyHtml += `<div class="card-details">${esc(cap.details)}</div>`
+
+    if (cap.envKey && cap.status !== 'ok') {
+      bodyHtml += `
+        <div class="env-input-row">
+          <input type="password" class="env-input" id="env-${cap.envKey}"
+                 placeholder="Paste ${cap.envKey}">
+          <button class="save-btn" data-env-key="${cap.envKey}">save</button>
+          <span class="save-ok" id="ok-${cap.envKey}">&#10003;</span>
+        </div>`
+    }
+
+    if (cap.action && !cap.envKey) {
+      bodyHtml += `
+        <div class="card-action">
+          <div class="cmd-block"><code>${esc(cap.action)}</code></div>
+          <button class="copy-btn" data-copy="${esc(cap.action)}">copy</button>
+        </div>`
+    }
+
+    return `
+      <div class="${cls}" data-capability="${cap.capability}">
+        <div class="card-header">
+          <span class="status-dot ${cap.status}"></span>
+          <span class="card-title">${esc(cap.title)}</span>
+          <span class="card-status-text">${statusLabel}</span>
+          <span class="card-chevron">&#9654;</span>
+        </div>
+        <div class="card-body">${bodyHtml}</div>
       </div>`
   }
 
-  // If it has an action command, show copy block
-  if (cap.action && !cap.envKey) {
-    bodyHtml += `
-      <div class="card-action">
-        <div class="cmd-block"><code>${esc(cap.action)}</code></div>
-        <button class="copy-btn" onclick="copyCmd(this, '${esc(cap.action)}')">copy</button>
-      </div>`
+  function renderAll() {
+    const ready = store.state.get('ready')
+    const total = store.state.get('total')
+    const pct = store.state.get('pct')
+
+    document.getElementById('readyCount').innerHTML =
+      `<span class="count">${ready}</span> of <span class="count">${total}</span> ready`
+    document.getElementById('progressText').textContent =
+      ready === total ? 'All systems go' : `${ready} of ${total} capabilities ready`
+    document.getElementById('progressPct').textContent = `${pct}%`
+
+    const fill = document.getElementById('progressFill')
+    fill.style.width = `${pct}%`
+    fill.className = 'progress-fill' + (store.allGood ? ' all-good' : '')
+
+    const groups = store.getGrouped()
+    let html = ''
+    for (const group of groups) {
+      html += `<div class="section-group">`
+      html += `<div class="section-title">${group.label}</div>`
+      for (const cap of group.items) {
+        html += renderCard(cap, cap.status !== 'ok')
+      }
+      html += `</div>`
+    }
+    document.getElementById('content').innerHTML = html
+
+    if (window.containerLink) {
+      containerLink.emit('setupProgress', {
+        ready, total,
+        capabilities: store.state.get('capabilities'),
+      })
+    }
   }
 
-  return `
-    <div class="${cls}" data-capability="${cap.capability}">
-      <div class="card-header" onclick="toggleCard(this)">
-        <span class="status-dot ${cap.status}"></span>
-        <span class="card-title">${esc(cap.title)}</span>
-        <span class="card-status-text">${statusLabel}</span>
-        <span class="card-chevron">▶</span>
-      </div>
-      <div class="card-body">${bodyHtml}</div>
-    </div>`
-}
+  // ── Event bindings ──
 
-function toggleCard(header) {
-  header.parentElement.classList.toggle('expanded')
-}
+  // Re-render when store data changes
+  store.on('data:updated', renderAll)
 
-function esc(str) {
-  if (!str) return ''
-  const d = document.createElement('div')
-  d.textContent = str
-  return d.innerHTML
-}
-
-async function copyCmd(btn, text) {
-  try {
-    await navigator.clipboard.writeText(text)
-    btn.classList.add('copied')
-    btn.textContent = 'copied!'
-    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'copy' }, 1500)
-  } catch { /* clipboard not available */ }
-}
-
-async function saveEnv(key) {
-  const input = document.getElementById(`env-${key}`)
-  const ok = document.getElementById(`ok-${key}`)
-  const value = input.value.trim()
-  if (!value) return
-
-  const res = await fetch('/api/env', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key, value }),
+  // Refresh button
+  app.on('refresh:start', () => {
+    const btn = document.getElementById('refreshBtn')
+    btn.classList.add('spinning')
+    btn.textContent = 'checking...'
   })
 
-  if (res.ok) {
-    input.classList.add('saved')
-    ok.classList.add('visible')
-    // Recheck after saving
-    setTimeout(() => refresh(), 500)
-  }
-}
+  app.on('refresh:end', () => {
+    const btn = document.getElementById('refreshBtn')
+    btn.classList.remove('spinning')
+    btn.textContent = 'recheck'
+  })
 
-// Initial load
-refresh()
+  document.getElementById('refreshBtn').addEventListener('click', () => app.refresh())
+
+  // Delegate click events on the content area
+  document.getElementById('content').addEventListener('click', async (e) => {
+    // Card header toggle
+    const header = e.target.closest('.card-header')
+    if (header) {
+      header.parentElement.classList.toggle('expanded')
+      return
+    }
+
+    // Copy button
+    const copyBtn = e.target.closest('.copy-btn')
+    if (copyBtn) {
+      const text = copyBtn.dataset.copy
+      try {
+        await navigator.clipboard.writeText(text)
+        copyBtn.classList.add('copied')
+        copyBtn.textContent = 'copied!'
+        setTimeout(() => { copyBtn.classList.remove('copied'); copyBtn.textContent = 'copy' }, 1500)
+      } catch { /* clipboard not available */ }
+      return
+    }
+
+    // Save env button
+    const saveBtn = e.target.closest('.save-btn')
+    if (saveBtn) {
+      const key = saveBtn.dataset.envKey
+      const input = document.getElementById(`env-${key}`)
+      const ok = document.getElementById(`ok-${key}`)
+      const value = input?.value?.trim()
+      if (!value) return
+
+      const success = await app.saveEnv(key, value)
+      if (success) {
+        input.classList.add('saved')
+        ok.classList.add('visible')
+      }
+      return
+    }
+  })
+
+  // Env input focus/blur for password reveal
+  document.getElementById('content').addEventListener('focusin', (e) => {
+    if (e.target.matches('.env-input')) e.target.type = 'text'
+  })
+  document.getElementById('content').addEventListener('focusout', (e) => {
+    if (e.target.matches('.env-input')) e.target.type = 'password'
+  })
+
+  // Remove inline onclick from refresh button (we use addEventListener above)
+  document.getElementById('refreshBtn').removeAttribute('onclick')
+
+  // Boot
+  await app.start()
 </script>
 </body>
 </html>

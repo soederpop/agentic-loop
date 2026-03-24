@@ -1,7 +1,6 @@
 ---
 title: Prompt Studio
 description: Author, preview, and run prompt documents with notebook-style code block execution
-port: 9320
 tags:
   - prompts
   - authoring

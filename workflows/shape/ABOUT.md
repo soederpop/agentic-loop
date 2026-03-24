@@ -1,7 +1,6 @@
 ---
 title: Shape
 description: Structured interview to flesh out ideas — moves them from spark/exploring to ready
-port: 9303
 tags:
   - ideas
   - interview

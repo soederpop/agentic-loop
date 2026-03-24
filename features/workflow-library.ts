@@ -13,7 +13,6 @@ export interface WorkflowInfo {
   name: string
   title: string
   description: string
-  port?: number
   tags: string[]
   folderPath: string
   hasServeHook: boolean
@@ -112,7 +111,6 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
           const meta = parsed.meta || {}
           info.title = meta.title || parsed.title || name
           info.description = meta.description || ''
-          info.port = meta.port
           info.tags = meta.tags || []
           info.raw = { ...meta, content: parsed.content }
         } catch {
@@ -161,7 +159,7 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
     }
   }
 
-  async runWorkflow(options: { name: string; port?: number }): Promise<{ url: string; pid?: number }> {
+  async runWorkflow(options: { name: string }): Promise<{ url: string; pid?: number }> {
     if (!this.isLoaded) await this.discover()
 
     const workflow = this.get(options.name)
@@ -173,12 +171,11 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
       throw new Error(`Workflow "${options.name}" has no luca.serve.ts — cannot run it as a server`)
     }
 
-    const basePort = options.port || workflow.port || 7700
     const networking = this.container.feature('networking')
-    const actualPort = await networking.findOpenPort(basePort)
+    const actualPort = await networking.findOpenPort(3001)
     const url = `http://localhost:${actualPort}`
 
-    const args = ['workflow', 'run', options.name, '--port', String(actualPort)]
+    const args = ['workflow', 'run', options.name]
 
     let resolvedPid: number | undefined
 

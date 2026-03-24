@@ -1,7 +1,6 @@
 ---
 title: Capture
 description: Quick idea capture interface — jot down ideas aligned to your goals with tags and descriptions
-port: 9300
 tags:
   - ideas
   - capture

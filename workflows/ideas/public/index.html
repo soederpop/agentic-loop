@@ -562,147 +562,299 @@
 
 <script type="module">
   const API = window.location.origin
-  let allIdeas = []
-  let allGoals = []
-  let allTags = []
-  let selectedId = null
-  let filters = { search: '', statuses: new Set(), goal: '', tag: '' }
 
-  // ── Load data ─────────────────────────
-  async function load() {
-    try {
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+  // ── Utility ─────────────────────────────
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return ''
+    text = text.replace(/^#\s+[^\n]+\n*/m, '')
+    let html = esc(text)
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => `<pre><code>${code.trim()}</code></pre>`)
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    html = html.replace(/^---$/gm, '<hr>')
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
+    html = html.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/gm, (_, headerRow, bodyRows) => {
+      const headers = headerRow.split('|').map(h => h.trim()).filter(Boolean)
+      const rows = bodyRows.trim().split('\n').map(r => r.split('|').map(c => c.trim()).filter(Boolean))
+      return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
+    })
+    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    html = html.replace(/\n\n+/g, '</p><p>')
+    html = '<p>' + html + '</p>'
+    html = html.replace(/<p>\s*<\/p>/g, '')
+    html = html.replace(/<p>\s*(<h[23]>)/g, '$1')
+    html = html.replace(/(<\/h[23]>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<pre>)/g, '$1')
+    html = html.replace(/(<\/pre>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<ul>)/g, '$1')
+    html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<table>)/g, '$1')
+    html = html.replace(/(<\/table>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<blockquote>)/g, '$1')
+    html = html.replace(/(<\/blockquote>)\s*<\/p>/g, '$1')
+    html = html.replace(/<p>\s*(<hr>)/g, '$1')
+    html = html.replace(/(<hr>)\s*<\/p>/g, '$1')
+    return html
+  }
+
+  // ═══════════════════════════════════════════
+  // Feature: IdeasApi — wraps all fetch() calls
+  // ═══════════════════════════════════════════
+  class IdeasApi extends Feature {
+    static shortcut = 'features.ideasApi'
+    static { Feature.register(this, 'ideasApi') }
+
+    /** Fetch all ideas and goals from the backend */
+    async fetchIdeas() {
       const res = await fetch(`${API}/api/ideas`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      allIdeas = data.ideas
-      allGoals = data.goals
+      this.emit('ideas:fetched', data)
+      return data
+    }
+  }
 
-      // Collect all unique tags
+  // ═══════════════════════════════════════════
+  // Feature: IdeasStore — data, filtering, sorting
+  // ═══════════════════════════════════════════
+  class IdeasStore extends Feature {
+    static shortcut = 'features.ideasStore'
+    static { Feature.register(this, 'ideasStore') }
+
+    static STATUS_ORDER = { exploring: 0, spark: 1, ready: 2, parked: 3, promoted: 4 }
+    static STATUSES = ['spark', 'exploring', 'ready', 'parked', 'promoted']
+
+    _ideas = []
+    _goals = []
+    _tags = []
+    _selectedId = null
+    _filters = { search: '', statuses: new Set(), goal: '', tag: '' }
+
+    get ideas() { return this._ideas }
+    get goals() { return this._goals }
+    get tags() { return this._tags }
+    get selectedId() { return this._selectedId }
+    get filters() { return this._filters }
+
+    /** Load raw data from the API response */
+    setData(data) {
+      this._ideas = data.ideas || []
+      this._goals = data.goals || []
       const tagSet = new Set()
-      for (const idea of allIdeas) {
+      for (const idea of this._ideas) {
         for (const t of idea.tags) tagSet.add(t)
       }
-      allTags = [...tagSet].sort()
+      this._tags = [...tagSet].sort()
 
-      document.getElementById('total-count').textContent = allIdeas.length
-      buildFilters()
-      renderSummary()
-      renderList()
-    } catch (err) {
-      console.error('Failed to load ideas:', err)
-      document.getElementById('ideas-list').innerHTML =
-        '<div class="empty-state">Failed to load ideas</div>'
+      this.state.set('totalCount', this._ideas.length)
+      this.state.set('goalCount', this._goals.length)
+      this.state.set('tagCount', this._tags.length)
+      this.emit('data:loaded')
+    }
+
+    /** Get status counts across all ideas */
+    statusCounts() {
+      const counts = {}
+      for (const idea of this._ideas) {
+        counts[idea.status] = (counts[idea.status] || 0) + 1
+      }
+      return counts
+    }
+
+    /** Get filtered and sorted ideas */
+    getFiltered() {
+      const f = this._filters
+      return this._ideas
+        .filter(idea => {
+          if (f.search) {
+            const haystack = (idea.title + ' ' + idea.body + ' ' + (idea.tags || []).join(' ')).toLowerCase()
+            if (!haystack.includes(f.search)) return false
+          }
+          if (f.statuses.size > 0 && !f.statuses.has(idea.status)) return false
+          if (f.goal && idea.goal !== f.goal) return false
+          if (f.tag && !(idea.tags || []).includes(f.tag)) return false
+          return true
+        })
+        .sort((a, b) => (IdeasStore.STATUS_ORDER[a.status] ?? 5) - (IdeasStore.STATUS_ORDER[b.status] ?? 5))
+    }
+
+    /** Check whether any filter is active */
+    hasActiveFilters() {
+      const f = this._filters
+      return !!(f.search || f.statuses.size > 0 || f.goal || f.tag)
+    }
+
+    /** Update a single filter field and emit */
+    setFilter(key, value) {
+      this._filters[key] = value
+      this.state.set('hasFilters', this.hasActiveFilters())
+      this.emit('filters:changed')
+    }
+
+    /** Toggle a status in the status set */
+    toggleStatus(status) {
+      if (this._filters.statuses.has(status)) {
+        this._filters.statuses.delete(status)
+      } else {
+        this._filters.statuses.add(status)
+      }
+      this.state.set('hasFilters', this.hasActiveFilters())
+      this.emit('filters:changed')
+      return this._filters.statuses.has(status)
+    }
+
+    /** Reset all filters */
+    clearFilters() {
+      this._filters = { search: '', statuses: new Set(), goal: '', tag: '' }
+      this.state.set('hasFilters', false)
+      this.emit('filters:cleared')
+      this.emit('filters:changed')
+    }
+
+    /** Select an idea by id */
+    selectIdea(id) {
+      this._selectedId = id
+      const idea = this._ideas.find(i => i.id === id)
+      this.state.set('selectedId', id)
+      this.emit('idea:selected', idea)
+      return idea
+    }
+
+    /** Find an idea by id */
+    findById(id) {
+      return this._ideas.find(i => i.id === id)
+    }
+
+    /** Navigate to next/previous idea in the filtered list */
+    navigate(direction) {
+      const filtered = this.getFiltered()
+      if (filtered.length === 0) return null
+      const idx = filtered.findIndex(i => i.id === this._selectedId)
+      let next
+      if (direction === 'next') {
+        next = filtered[idx + 1] || filtered[0]
+      } else {
+        next = filtered[idx - 1] || filtered[filtered.length - 1]
+      }
+      return next ? this.selectIdea(next.id) : null
     }
   }
 
-  // ── Build filter UI ───────────────────
-  function buildFilters() {
-    const statusContainer = document.getElementById('status-filters')
-    const statuses = ['spark', 'exploring', 'ready', 'parked', 'promoted']
-    statusContainer.innerHTML = statuses.map(s => `
-      <button class="filter-btn ${s}" data-status="${s}">${s}</button>
-    `).join('')
+  // ═══════════════════════════════════════════
+  // Feature: IdeasApp — central orchestrator
+  // ═══════════════════════════════════════════
+  class IdeasApp extends Feature {
+    static shortcut = 'features.ideasApp'
+    static { Feature.register(this, 'ideasApp') }
 
-    statusContainer.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-status]')
-      if (!btn) return
-      const status = btn.dataset.status
-      if (filters.statuses.has(status)) {
-        filters.statuses.delete(status)
-        btn.classList.remove('active')
-      } else {
-        filters.statuses.add(status)
-        btn.classList.add('active')
-      }
-      applyFilters()
-    })
+    get api() { return this.container.feature('ideasApi') }
+    get store() { return this.container.feature('ideasStore') }
 
-    // Goal dropdown
-    const goalSelect = document.getElementById('goal-filter')
-    for (const g of allGoals) {
-      const opt = document.createElement('option')
-      opt.value = g.id
-      opt.textContent = g.title
-      goalSelect.appendChild(opt)
+    async afterInitialize() {
+      this.state.set('ready', false)
     }
-    goalSelect.addEventListener('change', () => {
-      filters.goal = goalSelect.value
-      applyFilters()
-    })
 
-    // Tag buttons (show top 12)
-    const tagContainer = document.getElementById('tag-filters')
-    const displayTags = allTags.slice(0, 12)
-    tagContainer.innerHTML = displayTags.map(t => `
-      <button class="tag-btn" data-tag="${esc(t)}">${esc(t)}</button>
-    `).join('')
-
-    tagContainer.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-tag]')
-      if (!btn) return
-      const tag = btn.dataset.tag
-      if (filters.tag === tag) {
-        filters.tag = ''
-        btn.classList.remove('active')
-      } else {
-        // Deactivate previous
-        tagContainer.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'))
-        filters.tag = tag
-        btn.classList.add('active')
+    /** Load ideas from the API and populate the store */
+    async load() {
+      try {
+        const data = await this.api.fetchIdeas()
+        this.store.setData(data)
+        this.emit('loaded')
+      } catch (err) {
+        console.error('Failed to load ideas:', err)
+        this.emit('error', err)
       }
-      applyFilters()
-    })
+    }
 
-    // Search
-    document.getElementById('search').addEventListener('input', (e) => {
-      filters.search = e.target.value.toLowerCase()
-      applyFilters()
-    })
+    /** Reload data (e.g. on tab focus) */
+    async refresh() {
+      await this.load()
+    }
 
-    // Clear
-    document.getElementById('clear-filters').addEventListener('click', () => {
-      filters = { search: '', statuses: new Set(), goal: '', tag: '' }
-      document.getElementById('search').value = ''
-      document.getElementById('goal-filter').value = ''
-      document.querySelectorAll('.filter-btn, .tag-btn').forEach(b => b.classList.remove('active'))
-      applyFilters()
-    })
-  }
+    /** Select an idea by id */
+    selectIdea(id) {
+      return this.store.selectIdea(id)
+    }
 
-  // ── Apply filters ─────────────────────
-  function getFiltered() {
-    return allIdeas.filter(idea => {
-      if (filters.search) {
-        const haystack = (idea.title + ' ' + idea.body + ' ' + (idea.tags || []).join(' ')).toLowerCase()
-        if (!haystack.includes(filters.search)) return false
+    /** Navigate to next or previous idea */
+    navigate(direction) {
+      return this.store.navigate(direction)
+    }
+
+    /** Set a filter and trigger re-render */
+    setFilter(key, value) {
+      this.store.setFilter(key, value)
+    }
+
+    /** Toggle a status filter */
+    toggleStatus(status) {
+      return this.store.toggleStatus(status)
+    }
+
+    /** Clear all filters */
+    clearFilters() {
+      this.store.clearFilters()
+    }
+
+    /** Start the app — call after UI bindings are in place */
+    async start() {
+      await this.load()
+      this.state.set('ready', true)
+      this.emit('ready')
+    }
+
+    /** Return a snapshot of current app state for debugging/automation */
+    snapshot() {
+      const store = this.store
+      const filtered = store.getFiltered()
+      return {
+        ready: this.state.get('ready'),
+        totalIdeas: store.ideas.length,
+        filteredCount: filtered.length,
+        selectedId: store.selectedId,
+        filters: {
+          search: store.filters.search,
+          statuses: [...store.filters.statuses],
+          goal: store.filters.goal,
+          tag: store.filters.tag,
+        },
+        statusCounts: store.statusCounts(),
+        goalCount: store.goals.length,
+        tagCount: store.tags.length,
       }
-      if (filters.statuses.size > 0 && !filters.statuses.has(idea.status)) return false
-      if (filters.goal && idea.goal !== filters.goal) return false
-      if (filters.tag && !(idea.tags || []).includes(filters.tag)) return false
-      return true
-    })
+    }
   }
 
-  function applyFilters() {
-    const hasFilters = filters.search || filters.statuses.size > 0 || filters.goal || filters.tag
-    document.getElementById('clear-filters').style.display = hasFilters ? '' : 'none'
+  // ═══════════════════════════════════════════
+  // Boot features and bind UI
+  // ═══════════════════════════════════════════
+  const app = container.feature('ideasApp')
+  const store = container.feature('ideasStore')
 
-    const filtered = getFiltered()
-    document.getElementById('filter-info').textContent = hasFilters
-      ? `showing ${filtered.length} of ${allIdeas.length}`
-      : ''
-    renderList(filtered)
-  }
+  window.app = app
+  window.luca = container
 
-  // ── Summary bar ───────────────────────
+  // ── Render helpers ──────────────────────
+
   function renderSummary() {
-    const counts = {}
-    for (const idea of allIdeas) {
-      counts[idea.status] = (counts[idea.status] || 0) + 1
-    }
-
+    const counts = store.statusCounts()
     const bar = document.getElementById('summary-bar')
-    const statuses = ['spark', 'exploring', 'ready', 'parked', 'promoted']
-    bar.innerHTML = statuses.map(s => `
+    bar.innerHTML = IdeasStore.STATUSES.map(s => `
       <div class="summary-stat ${s}">
         <span class="num">${counts[s] || 0}</span>
         <span>${s}</span>
@@ -710,19 +862,15 @@
     `).join('')
   }
 
-  // ── Render list ───────────────────────
-  function renderList(ideas) {
-    ideas = ideas || getFiltered()
+  function renderList() {
+    const ideas = store.getFiltered()
+    const selectedId = store.selectedId
     const list = document.getElementById('ideas-list')
 
     if (ideas.length === 0) {
       list.innerHTML = '<div class="empty-state">No ideas match your filters<div class="hint">Try adjusting your search or filters</div></div>'
       return
     }
-
-    // Sort: exploring first, then spark, ready, parked, promoted
-    const order = { exploring: 0, spark: 1, ready: 2, parked: 3, promoted: 4 }
-    ideas.sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5))
 
     list.innerHTML = ideas.map(idea => `
       <div class="idea-row ${idea.id === selectedId ? 'selected' : ''}" data-id="${esc(idea.id)}">
@@ -738,25 +886,22 @@
       </div>
     `).join('')
 
-    // Click handlers
     list.querySelectorAll('.idea-row').forEach(row => {
       row.addEventListener('click', () => {
-        const id = row.dataset.id
-        selectedId = id
-        list.querySelectorAll('.idea-row').forEach(r => r.classList.remove('selected'))
-        row.classList.add('selected')
-        renderDetail(allIdeas.find(i => i.id === id))
+        app.selectIdea(row.dataset.id)
       })
     })
   }
 
-  // ── Render detail ─────────────────────
   function renderDetail(idea) {
     const panel = document.getElementById('detail-panel')
+    if (!idea) {
+      panel.classList.add('empty')
+      panel.innerHTML = '<div class="empty-state">Select an idea to view details</div>'
+      return
+    }
     panel.classList.remove('empty')
-
     const bodyHtml = renderMarkdown(idea.body)
-
     panel.innerHTML = `
       <div class="detail-header">
         <div class="detail-title">${esc(idea.title)}</div>
@@ -770,132 +915,144 @@
     `
   }
 
-  // ── Simple markdown renderer ──────────
-  function renderMarkdown(text) {
-    if (!text) return ''
-
-    // Remove the H1 title line (it's already in the header)
-    text = text.replace(/^#\s+[^\n]+\n*/m, '')
-
-    let html = esc(text)
-
-    // Code blocks (must be before inline code)
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      return `<pre><code>${code.trim()}</code></pre>`
-    })
-
-    // Headers
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-
-    // Bold and italic
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
-
-    // Inline code
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-
-    // Links
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-
-    // Horizontal rules
-    html = html.replace(/^---$/gm, '<hr>')
-
-    // Unordered lists
-    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-    html = html.replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
-
-    // Tables
-    html = html.replace(/^\|(.+)\|\n\|[-| :]+\|\n((?:\|.+\|\n?)*)/gm, (_, headerRow, bodyRows) => {
-      const headers = headerRow.split('|').map(h => h.trim()).filter(Boolean)
-      const rows = bodyRows.trim().split('\n').map(r =>
-        r.split('|').map(c => c.trim()).filter(Boolean)
-      )
-      return `<table><thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`
-    })
-
-    // Blockquotes
-    html = html.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-
-    // Paragraphs (double newline)
-    html = html.replace(/\n\n+/g, '</p><p>')
-    html = '<p>' + html + '</p>'
-
-    // Clean up empty paragraphs and paragraphs wrapping block elements
-    html = html.replace(/<p>\s*<\/p>/g, '')
-    html = html.replace(/<p>\s*(<h[23]>)/g, '$1')
-    html = html.replace(/(<\/h[23]>)\s*<\/p>/g, '$1')
-    html = html.replace(/<p>\s*(<pre>)/g, '$1')
-    html = html.replace(/(<\/pre>)\s*<\/p>/g, '$1')
-    html = html.replace(/<p>\s*(<ul>)/g, '$1')
-    html = html.replace(/(<\/ul>)\s*<\/p>/g, '$1')
-    html = html.replace(/<p>\s*(<table>)/g, '$1')
-    html = html.replace(/(<\/table>)\s*<\/p>/g, '$1')
-    html = html.replace(/<p>\s*(<blockquote>)/g, '$1')
-    html = html.replace(/(<\/blockquote>)\s*<\/p>/g, '$1')
-    html = html.replace(/<p>\s*(<hr>)/g, '$1')
-    html = html.replace(/(<hr>)\s*<\/p>/g, '$1')
-
-    return html
+  function renderFilterInfo() {
+    const hasFilters = store.hasActiveFilters()
+    document.getElementById('clear-filters').style.display = hasFilters ? '' : 'none'
+    const filtered = store.getFiltered()
+    document.getElementById('filter-info').textContent = hasFilters
+      ? `showing ${filtered.length} of ${store.ideas.length}`
+      : ''
   }
 
-  // ── Utilities ─────────────────────────
-  function esc(str) {
-    const d = document.createElement('div')
-    d.textContent = String(str || '')
-    return d.innerHTML
+  function buildFilterUI() {
+    // Status buttons
+    const statusContainer = document.getElementById('status-filters')
+    statusContainer.innerHTML = IdeasStore.STATUSES.map(s => `
+      <button class="filter-btn ${s}" data-status="${s}">${s}</button>
+    `).join('')
+
+    statusContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-status]')
+      if (!btn) return
+      const isActive = app.toggleStatus(btn.dataset.status)
+      btn.classList.toggle('active', isActive)
+    })
+
+    // Goal dropdown
+    const goalSelect = document.getElementById('goal-filter')
+    goalSelect.innerHTML = '<option value="">All goals</option>'
+    for (const g of store.goals) {
+      const opt = document.createElement('option')
+      opt.value = g.id
+      opt.textContent = g.title
+      goalSelect.appendChild(opt)
+    }
+    goalSelect.addEventListener('change', () => {
+      app.setFilter('goal', goalSelect.value)
+    })
+
+    // Tag buttons (top 12)
+    const tagContainer = document.getElementById('tag-filters')
+    const displayTags = store.tags.slice(0, 12)
+    tagContainer.innerHTML = displayTags.map(t => `
+      <button class="tag-btn" data-tag="${esc(t)}">${esc(t)}</button>
+    `).join('')
+
+    tagContainer.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-tag]')
+      if (!btn) return
+      const tag = btn.dataset.tag
+      if (store.filters.tag === tag) {
+        app.setFilter('tag', '')
+        btn.classList.remove('active')
+      } else {
+        tagContainer.querySelectorAll('.tag-btn').forEach(b => b.classList.remove('active'))
+        app.setFilter('tag', tag)
+        btn.classList.add('active')
+      }
+    })
+
+    // Search
+    document.getElementById('search').addEventListener('input', (e) => {
+      app.setFilter('search', e.target.value.toLowerCase())
+    })
+
+    // Clear
+    document.getElementById('clear-filters').addEventListener('click', () => {
+      app.clearFilters()
+      document.getElementById('search').value = ''
+      document.getElementById('goal-filter').value = ''
+      document.querySelectorAll('.filter-btn, .tag-btn').forEach(b => b.classList.remove('active'))
+    })
   }
 
-  // ── Keyboard nav ──────────────────────
+  // ── Bind feature events to UI ───────────
+
+  store.on('data:loaded', () => {
+    document.getElementById('total-count').textContent = store.ideas.length
+    buildFilterUI()
+    renderSummary()
+    renderList()
+  })
+
+  store.on('filters:changed', () => {
+    renderFilterInfo()
+    renderList()
+  })
+
+  store.on('filters:cleared', () => {
+    renderFilterInfo()
+    renderList()
+  })
+
+  store.on('idea:selected', (idea) => {
+    renderDetail(idea)
+    // Update selected row in list
+    const list = document.getElementById('ideas-list')
+    list.querySelectorAll('.idea-row').forEach(r => {
+      r.classList.toggle('selected', r.dataset.id === store.selectedId)
+      if (r.dataset.id === store.selectedId) r.scrollIntoView({ block: 'nearest' })
+    })
+  })
+
+  app.on('error', () => {
+    document.getElementById('ideas-list').innerHTML =
+      '<div class="empty-state">Failed to load ideas</div>'
+  })
+
+  // ── Keyboard nav ────────────────────────
+
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
 
-    const filtered = getFiltered()
-    const order = { exploring: 0, spark: 1, ready: 2, parked: 3, promoted: 4 }
-    filtered.sort((a, b) => (order[a.status] ?? 5) - (order[b.status] ?? 5))
-
     if (e.key === 'ArrowDown' || e.key === 'j') {
       e.preventDefault()
-      const idx = filtered.findIndex(i => i.id === selectedId)
-      const next = filtered[idx + 1] || filtered[0]
-      if (next) selectIdea(next.id)
+      app.navigate('next')
     } else if (e.key === 'ArrowUp' || e.key === 'k') {
       e.preventDefault()
-      const idx = filtered.findIndex(i => i.id === selectedId)
-      const prev = filtered[idx - 1] || filtered[filtered.length - 1]
-      if (prev) selectIdea(prev.id)
+      app.navigate('prev')
     } else if (e.key === '/') {
       e.preventDefault()
       document.getElementById('search').focus()
     } else if (e.key === 'Escape') {
       document.getElementById('search').blur()
-      filters.search = ''
+      app.setFilter('search', '')
       document.getElementById('search').value = ''
-      applyFilters()
     }
   })
 
-  function selectIdea(id) {
-    selectedId = id
-    const list = document.getElementById('ideas-list')
-    list.querySelectorAll('.idea-row').forEach(r => {
-      r.classList.toggle('selected', r.dataset.id === id)
-      if (r.dataset.id === id) r.scrollIntoView({ block: 'nearest' })
-    })
-    renderDetail(allIdeas.find(i => i.id === id))
-  }
+  // ── Auto-refresh on focus ───────────────
 
-  // ── Auto-refresh on focus ─────────────
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) load()
+    if (!document.hidden) app.refresh()
   })
 
   window.addEventListener('message', (e) => {
-    if (e.data && e.data.type === 'stateChange') load()
+    if (e.data && e.data.type === 'stateChange') app.refresh()
   })
 
-  // ── Boot ──────────────────────────────
-  load()
+  // ── Start ───────────────────────────────
+  await app.start()
 </script>
 </body>
 </html>

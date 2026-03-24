@@ -1,7 +1,6 @@
 ---
 title: Status Briefing
 description: Live read-only dashboard showing goals, idea funnel, projects, and recent activity
-port: 9302
 tags:
   - dashboard
   - status

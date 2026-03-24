@@ -1,7 +1,6 @@
 ---
 title: Ideas
 description: Browse, filter, and read all of your ideas in one place
-port: 9306
 tags:
   - ideas
   - browse

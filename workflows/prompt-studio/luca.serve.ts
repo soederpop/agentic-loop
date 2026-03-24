@@ -5,7 +5,7 @@
  * Includes a server-side VM for running code blocks and a streaming endpoint for `luca prompt`.
  *
  * Usage:
- *   luca serve --setup workflows/prompt-studio/luca.serve.ts --staticDir workflows/prompt-studio/public --endpoints-dir workflows/prompt-studio/endpoints --port 9320
+ *   luca serve --setup workflows/prompt-studio/luca.serve.ts --staticDir workflows/prompt-studio/public --endpoints-dir workflows/prompt-studio/endpoints --any-port
  */
 
 export default async function setup(server: any) {

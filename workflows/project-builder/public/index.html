@@ -710,12 +710,651 @@
 
 <script type="module">
   const API = window.location.origin
-  let projects = []
-  let currentProject = null
-  let buildStatus = 'idle'
-  let planDeltas = {}
 
-  // ── DOM refs ──
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+
+  // Get Feature base class from the registry
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+  // ── Shared helpers (pure functions, no state) ──
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
+  }
+
+  function badgeHTML(status) {
+    const s = String(status || 'unknown').toLowerCase()
+    return `<span class="badge badge-${s.replace(/\s+/g, '_')}">${esc(s)}</span>`
+  }
+
+  function statusColor(status) {
+    const map = {
+      pending: 'var(--warning)',
+      approved: 'var(--accent)',
+      building: 'var(--purple)',
+      in_progress: 'var(--purple)',
+      running: 'var(--warning)',
+      completed: 'var(--success)',
+      failed: 'var(--error)',
+      error: 'var(--error)',
+      rejected: 'var(--error)',
+      draft: 'var(--blue)',
+      reviewing: 'var(--blue)',
+      queued: 'var(--blue)',
+      skipped: 'var(--text-dim)',
+      ready: 'var(--accent)',
+    }
+    return map[status] || 'var(--text-faint)'
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return ''
+    if (Array.isArray(text)) return '<ul>' + text.map(item => `<li>${esc(item)}</li>`).join('') + '</ul>'
+
+    let html = esc(text)
+
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+
+    html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>')
+    html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, (m) => {
+      return '<ol>' + m.replace(/<\/?oli>/g, (t) => t.replace('oli', 'li')) + '</ol>'
+    })
+
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+
+    html = html.replace(/\n\n/g, '</p><p>')
+    html = '<p>' + html + '</p>'
+
+    html = html.replace(/<p><\/p>/g, '')
+    html = html.replace(/<p>(<h[23]>)/g, '$1')
+    html = html.replace(/(<\/h[23]>)<\/p>/g, '$1')
+    html = html.replace(/<p>(<[uo]l>)/g, '$1')
+    html = html.replace(/(<\/[uo]l>)<\/p>/g, '$1')
+
+    return html
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 1: ApiClient — wraps all fetch() calls to backend
+  // ═══════════════════════════════════════════════════════════════════
+  class ApiClient extends Feature {
+    static shortcut = 'features.apiClient'
+    static stateSchema = { loading: 'boolean' }
+    static eventsSchema = {
+      'request:start': { endpoint: 'string' },
+      'request:end': { endpoint: 'string' },
+      'request:error': { endpoint: 'string', error: 'string' },
+    }
+    static { Feature.register(this, 'apiClient') }
+
+    async afterInitialize() {
+      this.state.set('loading', false)
+    }
+
+    /** Fetch all projects with their plans */
+    async fetchProjects() {
+      return this._get('/api/projects')
+    }
+
+    /** Fetch a single project by slug */
+    async fetchProject(slug) {
+      return this._get(`/api/project/${slug}`)
+    }
+
+    /** Fetch available assistants */
+    async fetchAssistants() {
+      return this._get('/api/assistants')
+    }
+
+    /** Fetch build status for a project */
+    async fetchBuildStatus(slug) {
+      return this._get(`/api/build/${slug}`)
+    }
+
+    async _get(endpoint) {
+      this.state.set('loading', true)
+      this.emit('request:start', { endpoint })
+      try {
+        const res = await fetch(`${API}${endpoint}`)
+        const data = await res.json()
+        this.emit('request:end', { endpoint })
+        return data
+      } catch (err) {
+        this.emit('request:error', { endpoint, error: err.message })
+        throw err
+      } finally {
+        this.state.set('loading', false)
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 2: ProjectStore — manages project data & selection
+  // ═══════════════════════════════════════════════════════════════════
+  class ProjectStore extends Feature {
+    static shortcut = 'features.projectStore'
+    static stateSchema = {
+      projectCount: 'number',
+      currentSlug: 'string',
+    }
+    static eventsSchema = {
+      'projects:loaded': { count: 'number' },
+      'project:selected': { slug: 'string' },
+      'project:refreshed': { slug: 'string' },
+    }
+    static { Feature.register(this, 'projectStore') }
+
+    _projects = []
+    _current = null
+    _planDeltas = {}
+
+    async afterInitialize() {
+      this.state.set('projectCount', 0)
+      this.state.set('currentSlug', '')
+    }
+
+    get projects() { return this._projects }
+    get current() { return this._current }
+    get planDeltas() { return this._planDeltas }
+
+    /** Load all projects from the API */
+    async loadProjects() {
+      const api = container.feature('apiClient')
+      const data = await api.fetchProjects()
+      this._projects = data.projects || []
+      this.state.set('projectCount', this._projects.length)
+      this.emit('projects:loaded', { count: this._projects.length })
+      return this._projects
+    }
+
+    /** Select a project by slug */
+    selectProject(slug) {
+      const project = this._projects.find(p => p.slug === slug)
+      if (!project) return null
+      this._current = project
+      this._planDeltas = {}
+      this.state.set('currentSlug', slug)
+      this.emit('project:selected', { slug })
+      return project
+    }
+
+    /** Refresh the current project from the API */
+    async refreshCurrent() {
+      if (!this._current) return null
+      const api = container.feature('apiClient')
+      const project = await api.fetchProject(this._current.slug)
+      const idx = this._projects.findIndex(p => p.slug === project.slug)
+      if (idx >= 0) this._projects[idx] = project
+      this._current = project
+      this.emit('project:refreshed', { slug: project.slug })
+      return project
+    }
+
+    /** Update a plan's status in the current project */
+    updatePlanStatus(planId, status, extra) {
+      if (!this._current) return
+      const plan = this._current.plans.find(p => p.id === planId)
+      if (!plan) return
+      plan.status = status
+      if (extra?.costUsd != null) plan.costUsd = extra.costUsd
+      if (extra?.turns != null) plan.turns = extra.turns
+      if (extra?.toolCalls != null) plan.toolCalls = extra.toolCalls
+    }
+
+    /** Append delta text for a plan (capped at 2000 chars) */
+    appendPlanDelta(planId, text) {
+      this._planDeltas[planId] = (this._planDeltas[planId] || '') + text
+      if (this._planDeltas[planId].length > 2000) {
+        this._planDeltas[planId] = this._planDeltas[planId].slice(-2000)
+      }
+    }
+
+    /** Get the delta text for a plan */
+    getPlanDelta(planId) {
+      return this._planDeltas[planId] || ''
+    }
+
+    /** Get a snapshot of the store */
+    snapshot() {
+      return {
+        projectCount: this._projects.length,
+        currentSlug: this._current?.slug || null,
+        currentTitle: this._current?.title || null,
+        planCount: this._current?.plans?.length || 0,
+        deltaKeys: Object.keys(this._planDeltas),
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 3: BuildManager — build lifecycle & events
+  // ═══════════════════════════════════════════════════════════════════
+  class BuildManager extends Feature {
+    static shortcut = 'features.buildManager'
+    static stateSchema = {
+      status: 'string',
+    }
+    static eventsSchema = {
+      'status:changed': { status: 'string' },
+      'plan:status': { planId: 'string', status: 'string' },
+      'plan:delta': { planId: 'string' },
+      'build:needs-refresh': {},
+    }
+    static { Feature.register(this, 'buildManager') }
+
+    async afterInitialize() {
+      this.state.set('status', 'idle')
+    }
+
+    get status() { return this.state.get('status') }
+
+    /** Set the build status and emit change */
+    setStatus(status) {
+      this.state.set('status', status)
+      this.emit('status:changed', { status })
+    }
+
+    /** Request a build start via the chat WebSocket */
+    startBuild(projectSlug) {
+      const chat = container.feature('chatManager')
+      chat.send({ type: 'build_action', action: 'start', projectSlug })
+    }
+
+    /** Request a build abort via the chat WebSocket */
+    abortBuild(projectSlug) {
+      const chat = container.feature('chatManager')
+      chat.send({ type: 'build_action', action: 'abort', projectSlug })
+    }
+
+    /** Handle an incoming build event from WebSocket */
+    handleEvent(msg) {
+      const store = container.feature('projectStore')
+      const event = msg.event
+      const slug = msg.projectSlug
+
+      if (store.current && slug !== store.current.slug) return
+
+      switch (event) {
+        case 'build:start':
+          this.setStatus('running')
+          break
+        case 'build:complete':
+          this.setStatus('completed')
+          this.emit('build:needs-refresh')
+          break
+        case 'build:error':
+          this.setStatus('error')
+          this.emit('build:needs-refresh')
+          break
+        case 'build:aborting':
+          this.setStatus('aborting')
+          break
+        case 'build:aborted':
+          this.setStatus('ready')
+          this.emit('build:needs-refresh')
+          break
+        case 'plan:start':
+          store.updatePlanStatus(msg.planId, 'running')
+          this.emit('plan:status', { planId: msg.planId, status: 'running' })
+          break
+        case 'plan:delta':
+          store.appendPlanDelta(msg.planId, msg.text)
+          this.emit('plan:delta', { planId: msg.planId })
+          break
+        case 'plan:complete':
+          store.updatePlanStatus(msg.planId, 'completed', msg)
+          this.emit('plan:status', { planId: msg.planId, status: 'completed' })
+          break
+        case 'plan:error':
+          store.updatePlanStatus(msg.planId, 'error')
+          this.emit('plan:status', { planId: msg.planId, status: 'error' })
+          break
+        case 'plan:skipped':
+          store.updatePlanStatus(msg.planId, 'skipped')
+          this.emit('plan:status', { planId: msg.planId, status: 'skipped' })
+          break
+        case 'plan:queued':
+          store.updatePlanStatus(msg.planId, 'queued')
+          this.emit('plan:status', { planId: msg.planId, status: 'queued' })
+          break
+      }
+    }
+
+    snapshot() {
+      return { status: this.status }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 4: ChatManager — WebSocket, chat streaming, tool activity
+  // ═══════════════════════════════════════════════════════════════════
+  class ChatManager extends Feature {
+    static shortcut = 'features.chatManager'
+    static stateSchema = {
+      connected: 'boolean',
+      sessionReady: 'boolean',
+      streaming: 'boolean',
+      open: 'boolean',
+      selectedAssistant: 'string',
+      briefedProject: 'string',
+    }
+    static eventsSchema = {
+      'ws:connected': {},
+      'ws:disconnected': {},
+      'session:ready': {},
+      'session:error': { message: 'string' },
+      'chat:opened': {},
+      'chat:closed': {},
+      'assistants:loaded': { assistants: 'array' },
+      'assistant:changed': { id: 'string' },
+      'stream:start': {},
+      'stream:chunk': { text: 'string' },
+      'stream:end': { text: 'string' },
+      'tool:start': { id: 'string', name: 'string' },
+      'tool:end': { id: 'string', ok: 'boolean', durationMs: 'number', error: 'string' },
+      'chat:error': { message: 'string' },
+      'chat:briefing': { projectSlug: 'string' },
+      'build_chat:started': { projectSlug: 'string' },
+    }
+    static { Feature.register(this, 'chatManager') }
+
+    _ws = null
+    _sessionId = crypto.randomUUID()
+    _assistants = []
+    _reconnectTimer = null
+
+    async afterInitialize() {
+      this.state.set('connected', false)
+      this.state.set('sessionReady', false)
+      this.state.set('streaming', false)
+      this.state.set('open', false)
+      this.state.set('selectedAssistant', localStorage.getItem('pb-assistant') || '')
+      this.state.set('briefedProject', '')
+    }
+
+    get ws() { return this._ws }
+    get isConnected() { return this._ws && this._ws.readyState === WebSocket.OPEN }
+    get isStreaming() { return this.state.get('streaming') }
+    get isOpen() { return this.state.get('open') }
+    get isSessionReady() { return this.state.get('sessionReady') }
+    get assistants() { return this._assistants }
+    get briefedProject() { return this.state.get('briefedProject') }
+
+    /** Load available assistants from the API */
+    async loadAssistants() {
+      try {
+        const api = container.feature('apiClient')
+        const data = await api.fetchAssistants()
+        this._assistants = data.assistants || []
+        const stored = this.state.get('selectedAssistant')
+        if (!stored || !this._assistants.find(a => a.id === stored)) {
+          this.state.set('selectedAssistant', data.default || this._assistants[0]?.id || '')
+        }
+        this.emit('assistants:loaded', { assistants: this._assistants })
+        return this._assistants
+      } catch (_e) { return [] }
+    }
+
+    /** Change the selected assistant */
+    selectAssistant(id) {
+      this.state.set('selectedAssistant', id)
+      localStorage.setItem('pb-assistant', id)
+      this.emit('assistant:changed', { id })
+
+      if (this.isOpen && this._ws) {
+        this._sessionId = crypto.randomUUID()
+        this.state.set('sessionReady', false)
+        this.state.set('briefedProject', '')
+        this.send({ type: 'init', sessionId: this._sessionId, assistantId: id })
+      }
+    }
+
+    /** Open the chat drawer */
+    open() {
+      this.state.set('open', true)
+      this.emit('chat:opened')
+      if (!this.isConnected) this.connect()
+      // Brief if session is ready and we have a project
+      const store = container.feature('projectStore')
+      if (store.current && this.briefedProject !== store.current.slug && this.isSessionReady) {
+        this.startBuildChat(store.current.slug)
+      }
+    }
+
+    /** Close the chat drawer */
+    close() {
+      this.state.set('open', false)
+      this.emit('chat:closed')
+    }
+
+    /** Toggle the chat drawer */
+    toggle() {
+      if (this.isOpen) this.close()
+      else this.open()
+    }
+
+    /** Connect the WebSocket */
+    connect() {
+      this.state.set('sessionReady', false)
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+      this._ws = new WebSocket(`${proto}://${location.hostname}:${location.port}`)
+
+      this._ws.onopen = () => {
+        this.state.set('connected', true)
+        this.emit('ws:connected')
+        this.send({ type: 'init', sessionId: this._sessionId, assistantId: this.state.get('selectedAssistant') })
+      }
+
+      this._ws.onclose = () => {
+        this.state.set('connected', false)
+        this.state.set('sessionReady', false)
+        this.emit('ws:disconnected')
+        clearTimeout(this._reconnectTimer)
+        this._reconnectTimer = setTimeout(() => this.connect(), 2000)
+      }
+
+      this._ws.onerror = () => {}
+
+      this._ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data)
+        if (msg.type === 'build_event') {
+          container.feature('buildManager').handleEvent(msg)
+        } else {
+          this._handleChatMessage(msg)
+        }
+      }
+    }
+
+    /** Send a JSON message over WebSocket */
+    send(data) {
+      if (this.isConnected) {
+        this._ws.send(JSON.stringify(data))
+      }
+    }
+
+    /** Start a build chat briefing for a project */
+    startBuildChat(projectSlug) {
+      this.state.set('briefedProject', projectSlug)
+      this.state.set('streaming', false)
+      this.emit('chat:briefing', { projectSlug })
+      this.send({ type: 'start_build_chat', projectSlug })
+    }
+
+    /** Send a user chat message */
+    sendMessage(text) {
+      if (!text || this.isStreaming) return
+      this.send({ type: 'user_message', text })
+    }
+
+    _handleChatMessage(msg) {
+      switch (msg.type) {
+        case 'init_ok':
+          this.state.set('sessionReady', true)
+          this.emit('session:ready')
+          // Brief if chat is open and we have an unbriefed project
+          const store = container.feature('projectStore')
+          if (this.isOpen && store.current && this.briefedProject !== store.current.slug) {
+            this.startBuildChat(store.current.slug)
+          }
+          break
+
+        case 'init_error':
+          this.state.set('sessionReady', false)
+          this.emit('session:error', { message: msg.message })
+          break
+
+        case 'build_chat_started':
+          this.emit('build_chat:started', { projectSlug: msg.projectSlug })
+          break
+
+        case 'build_action_ok':
+          break
+
+        case 'assistant_message_start':
+          this.state.set('streaming', true)
+          this.emit('stream:start')
+          break
+
+        case 'chunk':
+          this.emit('stream:chunk', { text: msg.textDelta })
+          break
+
+        case 'tool_start':
+          this.emit('tool:start', { id: msg.id, name: msg.name })
+          break
+
+        case 'tool_end':
+          this.emit('tool:end', { id: msg.id, ok: msg.ok, durationMs: msg.durationMs, error: msg.error || '' })
+          break
+
+        case 'assistant_message_complete':
+          this.state.set('streaming', false)
+          this.emit('stream:end', { text: msg.text })
+          break
+
+        case 'error':
+          this.state.set('streaming', false)
+          this.emit('chat:error', { message: msg.message })
+          break
+      }
+    }
+
+    snapshot() {
+      return {
+        connected: this.isConnected,
+        sessionReady: this.isSessionReady,
+        streaming: this.isStreaming,
+        open: this.isOpen,
+        selectedAssistant: this.state.get('selectedAssistant'),
+        briefedProject: this.briefedProject,
+        assistantCount: this._assistants.length,
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 5: AppController — central orchestrator
+  // ═══════════════════════════════════════════════════════════════════
+  class AppController extends Feature {
+    static shortcut = 'features.appController'
+    static stateSchema = {
+      ready: 'boolean',
+    }
+    static eventsSchema = {
+      'ready': {},
+      'project:shown': { slug: 'string' },
+      'empty': {},
+    }
+    static { Feature.register(this, 'appController') }
+
+    async afterInitialize() {
+      this.state.set('ready', false)
+    }
+
+    get store() { return container.feature('projectStore') }
+    get build() { return container.feature('buildManager') }
+    get chat() { return container.feature('chatManager') }
+    get api() { return container.feature('apiClient') }
+
+    /** Boot the app: load data, select initial project, connect WS */
+    async start() {
+      await this.chat.loadAssistants()
+      await this.store.loadProjects()
+
+      if (this.store.projects.length > 0) {
+        const hash = window.location.hash.slice(1)
+        const target = this.store.projects.find(p => p.slug === hash) || this.store.projects[0]
+        this.selectProject(target.slug)
+      } else {
+        this.emit('empty')
+      }
+
+      this.chat.connect()
+      this.build.setStatus('ready')
+      this.state.set('ready', true)
+      this.emit('ready')
+    }
+
+    /** Select and display a project */
+    selectProject(slug) {
+      const project = this.store.selectProject(slug)
+      if (!project) return null
+      this.build.setStatus('ready')
+      this.emit('project:shown', { slug })
+
+      // Brief the chat if it's open and hasn't been briefed for this project
+      if (this.chat.isOpen && this.chat.briefedProject !== slug && this.chat.isSessionReady) {
+        this.chat.startBuildChat(slug)
+      }
+      return project
+    }
+
+    /** Toggle the build (start or abort) */
+    toggleBuild() {
+      if (!this.store.current) return
+      if (this.build.status === 'running') {
+        this.build.abortBuild(this.store.current.slug)
+      } else {
+        this.build.startBuild(this.store.current.slug)
+      }
+    }
+
+    /** Refresh the current project from the server */
+    async refreshProject() {
+      const project = await this.store.refreshCurrent()
+      if (project) this.emit('project:shown', { slug: project.slug })
+      return project
+    }
+
+    /** Full app state snapshot */
+    snapshot() {
+      return {
+        ready: this.state.get('ready'),
+        store: this.store.snapshot(),
+        build: this.build.snapshot(),
+        chat: this.chat.snapshot(),
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Boot features & get instances
+  // ═══════════════════════════════════════════════════════════════════
+  const api = container.feature('apiClient')
+  const store = container.feature('projectStore')
+  const build = container.feature('buildManager')
+  const chat = container.feature('chatManager')
+  const app = container.feature('appController')
+
+  // ═══════════════════════════════════════════════════════════════════
+  // UI Bindings — DOM refs
+  // ═══════════════════════════════════════════════════════════════════
   const selectEl = document.getElementById('project-select')
   const sidebarLoading = document.getElementById('sidebar-loading')
   const sidebarContent = document.getElementById('sidebar-content')
@@ -730,537 +1369,30 @@
   const chatMessages = document.getElementById('chat-messages')
   const chatInput = document.getElementById('chat-input')
   const chatSendBtn = document.getElementById('chat-send-btn')
-  const chatStatus = document.getElementById('chat-status')
+  const chatStatusEl = document.getElementById('chat-status')
   const chatDot = document.getElementById('chat-dot')
   const assistantSelect = document.getElementById('assistant-select')
 
-  let ws = null
-  let chatOpen = false
-  let chatStreaming = false
-  let chatInitiatedForProject = null
+  // Chat streaming DOM state (not feature state — purely for rendering)
   let currentStreamEl = null
   let currentStreamText = ''
   let currentToolActivity = null
   let toolItems = {}
-  let chatSessionId = crypto.randomUUID()
-  let chatSessionReady = false
-  let selectedAssistant = localStorage.getItem('pb-assistant') || ''
 
-  // ── Load assistants ──
-  async function loadAssistants() {
-    try {
-      const res = await fetch(`${API}/api/assistants`)
-      const data = await res.json()
-      assistantSelect.innerHTML = ''
-      for (const a of data.assistants) {
-        const opt = document.createElement('option')
-        opt.value = a.id
-        opt.textContent = a.name
-        assistantSelect.appendChild(opt)
-      }
-      if (selectedAssistant && data.assistants.find(a => a.id === selectedAssistant)) {
-        assistantSelect.value = selectedAssistant
-      } else {
-        assistantSelect.value = data.default || data.assistants[0]?.id || ''
-        selectedAssistant = assistantSelect.value
-      }
-    } catch (err) {
-      console.error('Failed to load assistants:', err)
-    }
-  }
-
-  assistantSelect.addEventListener('change', () => {
-    selectedAssistant = assistantSelect.value
-    localStorage.setItem('pb-assistant', selectedAssistant)
-    // Reconnect with new assistant if chat is open
-    if (chatOpen && ws) {
-      chatSessionId = crypto.randomUUID()
-      chatSessionReady = false
-      chatInitiatedForProject = null
-      chatMessages.innerHTML = ''
-      sendWS({ type: 'init', sessionId: chatSessionId, assistantId: selectedAssistant })
-    }
-  })
-
-  // ── Build button ──
-  buildBtn.addEventListener('click', () => {
-    if (!currentProject) return
-    if (buildStatus === 'running') {
-      sendWS({ type: 'build_action', action: 'abort', projectSlug: currentProject.slug })
-    } else {
-      sendWS({ type: 'build_action', action: 'start', projectSlug: currentProject.slug })
-    }
-  })
-
+  // ═══════════════════════════════════════════════════════════════════
+  // UI Rendering functions
+  // ═══════════════════════════════════════════════════════════════════
   function updateBuildBtn() {
-    if (buildStatus === 'running') {
+    const connected = chat.isConnected
+    if (build.status === 'running') {
       buildBtn.className = 'build-btn running'
       buildBtn.textContent = 'Abort'
-      buildBtn.disabled = !ws || ws.readyState !== WebSocket.OPEN
+      buildBtn.disabled = !connected
     } else {
       buildBtn.className = 'build-btn ready'
       buildBtn.textContent = 'Build'
-      buildBtn.disabled = !currentProject || !ws || ws.readyState !== WebSocket.OPEN
+      buildBtn.disabled = !store.current || !connected
     }
-  }
-
-  // ── Chat toggle ──
-  chatToggleBtn.addEventListener('click', () => {
-    chatOpen = !chatOpen
-    chatDrawer.classList.toggle('open', chatOpen)
-    chatToggleBtn.classList.toggle('active', chatOpen)
-
-    if (chatOpen) {
-      if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
-        connectWebSocket()
-      }
-      if (currentProject && chatInitiatedForProject !== currentProject.slug && chatSessionReady) {
-        startBuildChat(currentProject.slug)
-      }
-    }
-  })
-
-  chatCloseBtn.addEventListener('click', () => {
-    chatOpen = false
-    chatDrawer.classList.remove('open')
-    chatToggleBtn.classList.remove('active')
-  })
-
-  // ── WebSocket ──
-  function connectWebSocket() {
-    chatSessionReady = false
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-    ws = new WebSocket(`${proto}://${location.hostname}:${location.port}`)
-
-    ws.onopen = () => {
-      chatDot.className = 'chat-toggle-dot'
-      chatStatus.textContent = 'initializing...'
-      sendWS({ type: 'init', sessionId: chatSessionId, assistantId: selectedAssistant })
-      updateBuildBtn()
-    }
-
-    ws.onclose = () => {
-      chatDot.className = 'chat-toggle-dot'
-      chatStatus.textContent = 'disconnected'
-      chatSessionReady = false
-      chatInput.disabled = true
-      chatSendBtn.disabled = true
-      updateBuildBtn()
-      setTimeout(connectWebSocket, 2000)
-    }
-
-    ws.onerror = () => {
-      chatDot.className = 'chat-toggle-dot'
-    }
-
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data)
-      if (msg.type === 'build_event') {
-        handleBuildEvent(msg)
-      } else {
-        handleChatMessage(msg)
-      }
-    }
-  }
-
-  function sendWS(data) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(data))
-    }
-  }
-
-  // ── Start build chat ──
-  function startBuildChat(projectSlug) {
-    chatInitiatedForProject = projectSlug
-    chatMessages.innerHTML = ''
-    chatStreaming = false
-    currentStreamEl = null
-    currentStreamText = ''
-    currentToolActivity = null
-    toolItems = {}
-
-    const sysMsg = document.createElement('div')
-    sysMsg.className = 'chat-msg chat-msg-system'
-    sysMsg.innerHTML = `
-      <div class="chat-msg-label">System</div>
-      <p>Briefing <strong>${esc(selectedAssistant)}</strong> on <strong>${esc(currentProject.title)}</strong>...</p>
-    `
-    chatMessages.appendChild(sysMsg)
-
-    chatInput.disabled = true
-    chatSendBtn.disabled = true
-    chatDot.className = 'chat-toggle-dot streaming'
-    chatStatus.textContent = 'getting caught up...'
-
-    sendWS({ type: 'start_build_chat', projectSlug })
-  }
-
-  // ── Handle build events ──
-  function handleBuildEvent(msg) {
-    const event = msg.event
-    const slug = msg.projectSlug
-
-    if (currentProject && slug !== currentProject.slug) return
-
-    if (event === 'build:start') {
-      buildStatus = 'running'
-      planDeltas = {}
-      updateBuildBtn()
-      updateHeaderMeta(currentProject)
-    } else if (event === 'build:complete') {
-      buildStatus = 'completed'
-      updateBuildBtn()
-      refreshProject()
-    } else if (event === 'build:error') {
-      buildStatus = 'error'
-      updateBuildBtn()
-      refreshProject()
-    } else if (event === 'build:aborting') {
-      buildStatus = 'aborting'
-      updateBuildBtn()
-    } else if (event === 'build:aborted') {
-      buildStatus = 'ready'
-      updateBuildBtn()
-      refreshProject()
-    } else if (event === 'plan:start') {
-      updatePlanStatus(msg.planId, 'running')
-    } else if (event === 'plan:delta') {
-      planDeltas[msg.planId] = (planDeltas[msg.planId] || '') + msg.text
-      // Keep only last 2000 chars
-      if (planDeltas[msg.planId].length > 2000) {
-        planDeltas[msg.planId] = planDeltas[msg.planId].slice(-2000)
-      }
-      updatePlanDelta(msg.planId)
-    } else if (event === 'plan:complete') {
-      updatePlanStatus(msg.planId, 'completed', msg)
-    } else if (event === 'plan:error') {
-      updatePlanStatus(msg.planId, 'error')
-    } else if (event === 'plan:skipped') {
-      updatePlanStatus(msg.planId, 'skipped')
-    } else if (event === 'plan:queued') {
-      updatePlanStatus(msg.planId, 'queued')
-    }
-  }
-
-  function updatePlanStatus(planId, status, extra) {
-    if (!currentProject) return
-    const plan = currentProject.plans.find(p => p.id === planId)
-    if (plan) {
-      plan.status = status
-      if (extra?.costUsd != null) plan.costUsd = extra.costUsd
-      if (extra?.turns != null) plan.turns = extra.turns
-      if (extra?.toolCalls != null) plan.toolCalls = extra.toolCalls
-    }
-
-    // Update sidebar dot
-    const sidebarDot = document.querySelector(`.plan-list-item[data-plan-id="${CSS.escape(planId)}"] .plan-dot`)
-    if (sidebarDot) sidebarDot.style.background = statusColor(status)
-
-    const sidebarMeta = document.querySelector(`.plan-list-item[data-plan-id="${CSS.escape(planId)}"] .plan-meta`)
-    if (sidebarMeta) sidebarMeta.textContent = status
-
-    // Update main card badge
-    const card = document.querySelector(`.plan-card[data-plan-id="${CSS.escape(planId)}"]`)
-    if (card) {
-      const badge = card.querySelector('.plan-card-subtitle')
-      if (badge) badge.innerHTML = badgeHTML(status)
-
-      // Show/hide live output
-      let liveEl = card.querySelector('.plan-live-output')
-      if (status === 'running') {
-        if (!liveEl) {
-          liveEl = document.createElement('div')
-          liveEl.className = 'plan-live-output'
-          liveEl.textContent = 'Waiting for output...'
-          const body = card.querySelector('.plan-card-body')
-          if (body) body.appendChild(liveEl)
-          card.classList.add('open')
-        }
-      } else if (liveEl && status !== 'running') {
-        if (!planDeltas[planId]) liveEl.remove()
-      }
-    }
-  }
-
-  function updatePlanDelta(planId) {
-    const card = document.querySelector(`.plan-card[data-plan-id="${CSS.escape(planId)}"]`)
-    if (!card) return
-    const liveEl = card.querySelector('.plan-live-output')
-    if (liveEl) {
-      const delta = planDeltas[planId] || ''
-      const lines = delta.split('\n')
-      liveEl.textContent = lines.slice(-20).join('\n')
-      liveEl.scrollTop = liveEl.scrollHeight
-    }
-
-    // Sidebar delta preview
-    const sidebarDelta = document.querySelector(`.plan-list-item[data-plan-id="${CSS.escape(planId)}"] .plan-delta`)
-    if (sidebarDelta) {
-      const delta = planDeltas[planId] || ''
-      const lastLine = delta.split('\n').filter(l => l.trim()).slice(-1)[0] || ''
-      sidebarDelta.textContent = lastLine.slice(0, 40)
-    }
-  }
-
-  async function refreshProject() {
-    if (!currentProject) return
-    try {
-      const res = await fetch(`${API}/api/project/${currentProject.slug}`)
-      const project = await res.json()
-      const idx = projects.findIndex(p => p.slug === project.slug)
-      if (idx >= 0) projects[idx] = project
-      showProject(project)
-    } catch {}
-  }
-
-  // ── Handle chat messages ──
-  function handleChatMessage(msg) {
-    switch (msg.type) {
-      case 'init_ok':
-        chatSessionReady = true
-        chatDot.className = 'chat-toggle-dot connected'
-        chatStatus.textContent = 'connected'
-        // If chat is open and we haven't briefed yet, do it now
-        if (chatOpen && currentProject && chatInitiatedForProject !== currentProject.slug) {
-          startBuildChat(currentProject.slug)
-        }
-        break
-
-      case 'init_error':
-        chatSessionReady = false
-        chatDot.className = 'chat-toggle-dot'
-        chatStatus.textContent = 'init failed'
-        appendSystemMsg(`Session init failed: ${msg.message}`)
-        break
-
-      case 'build_chat_started':
-        break
-
-      case 'build_action_ok':
-        break
-
-      case 'assistant_message_start':
-        chatStreaming = true
-        chatDot.className = 'chat-toggle-dot streaming'
-        currentStreamText = ''
-        currentToolActivity = null
-        toolItems = {}
-
-        currentStreamEl = document.createElement('div')
-        currentStreamEl.className = 'chat-msg chat-msg-assistant chat-msg-streaming'
-        currentStreamEl.innerHTML = '<div class="chat-msg-content"></div>'
-        chatMessages.appendChild(currentStreamEl)
-        scrollChat()
-        break
-
-      case 'chunk':
-        if (currentStreamEl) {
-          currentStreamText += msg.textDelta
-          currentStreamEl.querySelector('.chat-msg-content').innerHTML = renderMarkdown(currentStreamText)
-          scrollChat()
-        }
-        break
-
-      case 'tool_start': {
-        if (!currentToolActivity) {
-          currentToolActivity = document.createElement('div')
-          currentToolActivity.className = 'tool-activity'
-          currentToolActivity.innerHTML = `
-            <div class="tool-activity-header">
-              <span class="tool-activity-chevron">&#9660;</span>
-              <span class="tool-activity-count">0 tools</span>
-            </div>
-            <div class="tool-activity-list"></div>
-          `
-          if (currentStreamEl) {
-            chatMessages.insertBefore(currentToolActivity, currentStreamEl)
-          } else {
-            chatMessages.appendChild(currentToolActivity)
-          }
-          currentToolActivity.querySelector('.tool-activity-header').addEventListener('click', () => {
-            currentToolActivity.classList.toggle('collapsed')
-          })
-        }
-
-        const toolEl = document.createElement('div')
-        toolEl.className = 'tool-item'
-        toolEl.innerHTML = `
-          <span class="tool-dot running"></span>
-          <span class="tool-name">${esc(msg.name)}</span>
-          <span class="tool-duration">running...</span>
-        `
-        toolItems[msg.id] = toolEl
-        currentToolActivity.querySelector('.tool-activity-list').appendChild(toolEl)
-        updateToolCount()
-        scrollChat()
-        break
-      }
-
-      case 'tool_end': {
-        const toolEl = toolItems[msg.id]
-        if (toolEl) {
-          const dot = toolEl.querySelector('.tool-dot')
-          dot.className = `tool-dot ${msg.ok ? 'success' : 'error'}`
-          toolEl.querySelector('.tool-duration').textContent = msg.ok ? `${msg.durationMs}ms` : msg.error || 'error'
-        }
-        updateToolCount()
-        break
-      }
-
-      case 'assistant_message_complete':
-        chatStreaming = false
-        chatDot.className = 'chat-toggle-dot connected'
-        chatStatus.textContent = 'connected'
-        chatInput.disabled = false
-        chatSendBtn.disabled = false
-
-        if (currentStreamEl) {
-          currentStreamEl.classList.remove('chat-msg-streaming')
-          currentStreamEl.querySelector('.chat-msg-content').innerHTML = renderMarkdown(msg.text)
-        }
-
-        if (currentToolActivity) currentToolActivity.classList.add('collapsed')
-
-        currentStreamEl = null
-        currentStreamText = ''
-        chatInput.focus()
-        scrollChat()
-        break
-
-      case 'error':
-        appendSystemMsg(`Error: ${msg.message}`)
-        chatStreaming = false
-        chatDot.className = 'chat-toggle-dot connected'
-        chatStatus.textContent = 'connected'
-        chatInput.disabled = false
-        chatSendBtn.disabled = false
-        break
-    }
-  }
-
-  function updateToolCount() {
-    if (!currentToolActivity) return
-    const total = Object.keys(toolItems).length
-    const running = currentToolActivity.querySelectorAll('.tool-dot.running').length
-    const label = running > 0 ? `${running} running, ${total} total` : `${total} completed`
-    currentToolActivity.querySelector('.tool-activity-count').textContent = label
-  }
-
-  function appendSystemMsg(text) {
-    const el = document.createElement('div')
-    el.className = 'chat-msg chat-msg-system'
-    el.innerHTML = `<div class="chat-msg-label">System</div><p>${esc(text)}</p>`
-    chatMessages.appendChild(el)
-    scrollChat()
-  }
-
-  function scrollChat() {
-    chatMessages.scrollTop = chatMessages.scrollHeight
-  }
-
-  // ── Send user message ──
-  function sendUserMessage() {
-    const text = chatInput.value.trim()
-    if (!text || chatStreaming) return
-
-    const el = document.createElement('div')
-    el.className = 'chat-msg chat-msg-user'
-    el.textContent = text
-    chatMessages.appendChild(el)
-    scrollChat()
-
-    chatInput.value = ''
-    chatInput.style.height = 'auto'
-    chatInput.disabled = true
-    chatSendBtn.disabled = true
-
-    sendWS({ type: 'user_message', text })
-  }
-
-  chatSendBtn.addEventListener('click', sendUserMessage)
-
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendUserMessage()
-    }
-  })
-
-  chatInput.addEventListener('input', () => {
-    chatInput.style.height = 'auto'
-    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px'
-  })
-
-  // ── Load projects ──
-  async function loadProjects() {
-    try {
-      const res = await fetch(`${API}/api/projects`)
-      const data = await res.json()
-      projects = data.projects || []
-
-      selectEl.innerHTML = ''
-      if (projects.length === 0) {
-        selectEl.innerHTML = '<option value="">No projects found</option>'
-        showEmpty()
-        return
-      }
-
-      for (const p of projects) {
-        const opt = document.createElement('option')
-        opt.value = p.slug
-        opt.textContent = p.title
-        selectEl.appendChild(opt)
-      }
-
-      const hash = window.location.hash.slice(1)
-      const target = projects.find(p => p.slug === hash) || projects[0]
-      selectEl.value = target.slug
-      showProject(target)
-    } catch (err) {
-      console.error('Failed to load projects:', err)
-      selectEl.innerHTML = '<option value="">Error loading</option>'
-    }
-  }
-
-  selectEl.addEventListener('change', () => {
-    const p = projects.find(p => p.slug === selectEl.value)
-    if (p) {
-      window.location.hash = p.slug
-      showProject(p)
-    }
-  })
-
-  // ── Render project ──
-  function showProject(project) {
-    currentProject = project
-    buildStatus = 'ready'
-    planDeltas = {}
-    sidebarLoading.style.display = 'none'
-    mainLoading.style.display = 'none'
-    sidebarContent.style.display = ''
-    mainContent.style.display = ''
-
-    renderSidebar(project)
-    renderMain(project)
-    updateHeaderMeta(project)
-    updateBuildBtn()
-
-    if (chatOpen && chatInitiatedForProject !== project.slug && chatSessionReady) {
-      startBuildChat(project.slug)
-    }
-  }
-
-  function showEmpty() {
-    sidebarLoading.style.display = 'none'
-    mainLoading.style.display = 'none'
-    sidebarContent.style.display = 'none'
-    mainContent.innerHTML = `
-      <div class="empty-state">
-        <div class="icon">&#9744;</div>
-        <p>No projects found. Create a project in docs/projects/ to get started.</p>
-      </div>
-    `
-    mainContent.style.display = ''
   }
 
   function updateHeaderMeta(project) {
@@ -1272,7 +1404,6 @@
     `
   }
 
-  // ── Sidebar ──
   function renderSidebar(project) {
     const completed = project.plans.filter(p => p.status === 'completed').length
     const total = project.plans.length
@@ -1328,7 +1459,6 @@
     if (item) item.classList.add('active')
   }
 
-  // ── Main content ──
   function renderMain(project) {
     let html = ''
 
@@ -1400,74 +1530,368 @@
     }
   }
 
-  // ── Markdown rendering ──
-  function renderMarkdown(text) {
-    if (!text) return ''
-    if (Array.isArray(text)) return '<ul>' + text.map(item => `<li>${esc(item)}</li>`).join('') + '</ul>'
-
-    let html = esc(text)
-
-    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
-
-    html = html.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>')
-    html = html.replace(/((?:<oli>.*<\/oli>\n?)+)/g, (m) => {
-      return '<ol>' + m.replace(/<\/?oli>/g, (t) => t.replace('oli', 'li')) + '</ol>'
-    })
-
-    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
-    html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-
-    html = html.replace(/\n\n/g, '</p><p>')
-    html = '<p>' + html + '</p>'
-
-    html = html.replace(/<p><\/p>/g, '')
-    html = html.replace(/<p>(<h[23]>)/g, '$1')
-    html = html.replace(/(<\/h[23]>)<\/p>/g, '$1')
-    html = html.replace(/<p>(<[uo]l>)/g, '$1')
-    html = html.replace(/(<\/[uo]l>)<\/p>/g, '$1')
-
-    return html
+  function showProjectUI(project) {
+    sidebarLoading.style.display = 'none'
+    mainLoading.style.display = 'none'
+    sidebarContent.style.display = ''
+    mainContent.style.display = ''
+    renderSidebar(project)
+    renderMain(project)
+    updateHeaderMeta(project)
+    updateBuildBtn()
   }
 
-  // ── Helpers ──
-  function esc(str) {
-    const d = document.createElement('div')
-    d.textContent = String(str || '')
-    return d.innerHTML
+  function showEmpty() {
+    sidebarLoading.style.display = 'none'
+    mainLoading.style.display = 'none'
+    sidebarContent.style.display = 'none'
+    mainContent.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">&#9744;</div>
+        <p>No projects found. Create a project in docs/projects/ to get started.</p>
+      </div>
+    `
+    mainContent.style.display = ''
   }
 
-  function badgeHTML(status) {
-    const s = String(status || 'unknown').toLowerCase()
-    return `<span class="badge badge-${s.replace(/\s+/g, '_')}">${esc(s)}</span>`
+  function scrollChat() {
+    chatMessages.scrollTop = chatMessages.scrollHeight
   }
 
-  function statusColor(status) {
-    const map = {
-      pending: 'var(--warning)',
-      approved: 'var(--accent)',
-      building: 'var(--purple)',
-      in_progress: 'var(--purple)',
-      running: 'var(--warning)',
-      completed: 'var(--success)',
-      failed: 'var(--error)',
-      error: 'var(--error)',
-      rejected: 'var(--error)',
-      draft: 'var(--blue)',
-      reviewing: 'var(--blue)',
-      queued: 'var(--blue)',
-      skipped: 'var(--text-dim)',
-      ready: 'var(--accent)',
+  function appendSystemMsg(text) {
+    const el = document.createElement('div')
+    el.className = 'chat-msg chat-msg-system'
+    el.innerHTML = `<div class="chat-msg-label">System</div><p>${esc(text)}</p>`
+    chatMessages.appendChild(el)
+    scrollChat()
+  }
+
+  function updateToolCount() {
+    if (!currentToolActivity) return
+    const total = Object.keys(toolItems).length
+    const running = currentToolActivity.querySelectorAll('.tool-dot.running').length
+    const label = running > 0 ? `${running} running, ${total} total` : `${total} completed`
+    currentToolActivity.querySelector('.tool-activity-count').textContent = label
+  }
+
+  function updatePlanStatusUI(planId, status) {
+    const sidebarDot = document.querySelector(`.plan-list-item[data-plan-id="${CSS.escape(planId)}"] .plan-dot`)
+    if (sidebarDot) sidebarDot.style.background = statusColor(status)
+
+    const sidebarMeta = document.querySelector(`.plan-list-item[data-plan-id="${CSS.escape(planId)}"] .plan-meta`)
+    if (sidebarMeta) sidebarMeta.textContent = status
+
+    const card = document.querySelector(`.plan-card[data-plan-id="${CSS.escape(planId)}"]`)
+    if (card) {
+      const badge = card.querySelector('.plan-card-subtitle')
+      if (badge) badge.innerHTML = badgeHTML(status)
+
+      let liveEl = card.querySelector('.plan-live-output')
+      if (status === 'running') {
+        if (!liveEl) {
+          liveEl = document.createElement('div')
+          liveEl.className = 'plan-live-output'
+          liveEl.textContent = 'Waiting for output...'
+          const body = card.querySelector('.plan-card-body')
+          if (body) body.appendChild(liveEl)
+          card.classList.add('open')
+        }
+      } else if (liveEl && status !== 'running') {
+        if (!store.getPlanDelta(planId)) liveEl.remove()
+      }
     }
-    return map[status] || 'var(--text-faint)'
   }
 
-  // ── Boot ──
-  loadAssistants()
-  loadProjects()
-  connectWebSocket()
+  function updatePlanDeltaUI(planId) {
+    const card = document.querySelector(`.plan-card[data-plan-id="${CSS.escape(planId)}"]`)
+    if (!card) return
+    const liveEl = card.querySelector('.plan-live-output')
+    if (liveEl) {
+      const delta = store.getPlanDelta(planId)
+      const lines = delta.split('\n')
+      liveEl.textContent = lines.slice(-20).join('\n')
+      liveEl.scrollTop = liveEl.scrollHeight
+    }
+
+    const sidebarDelta = document.querySelector(`.plan-list-item[data-plan-id="${CSS.escape(planId)}"] .plan-delta`)
+    if (sidebarDelta) {
+      const delta = store.getPlanDelta(planId)
+      const lastLine = delta.split('\n').filter(l => l.trim()).slice(-1)[0] || ''
+      sidebarDelta.textContent = lastLine.slice(0, 40)
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Wire feature events → UI updates
+  // ═══════════════════════════════════════════════════════════════════
+
+  // ── ProjectStore events ──
+  store.on('projects:loaded', () => {
+    selectEl.innerHTML = ''
+    if (store.projects.length === 0) {
+      selectEl.innerHTML = '<option value="">No projects found</option>'
+      return
+    }
+    for (const p of store.projects) {
+      const opt = document.createElement('option')
+      opt.value = p.slug
+      opt.textContent = p.title
+      selectEl.appendChild(opt)
+    }
+  })
+
+  // ── AppController events ──
+  app.on('project:shown', () => {
+    const project = store.current
+    if (!project) return
+    selectEl.value = project.slug
+    showProjectUI(project)
+  })
+
+  app.on('empty', showEmpty)
+
+  // ── BuildManager events ──
+  build.on('status:changed', () => {
+    updateBuildBtn()
+    if (store.current) updateHeaderMeta(store.current)
+  })
+
+  build.on('plan:status', ({ planId, status }) => {
+    updatePlanStatusUI(planId, status)
+  })
+
+  build.on('plan:delta', ({ planId }) => {
+    updatePlanDeltaUI(planId)
+  })
+
+  build.on('build:needs-refresh', () => {
+    app.refreshProject()
+  })
+
+  // ── ChatManager events ──
+  chat.on('assistants:loaded', ({ assistants }) => {
+    assistantSelect.innerHTML = ''
+    for (const a of assistants) {
+      const opt = document.createElement('option')
+      opt.value = a.id
+      opt.textContent = a.name
+      assistantSelect.appendChild(opt)
+    }
+    assistantSelect.value = chat.state.get('selectedAssistant')
+  })
+
+  chat.on('ws:connected', () => {
+    chatDot.className = 'chat-toggle-dot'
+    chatStatusEl.textContent = 'initializing...'
+    updateBuildBtn()
+  })
+
+  chat.on('ws:disconnected', () => {
+    chatDot.className = 'chat-toggle-dot'
+    chatStatusEl.textContent = 'disconnected'
+    chatInput.disabled = true
+    chatSendBtn.disabled = true
+    updateBuildBtn()
+  })
+
+  chat.on('session:ready', () => {
+    chatDot.className = 'chat-toggle-dot connected'
+    chatStatusEl.textContent = 'connected'
+  })
+
+  chat.on('session:error', ({ message }) => {
+    chatDot.className = 'chat-toggle-dot'
+    chatStatusEl.textContent = 'init failed'
+    appendSystemMsg(`Session init failed: ${message}`)
+  })
+
+  chat.on('chat:opened', () => {
+    chatDrawer.classList.add('open')
+    chatToggleBtn.classList.add('active')
+  })
+
+  chat.on('chat:closed', () => {
+    chatDrawer.classList.remove('open')
+    chatToggleBtn.classList.remove('active')
+  })
+
+  chat.on('assistant:changed', () => {
+    chatMessages.innerHTML = ''
+  })
+
+  chat.on('chat:briefing', ({ projectSlug }) => {
+    chatMessages.innerHTML = ''
+    currentStreamEl = null
+    currentStreamText = ''
+    currentToolActivity = null
+    toolItems = {}
+
+    const sysMsg = document.createElement('div')
+    sysMsg.className = 'chat-msg chat-msg-system'
+    sysMsg.innerHTML = `
+      <div class="chat-msg-label">System</div>
+      <p>Briefing <strong>${esc(chat.state.get('selectedAssistant'))}</strong> on <strong>${esc(store.current?.title || projectSlug)}</strong>...</p>
+    `
+    chatMessages.appendChild(sysMsg)
+
+    chatInput.disabled = true
+    chatSendBtn.disabled = true
+    chatDot.className = 'chat-toggle-dot streaming'
+    chatStatusEl.textContent = 'getting caught up...'
+  })
+
+  chat.on('stream:start', () => {
+    chatDot.className = 'chat-toggle-dot streaming'
+    currentStreamText = ''
+    currentToolActivity = null
+    toolItems = {}
+
+    currentStreamEl = document.createElement('div')
+    currentStreamEl.className = 'chat-msg chat-msg-assistant chat-msg-streaming'
+    currentStreamEl.innerHTML = '<div class="chat-msg-content"></div>'
+    chatMessages.appendChild(currentStreamEl)
+    scrollChat()
+  })
+
+  chat.on('stream:chunk', ({ text }) => {
+    if (currentStreamEl) {
+      currentStreamText += text
+      currentStreamEl.querySelector('.chat-msg-content').innerHTML = renderMarkdown(currentStreamText)
+      scrollChat()
+    }
+  })
+
+  chat.on('tool:start', ({ id, name }) => {
+    if (!currentToolActivity) {
+      currentToolActivity = document.createElement('div')
+      currentToolActivity.className = 'tool-activity'
+      currentToolActivity.innerHTML = `
+        <div class="tool-activity-header">
+          <span class="tool-activity-chevron">&#9660;</span>
+          <span class="tool-activity-count">0 tools</span>
+        </div>
+        <div class="tool-activity-list"></div>
+      `
+      if (currentStreamEl) {
+        chatMessages.insertBefore(currentToolActivity, currentStreamEl)
+      } else {
+        chatMessages.appendChild(currentToolActivity)
+      }
+      currentToolActivity.querySelector('.tool-activity-header').addEventListener('click', () => {
+        currentToolActivity.classList.toggle('collapsed')
+      })
+    }
+
+    const toolEl = document.createElement('div')
+    toolEl.className = 'tool-item'
+    toolEl.innerHTML = `
+      <span class="tool-dot running"></span>
+      <span class="tool-name">${esc(name)}</span>
+      <span class="tool-duration">running...</span>
+    `
+    toolItems[id] = toolEl
+    currentToolActivity.querySelector('.tool-activity-list').appendChild(toolEl)
+    updateToolCount()
+    scrollChat()
+  })
+
+  chat.on('tool:end', ({ id, ok, durationMs, error }) => {
+    const toolEl = toolItems[id]
+    if (toolEl) {
+      const dot = toolEl.querySelector('.tool-dot')
+      dot.className = `tool-dot ${ok ? 'success' : 'error'}`
+      toolEl.querySelector('.tool-duration').textContent = ok ? `${durationMs}ms` : error || 'error'
+    }
+    updateToolCount()
+  })
+
+  chat.on('stream:end', ({ text }) => {
+    chatDot.className = 'chat-toggle-dot connected'
+    chatStatusEl.textContent = 'connected'
+    chatInput.disabled = false
+    chatSendBtn.disabled = false
+
+    if (currentStreamEl) {
+      currentStreamEl.classList.remove('chat-msg-streaming')
+      currentStreamEl.querySelector('.chat-msg-content').innerHTML = renderMarkdown(text)
+    }
+
+    if (currentToolActivity) currentToolActivity.classList.add('collapsed')
+
+    currentStreamEl = null
+    currentStreamText = ''
+    chatInput.focus()
+    scrollChat()
+  })
+
+  chat.on('chat:error', ({ message }) => {
+    appendSystemMsg(`Error: ${message}`)
+    chatDot.className = 'chat-toggle-dot connected'
+    chatStatusEl.textContent = 'connected'
+    chatInput.disabled = false
+    chatSendBtn.disabled = false
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // DOM event listeners → feature method calls
+  // ═══════════════════════════════════════════════════════════════════
+  selectEl.addEventListener('change', () => {
+    const slug = selectEl.value
+    if (slug) {
+      window.location.hash = slug
+      app.selectProject(slug)
+    }
+  })
+
+  buildBtn.addEventListener('click', () => app.toggleBuild())
+
+  chatToggleBtn.addEventListener('click', () => chat.toggle())
+  chatCloseBtn.addEventListener('click', () => chat.close())
+
+  assistantSelect.addEventListener('change', () => {
+    chat.selectAssistant(assistantSelect.value)
+  })
+
+  chatSendBtn.addEventListener('click', () => {
+    const text = chatInput.value.trim()
+    if (!text || chat.isStreaming) return
+
+    const el = document.createElement('div')
+    el.className = 'chat-msg chat-msg-user'
+    el.textContent = text
+    chatMessages.appendChild(el)
+    scrollChat()
+
+    chatInput.value = ''
+    chatInput.style.height = 'auto'
+    chatInput.disabled = true
+    chatSendBtn.disabled = true
+
+    chat.sendMessage(text)
+  })
+
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      chatSendBtn.click()
+    }
+  })
+
+  chatInput.addEventListener('input', () => {
+    chatInput.style.height = 'auto'
+    chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px'
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Expose on window for automation & debugging
+  // ═══════════════════════════════════════════════════════════════════
+  window.app = app
+  window.luca = container
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Boot
+  // ═══════════════════════════════════════════════════════════════════
+  await app.start()
 </script>
 </body>
 </html>

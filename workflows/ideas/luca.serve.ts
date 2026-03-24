@@ -4,7 +4,7 @@
  * Browse, filter, and read all ideas with full content.
  *
  * Usage:
- *   luca serve --setup workflows/ideas/luca.serve.ts --staticDir workflows/ideas/public --endpoints-dir workflows/ideas/endpoints --port 9306 --no-open
+ *   luca serve --setup workflows/ideas/luca.serve.ts --staticDir workflows/ideas/public --endpoints-dir workflows/ideas/endpoints --any-port --no-open
  */
 export default async function setup(server: any) {
   const container = server.container

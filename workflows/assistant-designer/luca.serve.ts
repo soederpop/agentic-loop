@@ -6,7 +6,7 @@
  * a live assistant instance. Chat goes through assistant.ask().
  *
  * Usage:
- *   luca serve --setup workflows/assistant-designer/luca.serve.ts --staticDir workflows/assistant-designer/public --endpoints-dir workflows/assistant-designer/endpoints --port 9330
+ *   luca serve --setup workflows/assistant-designer/luca.serve.ts --staticDir workflows/assistant-designer/public --endpoints-dir workflows/assistant-designer/endpoints --any-port
  */
 
 export interface ToolDef {

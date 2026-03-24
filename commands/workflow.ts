@@ -8,30 +8,19 @@ export const positionals = ['action', 'target']
 export const argsSchema = z.object({
   action: z.string().describe('run,list,create').optional().default('run'),
   target: z.string().optional().describe('The workflow you want to run'),
-  port: z.number().default(7700).describe('Port to serve the workflow on'),
+  'open-browser': z.boolean().default(false).describe('Open in browser instead of window manager'),
   json: z.boolean().default(false).describe('Output as JSON'),
 })
 
 export default async function workflow(options: z.infer<typeof argsSchema>, context: ContainerContext) {
   const { container } = context
-  let { action, target, port } = options
+  let { action, target } = options
   const ui = container.feature('ui')
 
   await container.helpers.discoverAll()
 
   const wm = container.feature('windowManager')
-  
-  let launchedWindowId: any = null
-  let actualPort: any = undefined 
-  let serviceProcessPid : any = undefined
-  
-  wm.once('windowClosed', (w: any) => {
-    if(String(w.windowId).toLowerCase() === String(launchedWindowId).toLowerCase()) {
-      if (serviceProcessPid) {
-        process.exit(0)
-      }
-    }
-  })
+  let actualPort: number | undefined
 
   const library = container.feature('workflowLibrary')
 
@@ -68,10 +57,9 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
         return
       }
 
-      actualPort = port || info.port || 7700
       const setupPath = container.paths.resolve(info.folderPath, 'luca.serve.ts')
       const endpointsDir = container.paths.resolve(info.folderPath, 'endpoints')
-      const serveArgs = ['serve', '--setup', setupPath, '--port', String(actualPort), '--no-open', '--endpoints-dir', endpointsDir, '--force']
+      const serveArgs = ['serve', '--setup', setupPath, '--no-open', '--endpoints-dir', endpointsDir, '--any-port']
 
       if (info.hasPublicDir) {
         serveArgs.push('--staticDir', container.paths.resolve(info.folderPath, 'public'))
@@ -79,62 +67,75 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
 
       ui.print.cyan(`Starting workflow: ${info.title}`)
       if (info.description) ui.print.dim(info.description)
-      ui.print.dim(`http://localhost:${actualPort}`)
 
-      const windowManager = container.feature('windowManager')
-      await windowManager.listen()
-
-      const networking = container.feature('networking')
-      const pageUrl = `http://localhost:${actualPort}`
+      // Parse the actual port from the server's "listening on" message
+      const onOutputListeners: Array<(output: string) => void> = []
+      const portReady = new Promise<number>((resolve) => {
+        const timeout = setTimeout(() => resolve(0), 15000)
+        onOutputListeners.push((output: string) => {
+          const match = String(output).match(/listening on http:\/\/localhost:(\d+)/)
+          if (match) {
+            clearTimeout(timeout)
+            resolve(Number(match[1]))
+          }
+        })
+      })
 
       // Start the server in the background
       console.log(`[workflow] spawning luca ${serveArgs.join(' ')}`)
       const serverProcess = container.proc.spawnAndCapture('luca', serveArgs, {
-	      onOutput(output) {
-          console.log(`[workflow:stdout] ${String(output).trim()}`)
+	      onOutput(output: string) {
+          const line = String(output).trim()
+          console.log(`[workflow:stdout] ${line}`)
+          for (const listener of onOutputListeners) listener(line)
         },
 	      onError(output: string) {
           console.log(`[workflow:stderr] ${String(output).trim()}`)
         },
-        onStart: (p: any) => {
-          serviceProcessPid = p.pid
-          console.log('got a pid', serviceProcessPid)
-        }
       })
 
-      // Poll until the port is accepting connections
-      console.log(`[workflow] polling port ${actualPort}...`)
-      const maxWait = 15000
-      const start = Date.now()
-      let portReady = false
-      while (Date.now() - start < maxWait) {
-        const open = await networking.isPortOpen(actualPort)
-        if (!open) {
-          portReady = true
-          break
-        }
-        await new Promise((r) => setTimeout(r, 250))
-      }
-      console.log(`[workflow] port ${actualPort} ready=${portReady} (waited ${Date.now() - start}ms)`)
-	
-      const launchedWindow = await wm.spawn({ url: `http://localhost:${actualPort}` })
-
-      launchedWindowId = String(launchedWindow.result?.windowId).toLowerCase()
-
-      // Clean up windows and server process on exit (Ctrl+C)
-      const cleanup = async () => {
-        console.log('\n[workflow] shutting down...')
-        if (launchedWindowId) {
-          try { await wm.close(launchedWindowId) } catch {}
-        }
-        if (serviceProcessPid) {
-          try { process.kill(serviceProcessPid) } catch {}
-        }
-        process.exit(0)
+      // Wait for the server to report its actual port
+      actualPort = await portReady
+      if (!actualPort) {
+        ui.print.red('Server failed to start within 15 seconds')
+        return
       }
 
-      process.on('SIGINT', cleanup)
-      process.on('SIGTERM', cleanup)
+      console.log(`[workflow] server ready on port ${actualPort}`)
+      ui.print.dim(`http://localhost:${actualPort}`)
+
+      const pageUrl = `http://localhost:${actualPort}`
+      const openInBrowser = () => container.feature('opener').open(pageUrl)
+
+      if (options['open-browser']) {
+        await openInBrowser()
+      } else {
+        try {
+          const launchedWindow = await Promise.race([
+            wm.spawn({ url: pageUrl }),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6500)),
+          ])
+
+          const launchedWindowId = String(launchedWindow?.result?.windowId || launchedWindow?.windowId || '').toLowerCase()
+
+          if (launchedWindowId) {
+            console.log(`[workflow] tracking window ${launchedWindowId} for auto-cleanup`)
+            wm.on('windowClosed', (msg: any) => {
+              const closedId = String(msg?.windowId || '').toLowerCase()
+              if (closedId === launchedWindowId) {
+                console.log(`[workflow] window closed, shutting down server`)
+                process.exit(0)
+              }
+            })
+          }
+        } catch {
+          console.log('[workflow] window manager failed or timed out, falling back to browser')
+          await openInBrowser()
+        }
+      }
+
+      process.on('SIGINT', () => process.exit(0))
+      process.on('SIGTERM', () => process.exit(0))
 
       await serverProcess
 

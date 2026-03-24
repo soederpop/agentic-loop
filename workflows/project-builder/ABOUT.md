@@ -1,7 +1,6 @@
 ---
 title: Project Builder
 description: Build projects by executing their plans with real-time progress tracking and an AI chat assistant
-port: 9321
 tags:
   - build
   - projects

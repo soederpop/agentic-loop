@@ -533,7 +533,7 @@
     <h1>SHAPE</h1>
     <div class="subtitle">Idea Interview Workshop</div>
   </div>
-  <button class="back-btn" id="backBtn" onclick="showPicker()">Back to Ideas</button>
+  <button class="back-btn" id="backBtn">Back to Ideas</button>
 </div>
 
 <!-- Picker View -->
@@ -609,7 +609,7 @@
     <div class="question-group">
       <label>Tags</label>
       <div class="hint">Press Enter or comma to add a tag</div>
-      <div class="tags-input-wrapper" id="tagsWrapper" onclick="document.getElementById('tagInput').focus()">
+      <div class="tags-input-wrapper" id="tagsWrapper">
         <input type="text" id="tagInput" placeholder="add tag...">
       </div>
     </div>
@@ -619,9 +619,9 @@
     <div class="decision-section">
       <h3>Decision</h3>
       <div class="decision-buttons">
-        <button class="btn btn-ready" onclick="save('ready')">Mark as Ready</button>
-        <button class="btn btn-explore" onclick="save('exploring')">Keep Exploring</button>
-        <button class="btn btn-park" onclick="save('parked')">Park It</button>
+        <button class="btn btn-ready">Mark as Ready</button>
+        <button class="btn btn-explore">Keep Exploring</button>
+        <button class="btn btn-park">Park It</button>
       </div>
     </div>
   </div>
@@ -630,133 +630,381 @@
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
-<script>
-  // ── State ──
-  let currentSlug = null
-  let currentIdea = null
-  let tags = []
-  let goals = []
+<script type="module">
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
 
-  // ── Init ──
-  async function init() {
-    // Check URL param for direct idea link
-    const params = new URLSearchParams(window.location.search)
-    const ideaParam = params.get('idea')
+  const API = window.location.origin
 
-    // Load goals for context
-    try {
-      const res = await fetch('/api/goals')
+  // ── Utils (shared across features and UI) ──
+  function esc(s) {
+    const d = document.createElement('div')
+    d.textContent = s || ''
+    return d.innerHTML
+  }
+
+  function renderMarkdown(text) {
+    if (!text) return '<p style="color:var(--text-faint)">No description yet.</p>'
+    return text
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^- (.+)$/gm, '<li>$1</li>')
+      .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+      .replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
+        const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('')
+        const rows = body.trim().split('\n').map(row => {
+          const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('')
+          return `<tr>${tds}</tr>`
+        }).join('')
+        return `<table style="border-collapse:collapse;width:100%;margin:10px 0;font-size:12px"><tr>${ths}</tr>${rows}</table>`
+      })
+      .replace(/\n\n+/g, '</p><p>')
+      .replace(/^(?!<[hulpot])(.+)/gm, '<p>$1</p>')
+      .replace(/<p><\/p>/g, '')
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Feature 1: ShapeApi — wraps all fetch() calls to backend endpoints
+  // ────────────────────────────────────────────────────────────────────
+  class ShapeApi extends Feature {
+    static shortcut = 'features.shapeApi'
+    static { Feature.register(this, 'shapeApi') }
+
+    /** Fetch all goals for context display */
+    async fetchGoals() {
+      const res = await fetch(`${API}/api/goals`)
       const data = await res.json()
-      goals = data.goals || []
-    } catch (e) {
-      console.error('Failed to load goals:', e)
+      return data.goals || []
     }
 
-    if (ideaParam) {
-      await startInterview(ideaParam)
-    } else {
-      await loadPicker()
+    /** Fetch shapeable ideas (spark/exploring status) */
+    async fetchIdeas() {
+      const res = await fetch(`${API}/api/ideas`)
+      const data = await res.json()
+      return data.ideas || []
+    }
+
+    /** Fetch a single idea by slug */
+    async fetchIdea(slug) {
+      const res = await fetch(`${API}/api/idea/${encodeURIComponent(slug)}`)
+      if (!res.ok) throw new Error('Idea not found')
+      return res.json()
+    }
+
+    /** Save interview results for an idea */
+    async saveIdea(slug, { status, tags, appendSections }) {
+      const res = await fetch(`${API}/api/idea/${encodeURIComponent(slug)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status,
+          tags: tags?.length ? tags : undefined,
+          appendSections: appendSections && Object.keys(appendSections).length ? appendSections : undefined,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Save failed')
+      return data
     }
   }
 
-  // ── Picker ──
-  async function loadPicker() {
-    try {
-      const res = await fetch('/api/ideas')
-      const data = await res.json()
-      const ideas = data.ideas || []
+  // ────────────────────────────────────────────────────────────────────
+  // Feature 2: ShapeStore — manages loaded data, readiness, tags
+  // ────────────────────────────────────────────────────────────────────
+  class ShapeStore extends Feature {
+    static shortcut = 'features.shapeStore'
+    static { Feature.register(this, 'shapeStore') }
 
-      const grid = document.getElementById('ideaGrid')
-      const empty = document.getElementById('emptyState')
+    _ideas = []
+    _goals = []
+    _currentIdea = null
+    _currentSlug = null
+    _tags = []
 
-      if (ideas.length === 0) {
-        grid.style.display = 'none'
-        empty.style.display = 'block'
-        return
+    get ideas() { return this._ideas }
+    get goals() { return this._goals }
+    get currentIdea() { return this._currentIdea }
+    get currentSlug() { return this._currentSlug }
+    get tags() { return [...this._tags] }
+
+    /** Load goals from API */
+    async loadGoals() {
+      const api = this.container.feature('shapeApi')
+      try {
+        this._goals = await api.fetchGoals()
+        this.state.set('goalCount', this._goals.length)
+        this.emit('goals:loaded', this._goals)
+      } catch (e) {
+        console.error('Failed to load goals:', e)
+      }
+    }
+
+    /** Load shapeable ideas from API */
+    async loadIdeas() {
+      const api = this.container.feature('shapeApi')
+      this._ideas = await api.fetchIdeas()
+      this.state.set('ideaCount', this._ideas.length)
+      this.emit('ideas:loaded', this._ideas)
+      return this._ideas
+    }
+
+    /** Select an idea for interview */
+    async selectIdea(slug) {
+      const api = this.container.feature('shapeApi')
+      this._currentIdea = await api.fetchIdea(slug)
+      this._currentSlug = slug
+      this._tags = [...(this._currentIdea.tags || [])]
+      this.state.set('currentSlug', slug)
+      this.emit('idea:selected', this._currentIdea)
+      return this._currentIdea
+    }
+
+    /** Clear the current selection */
+    clearSelection() {
+      this._currentIdea = null
+      this._currentSlug = null
+      this._tags = []
+      this.state.set('currentSlug', null)
+      this.emit('idea:cleared')
+    }
+
+    /** Resolve a goal ID to its title */
+    goalLabel(goalId) {
+      if (!goalId) return null
+      const goal = this._goals.find(g => g.id === goalId)
+      return goal ? goal.title : goalId
+    }
+
+    /** Calculate readiness score for an idea (0-100) */
+    calcReadiness(idea) {
+      let score = 0
+      if (idea.contentLength > 100) score += 20
+      if (idea.contentLength > 500) score += 15
+      if (idea.contentLength > 1000) score += 10
+      if (idea.tags.length > 0) score += 15
+      if (idea.tags.length > 2) score += 10
+      if (idea.goal) score += 15
+      if (idea.status === 'exploring') score += 15
+      return Math.min(score, 100)
+    }
+
+    // ── Tag management ──
+
+    addTag(tag) {
+      const val = tag.replace(/,/g, '').trim().toLowerCase()
+      if (val && !this._tags.includes(val)) {
+        this._tags.push(val)
+        this.emit('tags:changed', this._tags)
+      }
+    }
+
+    removeTag(index) {
+      this._tags.splice(index, 1)
+      this.emit('tags:changed', this._tags)
+    }
+
+    popTag() {
+      if (this._tags.length) {
+        this._tags.pop()
+        this.emit('tags:changed', this._tags)
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Feature 3: ShapeApp — central orchestrator
+  // ────────────────────────────────────────────────────────────────────
+  class ShapeApp extends Feature {
+    static shortcut = 'features.shapeApp'
+    static { Feature.register(this, 'shapeApp') }
+
+    async afterInitialize() {
+      this.state.set('view', 'picker')
+      this.state.set('ready', false)
+
+      const store = this.container.feature('shapeStore')
+      await store.loadGoals()
+
+      // Check URL param for direct idea link
+      const params = new URLSearchParams(window.location.search)
+      const ideaParam = params.get('idea')
+
+      if (ideaParam) {
+        await this.startInterview(ideaParam)
+      } else {
+        await this.showPicker()
       }
 
-      grid.style.display = 'grid'
-      empty.style.display = 'none'
+      this.state.set('ready', true)
+      this.emit('ready')
+    }
 
-      grid.innerHTML = ideas.map(idea => {
-        const readiness = calcReadiness(idea)
-        const readinessClass = readiness < 30 ? 'low' : readiness < 60 ? 'medium' : 'high'
-        const goalLabel = idea.goal ? goals.find(g => g.id === idea.goal)?.title || idea.goal : 'no goal'
+    /** Navigate to picker view and reload ideas */
+    async showPicker() {
+      const store = this.container.feature('shapeStore')
+      store.clearSelection()
+      this.state.set('view', 'picker')
+      this.emit('view:picker')
+      await store.loadIdeas()
+    }
 
-        return `
-          <div class="idea-card" onclick="startInterview('${idea.slug}')">
-            <div class="idea-title">${esc(idea.title)}</div>
-            <div class="idea-meta">
-              <span class="status-badge ${idea.status}">${idea.status}</span>
-              <span class="doc-goal">${esc(goalLabel)}</span>
-            </div>
-            ${idea.tags.length ? `<div class="idea-tags">${idea.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
-            <div class="readiness-bar">
-              <div class="readiness-fill ${readinessClass}" style="width:${readiness}%"></div>
-            </div>
+    /** Start the interview for a specific idea by slug */
+    async startInterview(slug) {
+      const store = this.container.feature('shapeStore')
+      await store.selectIdea(slug)
+      this.state.set('view', 'interview')
+      this.emit('view:interview', store.currentIdea)
+    }
+
+    /** Collect form data and save the interview decision */
+    async saveDecision(decision) {
+      const store = this.container.feature('shapeStore')
+      const api = this.container.feature('shapeApi')
+
+      if (!store.currentSlug) return
+
+      this.emit('saving', { slug: store.currentSlug, decision })
+
+      const appendSections = {}
+      const problem = document.getElementById('qProblem').value.trim()
+      const scope = document.getElementById('qScope').value.trim()
+      const deps = document.getElementById('qDeps').value.trim()
+      const success = document.getElementById('qSuccess').value.trim()
+      const effort = document.getElementById('qEffort').value
+      const priority = document.getElementById('qPriority').value
+
+      if (problem) appendSections['Problem'] = problem
+      if (scope) appendSections['Scope'] = scope
+      if (deps) appendSections['Dependencies'] = deps
+      if (success) appendSections['Success Criteria'] = success
+
+      const assessmentParts = []
+      if (effort) assessmentParts.push(`**Effort:** ${effort}`)
+      if (priority) assessmentParts.push(`**Priority:** ${priority}`)
+      if (assessmentParts.length) {
+        appendSections['Assessment'] = assessmentParts.join('\n')
+      }
+
+      const data = await api.saveIdea(store.currentSlug, {
+        status: decision,
+        tags: store.tags,
+        appendSections,
+      })
+
+      // Emit lifecycle events
+      this.emit('idea:shaped', {
+        slug: store.currentSlug,
+        title: store.currentIdea.title,
+        oldStatus: data.oldStatus,
+        newStatus: data.newStatus,
+        decision,
+      })
+
+      // Emit to container/parent for external listeners
+      if (typeof container.emit === 'function') {
+        container.emit('ideaShaped', {
+          slug: store.currentSlug,
+          oldStatus: data.oldStatus,
+          newStatus: data.newStatus,
+          decision,
+        })
+      }
+      if (window.parent !== window) {
+        window.parent.postMessage({
+          type: '__PRESENTER_EVENT__',
+          action: 'ideaShaped',
+          data: { slug: store.currentSlug, oldStatus: data.oldStatus, newStatus: data.newStatus, decision },
+        }, '*')
+      }
+
+      this.emit('saved', { slug: store.currentSlug, decision })
+      return data
+    }
+
+    /** Return a snapshot of the current app state */
+    snapshot() {
+      const store = this.container.feature('shapeStore')
+      return {
+        view: this.state.get('view'),
+        ready: this.state.get('ready'),
+        ideaCount: store.ideas.length,
+        goalCount: store.goals.length,
+        currentSlug: store.currentSlug,
+        currentTitle: store.currentIdea?.title || null,
+        tags: store.tags,
+      }
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────
+  // Boot features & bind UI
+  // ────────────────────────────────────────────────────────────────────
+  const api = container.feature('shapeApi')
+  const store = container.feature('shapeStore')
+  const app = container.feature('shapeApp')
+
+  window.app = app
+  window.luca = container
+
+  // ── DOM references ──
+  const el = id => document.getElementById(id)
+  const grid = el('ideaGrid')
+  const empty = el('emptyState')
+  const pickerView = el('picker-view')
+  const interviewView = el('interview-view')
+  const backBtn = el('backBtn')
+  const docPanel = el('docPanel')
+  const tagInput = el('tagInput')
+  const tagsWrapper = el('tagsWrapper')
+  const toast = el('toast')
+
+  // ── Toast helper ──
+  function showToast(msg, isError = false) {
+    toast.textContent = msg
+    toast.className = 'toast' + (isError ? ' error' : '')
+    setTimeout(() => toast.classList.add('show'), 10)
+    setTimeout(() => toast.classList.remove('show'), 3000)
+  }
+
+  // ── Render helpers ──
+  function renderIdeaGrid(ideas) {
+    if (ideas.length === 0) {
+      grid.style.display = 'none'
+      empty.style.display = 'block'
+      return
+    }
+    grid.style.display = 'grid'
+    empty.style.display = 'none'
+
+    grid.innerHTML = ideas.map(idea => {
+      const readiness = store.calcReadiness(idea)
+      const readinessClass = readiness < 30 ? 'low' : readiness < 60 ? 'medium' : 'high'
+      const goalLabel = idea.goal ? store.goalLabel(idea.goal) || 'no goal' : 'no goal'
+      return `
+        <div class="idea-card" data-slug="${idea.slug}">
+          <div class="idea-title">${esc(idea.title)}</div>
+          <div class="idea-meta">
+            <span class="status-badge ${idea.status}">${idea.status}</span>
+            <span class="doc-goal">${esc(goalLabel)}</span>
           </div>
-        `
-      }).join('')
-
-    } catch (err) {
-      showToast('Failed to load ideas: ' + err.message, true)
-    }
-  }
-
-  function calcReadiness(idea) {
-    let score = 0
-    // Content length heuristic
-    if (idea.contentLength > 100) score += 20
-    if (idea.contentLength > 500) score += 15
-    if (idea.contentLength > 1000) score += 10
-    // Tags
-    if (idea.tags.length > 0) score += 15
-    if (idea.tags.length > 2) score += 10
-    // Goal alignment
-    if (idea.goal) score += 15
-    // Status
-    if (idea.status === 'exploring') score += 15
-    return Math.min(score, 100)
-  }
-
-  // ── Interview ──
-  async function startInterview(slug) {
-    try {
-      const res = await fetch(`/api/idea/${encodeURIComponent(slug)}`)
-      if (!res.ok) throw new Error('Idea not found')
-      currentIdea = await res.json()
-      currentSlug = slug
-
-      // Render left panel
-      renderDocPanel(currentIdea)
-
-      // Pre-populate tags
-      tags = [...(currentIdea.tags || [])]
-      renderTags()
-
-      // Clear form fields
-      document.getElementById('qProblem').value = ''
-      document.getElementById('qScope').value = ''
-      document.getElementById('qDeps').value = ''
-      document.getElementById('qSuccess').value = ''
-      document.getElementById('qEffort').value = ''
-      document.getElementById('qPriority').value = ''
-
-      // Switch view
-      document.getElementById('picker-view').classList.remove('active')
-      document.getElementById('interview-view').classList.add('active')
-      document.getElementById('backBtn').style.display = 'block'
-
-    } catch (err) {
-      showToast('Failed to load idea: ' + err.message, true)
-    }
+          ${idea.tags.length ? `<div class="idea-tags">${idea.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('')}</div>` : ''}
+          <div class="readiness-bar">
+            <div class="readiness-fill ${readinessClass}" style="width:${readiness}%"></div>
+          </div>
+        </div>
+      `
+    }).join('')
   }
 
   function renderDocPanel(idea) {
-    const goalLabel = idea.goal ? goals.find(g => g.id === idea.goal)?.title || idea.goal : null
-
-    const panel = document.getElementById('docPanel')
-    panel.innerHTML = `
+    const goalLabel = store.goalLabel(idea.goal)
+    docPanel.innerHTML = `
       <div class="doc-header">
         <h2>${esc(idea.title)}</h2>
         <div class="doc-meta">
@@ -769,188 +1017,89 @@
     `
   }
 
-  // ── Save ──
-  async function save(decision) {
-    if (!currentSlug) return
-
-    // Disable buttons during save
-    document.querySelectorAll('.decision-buttons .btn').forEach(b => b.disabled = true)
-
-    const appendSections = {}
-    const problem = document.getElementById('qProblem').value.trim()
-    const scope = document.getElementById('qScope').value.trim()
-    const deps = document.getElementById('qDeps').value.trim()
-    const success = document.getElementById('qSuccess').value.trim()
-    const effort = document.getElementById('qEffort').value
-    const priority = document.getElementById('qPriority').value
-
-    if (problem) appendSections['Problem'] = problem
-    if (scope) appendSections['Scope'] = scope
-    if (deps) appendSections['Dependencies'] = deps
-    if (success) appendSections['Success Criteria'] = success
-
-    // Build effort/priority into a single Assessment section
-    const assessmentParts = []
-    if (effort) assessmentParts.push(`**Effort:** ${effort}`)
-    if (priority) assessmentParts.push(`**Priority:** ${priority}`)
-    if (assessmentParts.length) {
-      appendSections['Assessment'] = assessmentParts.join('\n')
-    }
-
-    try {
-      const res = await fetch(`/api/idea/${encodeURIComponent(currentSlug)}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: decision,
-          tags: tags.length ? tags : undefined,
-          appendSections: Object.keys(appendSections).length ? appendSections : undefined,
-        }),
-      })
-
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Save failed')
-
-      // Emit events
-      emitEvent('ideaShaped', {
-        slug: currentSlug,
-        oldStatus: data.oldStatus,
-        newStatus: data.newStatus,
-        decision,
-      })
-
-      const labels = { ready: 'Marked as Ready', exploring: 'Keeping Exploring', parked: 'Parked' }
-      showToast(`${labels[decision] || decision} — ${currentIdea.title}`)
-
-      // Return to picker after brief delay
-      setTimeout(() => {
-        showPicker()
-      }, 1200)
-
-    } catch (err) {
-      showToast('Save failed: ' + err.message, true)
-      document.querySelectorAll('.decision-buttons .btn').forEach(b => b.disabled = false)
-    }
-  }
-
-  function showPicker() {
-    currentSlug = null
-    currentIdea = null
-    document.getElementById('interview-view').classList.remove('active')
-    document.getElementById('picker-view').classList.add('active')
-    document.getElementById('backBtn').style.display = 'none'
-    loadPicker()
-  }
-
-  // ── Tags ──
-  const tagInput = document.getElementById('tagInput')
-  tagInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault()
-      const val = tagInput.value.replace(/,/g, '').trim().toLowerCase()
-      if (val && !tags.includes(val)) {
-        tags.push(val)
-        renderTags()
-      }
-      tagInput.value = ''
-    }
-    if (e.key === 'Backspace' && !tagInput.value && tags.length) {
-      tags.pop()
-      renderTags()
-    }
-  })
-
-  function renderTags() {
-    const wrapper = document.getElementById('tagsWrapper')
-    const input = document.getElementById('tagInput')
-    // Remove existing chips
-    wrapper.querySelectorAll('.tag-chip').forEach(c => c.remove())
-    // Add chips before input
+  function renderTags(tags) {
+    tagsWrapper.querySelectorAll('.tag-chip').forEach(c => c.remove())
     tags.forEach((t, i) => {
       const chip = document.createElement('span')
       chip.className = 'tag-chip'
-      chip.innerHTML = `${esc(t)} <span class="remove" onclick="removeTag(${i})">x</span>`
-      wrapper.insertBefore(chip, input)
+      chip.innerHTML = `${esc(t)} <span class="remove" data-index="${i}">x</span>`
+      tagsWrapper.insertBefore(chip, tagInput)
     })
   }
 
-  function removeTag(i) {
-    tags.splice(i, 1)
-    renderTags()
-  }
+  // ── Feature event listeners ──
+  store.on('ideas:loaded', (ideas) => renderIdeaGrid(ideas))
+  store.on('tags:changed', (tags) => renderTags(tags))
 
-  // ── Events ──
-  function emitEvent(name, data) {
-    // ContainerLink / presenter
-    if (window.luca && typeof window.luca.emit === 'function') {
-      window.luca.emit(name, data)
+  app.on('view:picker', () => {
+    interviewView.classList.remove('active')
+    pickerView.classList.add('active')
+    backBtn.style.display = 'none'
+  })
+
+  app.on('view:interview', (idea) => {
+    renderDocPanel(idea)
+    renderTags(store.tags)
+    el('qProblem').value = ''
+    el('qScope').value = ''
+    el('qDeps').value = ''
+    el('qSuccess').value = ''
+    el('qEffort').value = ''
+    el('qPriority').value = ''
+    pickerView.classList.remove('active')
+    interviewView.classList.add('active')
+    backBtn.style.display = 'block'
+  })
+
+  app.on('saving', () => {
+    document.querySelectorAll('.decision-buttons .btn').forEach(b => b.disabled = true)
+  })
+
+  app.on('saved', ({ decision }) => {
+    const labels = { ready: 'Marked as Ready', exploring: 'Keeping Exploring', parked: 'Parked' }
+    showToast(`${labels[decision] || decision} — ${store.currentIdea?.title || ''}`)
+    setTimeout(() => app.showPicker(), 1200)
+  })
+
+  // ── DOM event listeners ──
+  grid.addEventListener('click', (e) => {
+    const card = e.target.closest('.idea-card')
+    if (card) app.startInterview(card.dataset.slug)
+  })
+
+  backBtn.addEventListener('click', () => app.showPicker())
+
+  tagInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault()
+      store.addTag(tagInput.value)
+      tagInput.value = ''
     }
-    // PostMessage for parent frames
-    if (window.parent !== window) {
-      window.parent.postMessage({
-        type: '__PRESENTER_EVENT__',
-        action: name,
-        data,
-      }, '*')
+    if (e.key === 'Backspace' && !tagInput.value) {
+      store.popTag()
     }
-  }
+  })
 
-  // ── Markdown (lightweight) ──
-  function renderMarkdown(text) {
-    if (!text) return '<p style="color:var(--text-faint)">No description yet.</p>'
+  tagsWrapper.addEventListener('click', (e) => {
+    const remove = e.target.closest('.remove')
+    if (remove) store.removeTag(Number(remove.dataset.index))
+    tagInput.focus()
+  })
 
-    return text
-      // Code blocks
-      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-      // Inline code
-      .replace(/`([^`]+)`/g, '<code>$1</code>')
-      // H3
-      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-      // H2
-      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-      // H1
-      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-      // Bold
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      // Italic
-      .replace(/\*(.+?)\*/g, '<em>$1</em>')
-      // Unordered list items
-      .replace(/^- (.+)$/gm, '<li>$1</li>')
-      // Wrap consecutive <li> in <ul>
-      .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-      // Tables (basic: header | separator | rows)
-      .replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)+)/gm, (_, header, sep, body) => {
-        const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('')
-        const rows = body.trim().split('\n').map(row => {
-          const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('')
-          return `<tr>${tds}</tr>`
-        }).join('')
-        return `<table style="border-collapse:collapse;width:100%;margin:10px 0;font-size:12px"><tr>${ths}</tr>${rows}</table>`
-      })
-      // Paragraphs
-      .replace(/\n\n+/g, '</p><p>')
-      .replace(/^(?!<[hulpot])(.+)/gm, '<p>$1</p>')
-      // Clean up empty <p> tags
-      .replace(/<p><\/p>/g, '')
-  }
-
-  // ── Utils ──
-  function esc(s) {
-    const d = document.createElement('div')
-    d.textContent = s || ''
-    return d.innerHTML
-  }
-
-  function showToast(msg, isError = false) {
-    const toast = document.getElementById('toast')
-    toast.textContent = msg
-    toast.className = 'toast' + (isError ? ' error' : '')
-    setTimeout(() => toast.classList.add('show'), 10)
-    setTimeout(() => toast.classList.remove('show'), 3000)
-  }
-
-  // ── Boot ──
-  init()
+  // Decision buttons
+  document.querySelectorAll('.decision-buttons .btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const decision = btn.classList.contains('btn-ready') ? 'ready'
+        : btn.classList.contains('btn-explore') ? 'exploring'
+        : 'parked'
+      try {
+        await app.saveDecision(decision)
+      } catch (err) {
+        showToast('Save failed: ' + err.message, true)
+        document.querySelectorAll('.decision-buttons .btn').forEach(b => b.disabled = false)
+      }
+    })
+  })
 </script>
 </body>
 </html>

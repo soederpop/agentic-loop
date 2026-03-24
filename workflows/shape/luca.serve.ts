@@ -5,7 +5,7 @@
  * Left panel shows the idea document, right panel shows interview questions.
  *
  * Usage:
- *   luca serve --setup workflows/shape/luca.serve.ts --staticDir workflows/shape/public --endpoints-dir workflows/shape/endpoints --port 9303 --no-open
+ *   luca serve --setup workflows/shape/luca.serve.ts --staticDir workflows/shape/public --endpoints-dir workflows/shape/endpoints --any-port --no-open
  */
 export default async function setup(server: any) {
   const container = server.container

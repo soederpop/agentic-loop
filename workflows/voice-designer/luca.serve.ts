@@ -4,7 +4,7 @@
  * Exposes the assistant voice configs for live editing and phrase testing.
  *
  * Usage:
- *   luca serve --setup workflows/voice-designer/luca.serve.ts --staticDir workflows/voice-designer/public --endpoints-dir workflows/voice-designer/endpoints --port 9305 --no-open
+ *   luca serve --setup workflows/voice-designer/luca.serve.ts --staticDir workflows/voice-designer/public --endpoints-dir workflows/voice-designer/endpoints --any-port --no-open
  */
 export default async function setup(server: any) {
   const container = server.container

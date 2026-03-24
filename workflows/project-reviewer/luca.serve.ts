@@ -5,7 +5,7 @@
  * Chat is powered by the ChatService feature — no hand-rolled WebSocket code.
  *
  * Usage:
- *   luca serve --setup workflows/project-reviewer/luca.serve.ts --staticDir workflows/project-reviewer/public --endpoints-dir workflows/project-reviewer/endpoints --port 9310
+ *   luca serve --setup workflows/project-reviewer/luca.serve.ts --staticDir workflows/project-reviewer/public --endpoints-dir workflows/project-reviewer/endpoints --any-port
  */
 import type { ChatService } from '../../features/chat-service'
 

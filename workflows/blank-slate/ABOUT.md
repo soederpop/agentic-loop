@@ -1,7 +1,6 @@
 ---
 title: Blank Slate
 description: First-run onboarding wizard that walks you through defining your vision, goals, and first ideas
-port: 9301
 tags:
   - onboarding
   - setup

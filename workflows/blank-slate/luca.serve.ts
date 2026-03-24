@@ -8,7 +8,7 @@
  * 4. Celebrating completion
  *
  * Usage:
- *   luca serve --setup workflows/blank-slate/luca.serve.ts --staticDir workflows/blank-slate/public --endpoints-dir workflows/blank-slate/endpoints --port 9301 --no-open
+ *   luca serve --setup workflows/blank-slate/luca.serve.ts --staticDir workflows/blank-slate/public --endpoints-dir workflows/blank-slate/endpoints --any-port --no-open
  */
 export default async function setup(server: any) {
   const container = server.container

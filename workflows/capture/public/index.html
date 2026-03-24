@@ -399,256 +399,387 @@
 </div>
 
 <script type="module">
-  // ── State ─────────────────────────────────
-  const tags = [];
-  let goals = [];
-  let ideas = [];
-  let submitting = false;
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
 
-  const titleEl = document.getElementById('title');
-  const goalEl = document.getElementById('goal');
-  const descEl = document.getElementById('description');
-  const tagInputEl = document.getElementById('tag-input');
-  const tagAreaEl = document.getElementById('tag-area');
-  const submitBtn = document.getElementById('submit-btn');
-  const cancelBtn = document.getElementById('cancel-btn');
-  const errorEl = document.getElementById('error');
-  const formView = document.getElementById('form-view');
-  const successView = document.getElementById('success-view');
-  const existingIdeasEl = document.getElementById('existing-ideas');
-  const anotherBtn = document.getElementById('another-btn');
+  // Get Feature base class from the registry
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
 
-  // ── API base — auto-detect from current URL ──
-  const API = window.location.origin;
+  const API = window.location.origin
 
-  // ── Load goals and ideas ──────────────────
-  async function loadData() {
-    try {
-      const [goalsRes, ideasRes] = await Promise.all([
-        fetch(`${API}/api/goals`).then(r => r.json()),
-        fetch(`${API}/api/ideas`).then(r => r.json()),
-      ]);
-
-      goals = goalsRes.goals || [];
-      ideas = ideasRes.ideas || [];
-
-      // Populate goal picker
-      goalEl.innerHTML = '<option value="">No goal alignment</option>';
-      for (const g of goals) {
-        const opt = document.createElement('option');
-        opt.value = g.id;
-        opt.textContent = g.title;
-        goalEl.appendChild(opt);
-      }
-
-      // Pre-select if there's only one goal
-      if (goals.length === 1) {
-        goalEl.value = goals[0].id;
-      }
-
-      // Populate existing ideas
-      const summary = existingIdeasEl.querySelector('summary');
-      summary.textContent = `Existing ideas (${ideas.length})`;
-
-      for (const idea of ideas) {
-        const div = document.createElement('div');
-        div.className = 'existing-idea';
-        const statusClass = idea.status === 'parked' ? 'idea-status parked' : 'idea-status';
-        div.innerHTML = `<span class="${statusClass}">${esc(idea.status)}</span> ${esc(idea.title)}`;
-        existingIdeasEl.appendChild(div);
-      }
-    } catch (err) {
-      console.error('Failed to load data:', err);
-      existingIdeasEl.querySelector('summary').textContent = 'Existing ideas (offline)';
-    }
+  /** HTML-escape helper */
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str)
+    return d.innerHTML
   }
 
-  // ── Title validation ──────────────────────
-  titleEl.addEventListener('input', () => {
-    submitBtn.disabled = !titleEl.value.trim();
-    hideError();
-  });
+  // ═══════════════════════════════════════════
+  // Feature: CaptureApi
+  // Wraps all fetch() calls to the capture backend
+  // ═══════════════════════════════════════════
+  class CaptureApi extends Feature {
+    static shortcut = 'features.captureApi'
+    static { Feature.register(this, 'captureApi') }
 
-  // ── Tag input ─────────────────────────────
-  tagAreaEl.addEventListener('click', () => tagInputEl.focus());
-
-  tagInputEl.addEventListener('keydown', (e) => {
-    if ((e.key === 'Enter' || e.key === ',') && tagInputEl.value.trim()) {
-      e.preventDefault();
-      addTag(tagInputEl.value.trim().replace(/,/g, ''));
-      tagInputEl.value = '';
+    /** Fetch all goals from /api/goals */
+    async fetchGoals() {
+      const res = await fetch(`${API}/api/goals`)
+      const data = await res.json()
+      return data.goals || []
     }
-    if (e.key === 'Backspace' && !tagInputEl.value && tags.length) {
-      removeTag(tags.length - 1);
+
+    /** Fetch all ideas from /api/ideas */
+    async fetchIdeas() {
+      const res = await fetch(`${API}/api/ideas`)
+      const data = await res.json()
+      return data.ideas || []
     }
-  });
 
-  function addTag(text) {
-    const clean = text.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-    if (!clean || tags.includes(clean)) return;
-    tags.push(clean);
-    renderTags();
-  }
-
-  function removeTag(index) {
-    tags.splice(index, 1);
-    renderTags();
-  }
-
-  function renderTags() {
-    // Remove existing tag elements
-    tagAreaEl.querySelectorAll('.tag').forEach(t => t.remove());
-    // Add tags before the input
-    for (let i = 0; i < tags.length; i++) {
-      const tag = document.createElement('span');
-      tag.className = 'tag';
-      tag.innerHTML = `${esc(tags[i])} <button type="button">&times;</button>`;
-      tag.querySelector('button').addEventListener('click', () => removeTag(i));
-      tagAreaEl.insertBefore(tag, tagInputEl);
-    }
-  }
-
-  // ── Submit ────────────────────────────────
-  submitBtn.addEventListener('click', submit);
-
-  titleEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && titleEl.value.trim()) {
-      e.preventDefault();
-      descEl.focus();
-    }
-  });
-
-  descEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && e.metaKey && titleEl.value.trim()) {
-      e.preventDefault();
-      submit();
-    }
-  });
-
-  async function submit() {
-    if (submitting || !titleEl.value.trim()) return;
-    submitting = true;
-    submitBtn.disabled = true;
-    submitBtn.textContent = 'Filing...';
-    hideError();
-
-    try {
+    /** Create a new idea via POST /api/ideas */
+    async createIdea({ title, goal, tags, description }) {
       const res = await fetch(`${API}/api/ideas`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: titleEl.value.trim(),
-          goal: goalEl.value || undefined,
-          tags: [...tags],
-          description: descEl.value.trim() || undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Failed to create idea');
-      }
-
-      // Success
-      document.getElementById('success-title').textContent = `"${data.title}" filed`;
-      const goalName = goals.find(g => g.id === goalEl.value)?.title;
-      document.getElementById('success-detail').textContent = goalName
-        ? `Saved as a spark under ${goalName}`
-        : 'Saved as a spark';
-
-      formView.style.display = 'none';
-      successView.style.display = '';
-
-      // Emit event for containerLink / presenter feedback
-      if (window.luca) {
-        try {
-          const link = window.luca.feature('containerLink');
-          if (link && link.isConnected) {
-            link.emitToHost('ideaCaptured', {
-              id: data.id,
-              title: data.title,
-              slug: data.slug,
-              goal: goalEl.value || null,
-              tags: [...tags],
-            });
-          }
-        } catch {}
-      }
-
-      // Also post to parent if in presenter iframe
-      try {
-        window.parent.postMessage({
-          type: '__PRESENTER_EVENT__',
-          action: 'submitted',
-          data: {
-            id: data.id,
-            title: data.title,
-            slug: data.slug,
-          },
-        }, '*');
-      } catch {}
-    } catch (err) {
-      showError(err.message);
-    } finally {
-      submitting = false;
-      submitBtn.disabled = !titleEl.value.trim();
-      submitBtn.textContent = 'File It';
+        body: JSON.stringify({ title, goal, tags, description }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create idea')
+      return data
     }
   }
 
-  // ── Cancel ────────────────────────────────
-  cancelBtn.addEventListener('click', () => {
+  // ═══════════════════════════════════════════
+  // Feature: CaptureStore
+  // Manages loaded data (goals, ideas) and form state (tags)
+  // ═══════════════════════════════════════════
+  class CaptureStore extends Feature {
+    static shortcut = 'features.captureStore'
+    static { Feature.register(this, 'captureStore') }
+
+    _goals = []
+    _ideas = []
+    _tags = []
+
+    get goals() { return this._goals }
+    get ideas() { return this._ideas }
+    get tags() { return [...this._tags] }
+
+    async afterInitialize() {
+      this.state.set('goalsCount', 0)
+      this.state.set('ideasCount', 0)
+      this.state.set('tagsCount', 0)
+      this.state.set('submitting', false)
+    }
+
+    /** Load goals and ideas from the API */
+    async loadData() {
+      const api = this.container.feature('captureApi')
+      try {
+        const [goals, ideas] = await Promise.all([
+          api.fetchGoals(),
+          api.fetchIdeas(),
+        ])
+        this._goals = goals
+        this._ideas = ideas
+        this.state.set('goalsCount', goals.length)
+        this.state.set('ideasCount', ideas.length)
+        this.emit('data:loaded', { goals, ideas })
+      } catch (err) {
+        console.error('Failed to load data:', err)
+        this.emit('data:error', err)
+      }
+    }
+
+    /** Add a tag (cleaned/normalized) */
+    addTag(text) {
+      const clean = text.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+      if (!clean || this._tags.includes(clean)) return false
+      this._tags.push(clean)
+      this.state.set('tagsCount', this._tags.length)
+      this.emit('tags:changed', this._tags)
+      return true
+    }
+
+    /** Remove a tag by index */
+    removeTag(index) {
+      if (index < 0 || index >= this._tags.length) return
+      this._tags.splice(index, 1)
+      this.state.set('tagsCount', this._tags.length)
+      this.emit('tags:changed', this._tags)
+    }
+
+    /** Clear all tags */
+    clearTags() {
+      this._tags.length = 0
+      this.state.set('tagsCount', 0)
+      this.emit('tags:changed', this._tags)
+    }
+
+    /** Find a goal by id */
+    getGoal(id) {
+      return this._goals.find(g => g.id === id) || null
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // Feature: CaptureApp (orchestrator)
+  // Composes CaptureApi + CaptureStore, provides toolable API
+  // ═══════════════════════════════════════════
+  class CaptureApp extends Feature {
+    static shortcut = 'features.captureApp'
+    static { Feature.register(this, 'captureApp') }
+
+    async afterInitialize() {
+      this.state.set('ready', false)
+      this.state.set('view', 'form')
+      this.state.set('lastCaptured', null)
+    }
+
+    get api() { return this.container.feature('captureApi') }
+    get store() { return this.container.feature('captureStore') }
+
+    /** Boot the app — load data and signal ready */
+    async start() {
+      await this.store.loadData()
+      this.state.set('ready', true)
+      this.emit('ready')
+    }
+
+    /** Submit a new idea from the current form values */
+    async submitIdea({ title, goal, tags, description }) {
+      if (this.store.state.get('submitting')) return null
+      this.store.state.set('submitting', true)
+      this.emit('submit:start')
+
+      try {
+        const data = await this.api.createIdea({
+          title: title.trim(),
+          goal: goal || undefined,
+          tags,
+          description: description?.trim() || undefined,
+        })
+
+        this.store.state.set('submitting', false)
+        this.state.set('view', 'success')
+        this.state.set('lastCaptured', { id: data.id, title: data.title, slug: data.slug, goal })
+
+        this.emit('submit:success', data)
+        this._notifyPresenter('submitted', { id: data.id, title: data.title, slug: data.slug })
+        this._notifyContainerLink('ideaCaptured', { id: data.id, title: data.title, slug: data.slug, goal: goal || null, tags })
+
+        return data
+      } catch (err) {
+        this.store.state.set('submitting', false)
+        this.emit('submit:error', err)
+        throw err
+      }
+    }
+
+    /** Reset form state and go back to form view */
+    resetAndCaptureAnother() {
+      this.store.clearTags()
+      this.state.set('view', 'form')
+      this.state.set('lastCaptured', null)
+      this.emit('form:reset')
+      // Reload to pick up the new idea in the list
+      this.store.loadData()
+    }
+
+    /** Signal close to presenter */
+    close() {
+      this._notifyPresenter('closed')
+      this.emit('form:reset')
+    }
+
+    /** Returns a snapshot of the full app state */
+    snapshot() {
+      return {
+        view: this.state.get('view'),
+        ready: this.state.get('ready'),
+        lastCaptured: this.state.get('lastCaptured'),
+        goals: this.store.goals.length,
+        ideas: this.store.ideas.length,
+        tags: this.store.tags,
+        submitting: this.store.state.get('submitting'),
+      }
+    }
+
+    /** Notify presenter iframe parent */
+    _notifyPresenter(action, data) {
+      try {
+        window.parent.postMessage({ type: '__PRESENTER_EVENT__', action, ...(data ? { data } : {}) }, '*')
+      } catch {}
+    }
+
+    /** Notify containerLink if connected */
+    _notifyContainerLink(event, payload) {
+      try {
+        const link = this.container.feature('containerLink')
+        if (link && link.isConnected) link.emitToHost(event, payload)
+      } catch {}
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // UI Bindings — thin layer that connects DOM to features
+  // ═══════════════════════════════════════════
+  const titleEl = document.getElementById('title')
+  const goalEl = document.getElementById('goal')
+  const descEl = document.getElementById('description')
+  const tagInputEl = document.getElementById('tag-input')
+  const tagAreaEl = document.getElementById('tag-area')
+  const submitBtn = document.getElementById('submit-btn')
+  const cancelBtn = document.getElementById('cancel-btn')
+  const errorEl = document.getElementById('error')
+  const formView = document.getElementById('form-view')
+  const successView = document.getElementById('success-view')
+  const existingIdeasEl = document.getElementById('existing-ideas')
+  const anotherBtn = document.getElementById('another-btn')
+
+  // Get feature instances
+  const app = container.feature('captureApp')
+  const store = container.feature('captureStore')
+
+  // ── Render: data loaded ──
+  store.on('data:loaded', ({ goals, ideas }) => {
+    // Populate goal picker
+    goalEl.innerHTML = '<option value="">No goal alignment</option>'
+    for (const g of goals) {
+      const opt = document.createElement('option')
+      opt.value = g.id
+      opt.textContent = g.title
+      goalEl.appendChild(opt)
+    }
+    if (goals.length === 1) goalEl.value = goals[0].id
+
+    // Populate existing ideas
+    const summary = existingIdeasEl.querySelector('summary')
+    summary.textContent = `Existing ideas (${ideas.length})`
+    existingIdeasEl.querySelectorAll('.existing-idea').forEach(el => el.remove())
+    for (const idea of ideas) {
+      const div = document.createElement('div')
+      div.className = 'existing-idea'
+      const statusClass = idea.status === 'parked' ? 'idea-status parked' : 'idea-status'
+      div.innerHTML = `<span class="${statusClass}">${esc(idea.status)}</span> ${esc(idea.title)}`
+      existingIdeasEl.appendChild(div)
+    }
+  })
+
+  store.on('data:error', () => {
+    existingIdeasEl.querySelector('summary').textContent = 'Existing ideas (offline)'
+  })
+
+  // ── Render: tags changed ──
+  store.on('tags:changed', (tags) => {
+    tagAreaEl.querySelectorAll('.tag').forEach(t => t.remove())
+    for (let i = 0; i < tags.length; i++) {
+      const tag = document.createElement('span')
+      tag.className = 'tag'
+      tag.innerHTML = `${esc(tags[i])} <button type="button">&times;</button>`
+      tag.querySelector('button').addEventListener('click', () => store.removeTag(i))
+      tagAreaEl.insertBefore(tag, tagInputEl)
+    }
+  })
+
+  // ── Render: submit lifecycle ──
+  app.on('submit:start', () => {
+    submitBtn.disabled = true
+    submitBtn.textContent = 'Filing...'
+    errorEl.classList.remove('visible')
+  })
+
+  app.on('submit:success', (data) => {
+    const lastCaptured = app.state.get('lastCaptured')
+    document.getElementById('success-title').textContent = `"${data.title}" filed`
+    const goalName = store.getGoal(lastCaptured?.goal)?.title
+    document.getElementById('success-detail').textContent = goalName
+      ? `Saved as a spark under ${goalName}`
+      : 'Saved as a spark'
+    formView.style.display = 'none'
+    successView.style.display = ''
+  })
+
+  app.on('submit:error', (err) => {
+    errorEl.textContent = err.message
+    errorEl.classList.add('visible')
+    submitBtn.disabled = !titleEl.value.trim()
+    submitBtn.textContent = 'File It'
+  })
+
+  // ── Render: form reset ──
+  app.on('form:reset', () => {
+    titleEl.value = ''
+    descEl.value = ''
+    tagInputEl.value = ''
+    submitBtn.disabled = true
+    submitBtn.textContent = 'File It'
+    errorEl.classList.remove('visible')
+    formView.style.display = ''
+    successView.style.display = 'none'
+  })
+
+  // ── DOM event handlers ──
+  titleEl.addEventListener('input', () => {
+    submitBtn.disabled = !titleEl.value.trim()
+    errorEl.classList.remove('visible')
+  })
+
+  tagAreaEl.addEventListener('click', () => tagInputEl.focus())
+
+  tagInputEl.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && tagInputEl.value.trim()) {
+      e.preventDefault()
+      store.addTag(tagInputEl.value.trim().replace(/,/g, ''))
+      tagInputEl.value = ''
+    }
+    if (e.key === 'Backspace' && !tagInputEl.value && store.tags.length) {
+      store.removeTag(store.tags.length - 1)
+    }
+  })
+
+  titleEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && titleEl.value.trim()) {
+      e.preventDefault()
+      descEl.focus()
+    }
+  })
+
+  descEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && e.metaKey && titleEl.value.trim()) {
+      e.preventDefault()
+      doSubmit()
+    }
+  })
+
+  submitBtn.addEventListener('click', doSubmit)
+
+  async function doSubmit() {
     try {
-      window.parent.postMessage({
-        type: '__PRESENTER_EVENT__',
-        action: 'closed',
-      }, '*');
+      await app.submitIdea({
+        title: titleEl.value,
+        goal: goalEl.value,
+        tags: store.tags,
+        description: descEl.value,
+      })
     } catch {}
-    // If not in an iframe, just reset
-    resetForm();
-  });
+  }
 
-  // ── Another ───────────────────────────────
+  cancelBtn.addEventListener('click', () => {
+    app.close()
+  })
+
   anotherBtn.addEventListener('click', () => {
-    resetForm();
-    formView.style.display = '';
-    successView.style.display = 'none';
-    titleEl.focus();
-    // Reload to pick up the new idea in the list
-    loadData();
-  });
+    app.resetAndCaptureAnother()
+    titleEl.focus()
+  })
 
-  function resetForm() {
-    titleEl.value = '';
-    descEl.value = '';
-    tagInputEl.value = '';
-    tags.length = 0;
-    renderTags();
-    submitBtn.disabled = true;
-    hideError();
-  }
+  // ── Expose for automation/debugging ──
+  window.app = app
+  window.luca = container
 
-  function showError(msg) {
-    errorEl.textContent = msg;
-    errorEl.classList.add('visible');
-  }
-
-  function hideError() {
-    errorEl.classList.remove('visible');
-  }
-
-  function esc(str) {
-    const d = document.createElement('div');
-    d.textContent = String(str);
-    return d.innerHTML;
-  }
-
-  // ── Boot ──────────────────────────────────
-  loadData();
-
-  // Try loading luca container (non-blocking, for containerLink if available)
-  import('https://esm.sh/@soederpop/luca@0.0.25/src/browser.ts').catch(() => {});
+  // ── Boot ──
+  await app.start()
 </script>
 </body>
 </html>

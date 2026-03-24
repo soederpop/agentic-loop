@@ -658,401 +658,634 @@
 </div>
 
 <script type="module">
-  const API = window.location.origin;
+  // ── Load Luca browser container ────────────────
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
 
-  // ── State ────────────────────────────────────
-  let currentStep = 1;
-  let visionWritten = false;
-  const createdGoals = [];
-  const createdIdeas = [];
-  let existingGoals = [];
+  const API = window.location.origin
 
-  // ── DOM refs ─────────────────────────────────
-  const panels = [null, document.getElementById('step-1'), document.getElementById('step-2'), document.getElementById('step-3'), document.getElementById('step-4')];
+  // ═══════════════════════════════════════════════
+  // Feature: ApiClient — wraps all fetch() calls
+  // ═══════════════════════════════════════════════
+  class ApiClient extends Feature {
+    static shortcut = 'features.apiClient'
 
-  // Vision
-  const visionExisting = document.getElementById('vision-existing');
-  const visionForm = document.getElementById('vision-form');
-  const visionPreview = document.getElementById('vision-preview-text');
-  const visionText = document.getElementById('vision-text');
-  const visionSaveBtn = document.getElementById('vision-save-btn');
-  const visionEditBtn = document.getElementById('vision-edit-btn');
-  const visionKeepBtn = document.getElementById('vision-keep-btn');
-  const visionError = document.getElementById('vision-error');
+    static stateSchema = {
+      lastError: { type: 'string', default: null, describe: 'Last API error message' },
+    }
 
-  // Goals
-  const goalsList = document.getElementById('goals-list');
-  const goalTitle = document.getElementById('goal-title');
-  const goalHorizon = document.getElementById('goal-horizon');
-  const goalMotivation = document.getElementById('goal-motivation');
-  const goalCriteria = document.getElementById('goal-criteria');
-  const goalAddBtn = document.getElementById('goal-add-btn');
-  const goalError = document.getElementById('goal-error');
-  const goalsNextBtn = document.getElementById('goals-next-btn');
+    static optionsSchema = {
+      apiBase: { type: 'string', default: '', describe: 'Base URL for API calls' },
+    }
 
-  // Ideas
-  const ideaGoalCtx = document.getElementById('ideas-goals-context');
-  const ideasList = document.getElementById('ideas-list');
-  const ideaTitle = document.getElementById('idea-title');
-  const ideaGoal = document.getElementById('idea-goal');
-  const ideaDesc = document.getElementById('idea-desc');
-  const ideaAddBtn = document.getElementById('idea-add-btn');
-  const ideaError = document.getElementById('idea-error');
+    static eventsSchema = {
+      'error': { args: ['error'], describe: 'Fired on any API error' },
+    }
 
-  // ── Step navigation ──────────────────────────
-  function goToStep(n) {
-    currentStep = n;
-    for (let i = 1; i <= 4; i++) {
-      panels[i].classList.toggle('active', i === n);
-      const dot = document.getElementById(`dot-${i}`);
-      const label = document.getElementById(`label-${i}`);
-      dot.classList.remove('active', 'done');
-      label.classList.remove('active', 'done');
-      if (i < n) {
-        dot.classList.add('done');
-        dot.textContent = '\u2713';
-        label.classList.add('done');
-      } else if (i === n) {
-        dot.classList.add('active');
-        dot.textContent = String(i);
-        label.classList.add('active');
-      } else {
-        dot.textContent = String(i);
-      }
-      if (i < 4) {
-        document.getElementById(`line-${i}`).classList.toggle('done', i < n);
+    static { Feature.register(this, 'apiClient') }
+
+    get apiBase() { return this.options.apiBase || API }
+
+    /** Fetch onboarding status (vision exists, goal/idea counts) */
+    async getStatus() {
+      return this._get('/api/status')
+    }
+
+    /** Fetch the current vision text */
+    async getVision() {
+      return this._get('/api/vision')
+    }
+
+    /** Save a new vision statement */
+    async saveVision(text) {
+      return this._post('/api/vision', { text })
+    }
+
+    /** Fetch all existing goals */
+    async getGoals() {
+      return this._get('/api/goals')
+    }
+
+    /** Create a new goal */
+    async createGoal({ title, horizon, motivation, successCriteria }) {
+      return this._post('/api/goals', { title, horizon, motivation, successCriteria })
+    }
+
+    /** Create a new idea */
+    async createIdea({ title, goal, description }) {
+      return this._post('/api/ideas', { title, goal, description })
+    }
+
+    async _get(path) {
+      try {
+        const res = await fetch(`${this.apiBase}${path}`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || `GET ${path} failed`)
+        return data
+      } catch (err) {
+        this.state.set('lastError', err.message)
+        this.emit('error', err)
+        throw err
       }
     }
-    // Re-trigger animation
-    const body = document.querySelector('.card-body');
-    body.style.animation = 'none';
-    body.offsetHeight; // reflow
-    body.style.animation = '';
+
+    async _post(path, body) {
+      try {
+        const res = await fetch(`${this.apiBase}${path}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || `POST ${path} failed`)
+        return data
+      } catch (err) {
+        this.state.set('lastError', err.message)
+        this.emit('error', err)
+        throw err
+      }
+    }
   }
 
-  // ── Helpers ──────────────────────────────────
+  // ═══════════════════════════════════════════════
+  // Feature: OnboardingStore — manages wizard data
+  // ═══════════════════════════════════════════════
+  class OnboardingStore extends Feature {
+    static shortcut = 'features.onboardingStore'
+
+    static stateSchema = {
+      currentStep:   { type: 'number',  default: 1,     describe: 'Active wizard step (1-4)' },
+      visionWritten: { type: 'boolean', default: false,  describe: 'Whether the user wrote/saved vision this session' },
+      hasVision:     { type: 'boolean', default: false,  describe: 'Whether a vision exists on the server' },
+      visionText:    { type: 'string',  default: '',     describe: 'Raw vision text from server' },
+    }
+
+    static eventsSchema = {
+      'step:changed':    { args: ['step'],   describe: 'Wizard step changed' },
+      'vision:loaded':   { args: ['data'],   describe: 'Vision data loaded from server' },
+      'vision:saved':    { args: ['data'],   describe: 'Vision saved successfully' },
+      'goals:changed':   { args: ['goals'],  describe: 'Goals list changed (loaded or new goal added)' },
+      'goal:created':    { args: ['goal'],   describe: 'A single goal was created' },
+      'ideas:changed':   { args: ['ideas'],  describe: 'Ideas list changed' },
+      'idea:created':    { args: ['idea'],   describe: 'A single idea was created' },
+      'complete':        { args: ['summary'], describe: 'Onboarding wizard completed' },
+    }
+
+    static { Feature.register(this, 'onboardingStore') }
+
+    _existingGoals = []
+    _createdGoals = []
+    _createdIdeas = []
+
+    /** All goals (pre-existing + newly created) */
+    get allGoals() { return [...this._existingGoals, ...this._createdGoals] }
+
+    /** Goals created this session */
+    get createdGoals() { return this._createdGoals }
+
+    /** Ideas created this session */
+    get createdIdeas() { return this._createdIdeas }
+
+    /** Navigate to a wizard step */
+    goToStep(n) {
+      this.state.set('currentStep', n)
+      this.emit('step:changed', n)
+    }
+
+    /** Store vision data from server load */
+    setVisionLoaded(hasVision, text) {
+      this.state.set('hasVision', hasVision)
+      this.state.set('visionText', text)
+      this.emit('vision:loaded', { hasVision, text })
+    }
+
+    /** Mark vision as saved this session */
+    markVisionWritten() {
+      this.state.set('visionWritten', true)
+    }
+
+    /** Store pre-existing goals from server */
+    setExistingGoals(goals) {
+      this._existingGoals = goals
+      this.emit('goals:changed', this.allGoals)
+    }
+
+    /** Add a newly created goal */
+    addGoal(goal) {
+      this._createdGoals.push(goal)
+      this.emit('goal:created', goal)
+      this.emit('goals:changed', this.allGoals)
+    }
+
+    /** Add a newly created idea */
+    addIdea(idea) {
+      this._createdIdeas.push(idea)
+      this.emit('idea:created', idea)
+      this.emit('ideas:changed', this._createdIdeas)
+    }
+
+    /** Completion summary */
+    getSummary() {
+      return {
+        visionWritten: this.state.get('visionWritten'),
+        goalsCreated: this._createdGoals.length,
+        ideasCreated: this._createdIdeas.length,
+        totalGoals: this.allGoals.length,
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // Feature: BlankSlateApp — orchestrator
+  // ═══════════════════════════════════════════════
+  class BlankSlateApp extends Feature {
+    static shortcut = 'features.blankSlateApp'
+
+    static stateSchema = {
+      ready: { type: 'boolean', default: false, describe: 'Whether the app has finished initializing' },
+    }
+
+    static eventsSchema = {
+      'ready':    { args: [],        describe: 'App initialized and ready' },
+      'error':    { args: ['error'], describe: 'An operation failed' },
+    }
+
+    static { Feature.register(this, 'blankSlateApp') }
+
+    /** @returns {ApiClient} */
+    get api() { return this.container.feature('apiClient') }
+
+    /** @returns {OnboardingStore} */
+    get store() { return this.container.feature('onboardingStore') }
+
+    /** Load initial data from server and determine starting state */
+    async start() {
+      try {
+        const [status, vision, goalsRes] = await Promise.all([
+          this.api.getStatus(),
+          this.api.getVision(),
+          this.api.getGoals(),
+        ])
+
+        const existingGoals = (goalsRes.goals || []).map(g => ({
+          id: g.id, title: g.title, horizon: g.horizon,
+        }))
+        this.store.setExistingGoals(existingGoals)
+
+        this.store.setVisionLoaded(status.hasVision, vision.text || '')
+
+        this.state.set('ready', true)
+        this.emit('ready')
+      } catch (err) {
+        console.error('Failed to initialize:', err)
+        this.emit('error', err)
+      }
+    }
+
+    /** Save vision and advance to goals step */
+    async saveVision(text) {
+      const data = await this.api.saveVision(text)
+      this.store.markVisionWritten()
+      this.store.emit('vision:saved', data)
+      this.store.goToStep(2)
+      return data
+    }
+
+    /** Keep existing vision and advance */
+    keepVision() {
+      this.store.markVisionWritten()
+      this.store.goToStep(2)
+    }
+
+    /** Create a goal via API and add to store */
+    async addGoal({ title, horizon, motivation, successCriteria }) {
+      const data = await this.api.createGoal({ title, horizon, motivation, successCriteria })
+      this.store.addGoal(data)
+      return data
+    }
+
+    /** Create an idea via API and add to store */
+    async addIdea({ title, goal, description }) {
+      const data = await this.api.createIdea({ title, goal, description })
+      this.store.addIdea({ ...data, goal })
+      return data
+    }
+
+    /** Navigate to a specific step */
+    goToStep(n) {
+      this.store.goToStep(n)
+    }
+
+    /** Finish the wizard — emit completion events */
+    finish() {
+      const summary = this.store.getSummary()
+      this.store.goToStep(4)
+      this.store.emit('complete', summary)
+
+      // Emit to host container if linked
+      try {
+        const link = this.container.feature('containerLink')
+        if (link && link.isConnected) {
+          link.emitToHost('onboardingComplete', summary)
+        }
+      } catch {}
+
+      // Emit to parent frame
+      try {
+        window.parent.postMessage({
+          type: '__PRESENTER_EVENT__',
+          action: 'submitted',
+          data: summary,
+        }, '*')
+      } catch {}
+
+      return summary
+    }
+
+    /** Full state snapshot for debugging and tooling */
+    snapshot() {
+      return {
+        ready: this.state.get('ready'),
+        currentStep: this.store.state.get('currentStep'),
+        visionWritten: this.store.state.get('visionWritten'),
+        hasVision: this.store.state.get('hasVision'),
+        goals: this.store.allGoals,
+        createdGoals: this.store.createdGoals.length,
+        createdIdeas: this.store.createdIdeas.length,
+        summary: this.store.getSummary(),
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════
+  // Instantiate features and expose globals
+  // ═══════════════════════════════════════════════
+  const api   = container.feature('apiClient')
+  const store = container.feature('onboardingStore')
+  const app   = container.feature('blankSlateApp')
+
+  window.app  = app
+  window.luca = container
+
+  // ═══════════════════════════════════════════════
+  // DOM refs
+  // ═══════════════════════════════════════════════
+  const panels = [null, document.getElementById('step-1'), document.getElementById('step-2'), document.getElementById('step-3'), document.getElementById('step-4')]
+
+  // Vision
+  const visionExisting = document.getElementById('vision-existing')
+  const visionForm     = document.getElementById('vision-form')
+  const visionPreview  = document.getElementById('vision-preview-text')
+  const visionText     = document.getElementById('vision-text')
+  const visionSaveBtn  = document.getElementById('vision-save-btn')
+  const visionEditBtn  = document.getElementById('vision-edit-btn')
+  const visionKeepBtn  = document.getElementById('vision-keep-btn')
+  const visionError    = document.getElementById('vision-error')
+
+  // Goals
+  const goalsList      = document.getElementById('goals-list')
+  const goalTitle      = document.getElementById('goal-title')
+  const goalHorizon    = document.getElementById('goal-horizon')
+  const goalMotivation = document.getElementById('goal-motivation')
+  const goalCriteria   = document.getElementById('goal-criteria')
+  const goalAddBtn     = document.getElementById('goal-add-btn')
+  const goalError      = document.getElementById('goal-error')
+  const goalsNextBtn   = document.getElementById('goals-next-btn')
+
+  // Ideas
+  const ideaGoalCtx    = document.getElementById('ideas-goals-context')
+  const ideasList      = document.getElementById('ideas-list')
+  const ideaTitle      = document.getElementById('idea-title')
+  const ideaGoal       = document.getElementById('idea-goal')
+  const ideaDesc       = document.getElementById('idea-desc')
+  const ideaAddBtn     = document.getElementById('idea-add-btn')
+  const ideaError      = document.getElementById('idea-error')
+
+  // ═══════════════════════════════════════════════
+  // UI helpers (pure DOM, no state)
+  // ═══════════════════════════════════════════════
   function esc(str) {
-    const d = document.createElement('div');
-    d.textContent = String(str || '');
-    return d.innerHTML;
+    const d = document.createElement('div')
+    d.textContent = String(str || '')
+    return d.innerHTML
   }
 
   function showError(el, msg) {
-    el.textContent = msg;
-    el.classList.add('visible');
+    el.textContent = msg
+    el.classList.add('visible')
   }
 
   function hideError(el) {
-    el.classList.remove('visible');
+    el.classList.remove('visible')
   }
 
-  // ── STEP 1: Vision ──────────────────────────
-  visionText.addEventListener('input', () => {
-    visionSaveBtn.disabled = !visionText.value.trim();
-    hideError(visionError);
-  });
+  // ═══════════════════════════════════════════════
+  // UI rendering (driven by feature events)
+  // ═══════════════════════════════════════════════
 
-  visionSaveBtn.addEventListener('click', async () => {
-    const text = visionText.value.trim();
-    if (!text) return;
-    visionSaveBtn.disabled = true;
-    visionSaveBtn.textContent = 'Saving...';
-    hideError(visionError);
-
-    try {
-      const res = await fetch(`${API}/api/vision`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to save vision');
-
-      visionWritten = true;
-      goToStep(2);
-    } catch (err) {
-      showError(visionError, err.message);
-    } finally {
-      visionSaveBtn.disabled = !visionText.value.trim();
-      visionSaveBtn.textContent = 'Save Vision & Continue';
+  /** Update step indicator dots, lines, and panel visibility */
+  function renderStep(n) {
+    for (let i = 1; i <= 4; i++) {
+      panels[i].classList.toggle('active', i === n)
+      const dot = document.getElementById(`dot-${i}`)
+      const label = document.getElementById(`label-${i}`)
+      dot.classList.remove('active', 'done')
+      label.classList.remove('active', 'done')
+      if (i < n) {
+        dot.classList.add('done')
+        dot.textContent = '\u2713'
+        label.classList.add('done')
+      } else if (i === n) {
+        dot.classList.add('active')
+        dot.textContent = String(i)
+        label.classList.add('active')
+      } else {
+        dot.textContent = String(i)
+      }
+      if (i < 4) {
+        document.getElementById(`line-${i}`).classList.toggle('done', i < n)
+      }
     }
-  });
-
-  visionEditBtn.addEventListener('click', () => {
-    visionExisting.style.display = 'none';
-    visionForm.style.display = '';
-    // Pre-fill textarea with current vision (strip heading)
-    const raw = visionPreview.textContent;
-    visionText.value = raw;
-    visionText.focus();
-    visionSaveBtn.disabled = false;
-  });
-
-  visionKeepBtn.addEventListener('click', () => {
-    visionWritten = true;
-    goToStep(2);
-  });
-
-  // ── STEP 2: Goals ───────────────────────────
-  goalTitle.addEventListener('input', () => {
-    goalAddBtn.disabled = !goalTitle.value.trim();
-    hideError(goalError);
-  });
-
-  goalAddBtn.addEventListener('click', async () => {
-    const title = goalTitle.value.trim();
-    if (!title) return;
-    goalAddBtn.disabled = true;
-    goalAddBtn.textContent = 'Creating...';
-    hideError(goalError);
-
-    try {
-      const res = await fetch(`${API}/api/goals`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          horizon: goalHorizon.value,
-          motivation: goalMotivation.value.trim() || undefined,
-          successCriteria: goalCriteria.value.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create goal');
-
-      createdGoals.push(data);
-      renderGoalsList();
-      updateGoalsNext();
-      updateIdeaGoalPicker();
-
-      // Reset form
-      goalTitle.value = '';
-      goalHorizon.value = 'medium';
-      goalMotivation.value = '';
-      goalCriteria.value = '';
-      goalTitle.focus();
-    } catch (err) {
-      showError(goalError, err.message);
-    } finally {
-      goalAddBtn.disabled = !goalTitle.value.trim();
-      goalAddBtn.textContent = 'Add Goal';
-    }
-  });
-
-  goalTitle.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && goalTitle.value.trim()) {
-      e.preventDefault();
-      goalMotivation.focus();
-    }
-  });
+    // Re-trigger slide animation
+    const body = document.querySelector('.card-body')
+    body.style.animation = 'none'
+    body.offsetHeight
+    body.style.animation = ''
+  }
 
   function renderGoalsList() {
-    const allGoals = [...existingGoals, ...createdGoals];
-    if (!allGoals.length) {
-      goalsList.innerHTML = '<div class="empty-state">No goals yet. Create your first one below.</div>';
-      return;
+    const goals = store.allGoals
+    if (!goals.length) {
+      goalsList.innerHTML = '<div class="empty-state">No goals yet. Create your first one below.</div>'
+      return
     }
-    goalsList.innerHTML = allGoals.map(g => `
+    goalsList.innerHTML = goals.map(g => `
       <li class="created-item">
         <span class="check">\u2713</span>
         <span class="title">${esc(g.title)}</span>
         <span class="meta">${esc(g.horizon || '')}</span>
       </li>
-    `).join('');
+    `).join('')
   }
 
   function updateGoalsNext() {
-    const total = existingGoals.length + createdGoals.length;
-    goalsNextBtn.disabled = total === 0;
+    goalsNextBtn.disabled = store.allGoals.length === 0
   }
-
-  goalsNextBtn.addEventListener('click', () => {
-    populateIdeasContext();
-    goToStep(3);
-    ideaTitle.focus();
-  });
-
-  document.getElementById('goals-back-btn').addEventListener('click', () => goToStep(1));
-
-  // ── STEP 3: Ideas ───────────────────────────
-  ideaTitle.addEventListener('input', () => {
-    ideaAddBtn.disabled = !ideaTitle.value.trim();
-    hideError(ideaError);
-  });
 
   function updateIdeaGoalPicker() {
-    const allGoals = [...existingGoals, ...createdGoals];
-    ideaGoal.innerHTML = '<option value="">No goal alignment</option>';
-    for (const g of allGoals) {
-      const opt = document.createElement('option');
-      opt.value = g.id;
-      opt.textContent = g.title;
-      ideaGoal.appendChild(opt);
+    const goals = store.allGoals
+    ideaGoal.innerHTML = '<option value="">No goal alignment</option>'
+    for (const g of goals) {
+      const opt = document.createElement('option')
+      opt.value = g.id
+      opt.textContent = g.title
+      ideaGoal.appendChild(opt)
     }
-    if (allGoals.length === 1) {
-      ideaGoal.value = allGoals[0].id;
-    }
-  }
-
-  function populateIdeasContext() {
-    const allGoals = [...existingGoals, ...createdGoals];
-    ideaGoalCtx.innerHTML = '<h4>Your Goals</h4>';
-    for (const g of allGoals) {
-      const chip = document.createElement('span');
-      chip.className = 'context-chip';
-      chip.textContent = g.title;
-      ideaGoalCtx.appendChild(chip);
+    if (goals.length === 1) {
+      ideaGoal.value = goals[0].id
     }
   }
 
-  ideaAddBtn.addEventListener('click', async () => {
-    const title = ideaTitle.value.trim();
-    if (!title) return;
-    ideaAddBtn.disabled = true;
-    ideaAddBtn.textContent = 'Creating...';
-    hideError(ideaError);
-
-    try {
-      const res = await fetch(`${API}/api/ideas`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          goal: ideaGoal.value || undefined,
-          description: ideaDesc.value.trim() || undefined,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to create idea');
-
-      createdIdeas.push({ ...data, goal: ideaGoal.value });
-      renderIdeasList();
-
-      // Reset
-      ideaTitle.value = '';
-      ideaDesc.value = '';
-      ideaTitle.focus();
-    } catch (err) {
-      showError(ideaError, err.message);
-    } finally {
-      ideaAddBtn.disabled = !ideaTitle.value.trim();
-      ideaAddBtn.textContent = 'Add Idea';
+  function renderIdeasContext() {
+    const goals = store.allGoals
+    ideaGoalCtx.innerHTML = '<h4>Your Goals</h4>'
+    for (const g of goals) {
+      const chip = document.createElement('span')
+      chip.className = 'context-chip'
+      chip.textContent = g.title
+      ideaGoalCtx.appendChild(chip)
     }
-  });
-
-  ideaTitle.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey && ideaTitle.value.trim()) {
-      e.preventDefault();
-      ideaDesc.focus();
-    }
-  });
+  }
 
   function renderIdeasList() {
-    if (!createdIdeas.length) {
-      ideasList.innerHTML = '';
-      return;
+    const ideas = store.createdIdeas
+    if (!ideas.length) {
+      ideasList.innerHTML = ''
+      return
     }
-    const allGoals = [...existingGoals, ...createdGoals];
-    ideasList.innerHTML = createdIdeas.map(i => {
-      const goalName = allGoals.find(g => g.id === i.goal)?.title || '';
+    const goals = store.allGoals
+    ideasList.innerHTML = ideas.map(i => {
+      const goalName = goals.find(g => g.id === i.goal)?.title || ''
       return `
         <li class="created-item">
           <span class="check">\u2713</span>
           <span class="title">${esc(i.title)}</span>
           ${goalName ? `<span class="meta">${esc(goalName)}</span>` : ''}
         </li>
-      `;
-    }).join('');
+      `
+    }).join('')
   }
 
-  document.getElementById('ideas-back-btn').addEventListener('click', () => goToStep(2));
+  // ═══════════════════════════════════════════════
+  // Bind feature events → UI rendering
+  // ═══════════════════════════════════════════════
 
-  document.getElementById('ideas-next-btn').addEventListener('click', () => {
-    // Fill summary
-    document.getElementById('sum-vision').textContent = visionWritten ? 'Written' : 'Already existed';
-    document.getElementById('sum-goals').textContent = String(createdGoals.length);
-    document.getElementById('sum-ideas').textContent = String(createdIdeas.length);
+  store.on('step:changed', renderStep)
 
-    goToStep(4);
+  store.on('goals:changed', () => {
+    renderGoalsList()
+    updateGoalsNext()
+    updateIdeaGoalPicker()
+  })
 
-    // Emit events
-    emitComplete();
-  });
+  store.on('ideas:changed', renderIdeasList)
 
-  function emitComplete() {
-    const payload = {
-      visionWritten,
-      goalsCreated: createdGoals.length,
-      ideasCreated: createdIdeas.length,
-    };
+  store.on('complete', (summary) => {
+    document.getElementById('sum-vision').textContent = summary.visionWritten ? 'Written' : 'Already existed'
+    document.getElementById('sum-goals').textContent = String(summary.goalsCreated)
+    document.getElementById('sum-ideas').textContent = String(summary.ideasCreated)
+  })
 
-    if (window.luca) {
-      try {
-        const link = window.luca.feature('containerLink');
-        if (link && link.isConnected) {
-          link.emitToHost('onboardingComplete', payload);
-        }
-      } catch {}
-    }
+  // ═══════════════════════════════════════════════
+  // Bind DOM events → feature methods
+  // ═══════════════════════════════════════════════
+
+  // -- Vision --
+  visionText.addEventListener('input', () => {
+    visionSaveBtn.disabled = !visionText.value.trim()
+    hideError(visionError)
+  })
+
+  visionSaveBtn.addEventListener('click', async () => {
+    const text = visionText.value.trim()
+    if (!text) return
+    visionSaveBtn.disabled = true
+    visionSaveBtn.textContent = 'Saving...'
+    hideError(visionError)
 
     try {
-      window.parent.postMessage({
-        type: '__PRESENTER_EVENT__',
-        action: 'submitted',
-        data: payload,
-      }, '*');
-    } catch {}
-  }
-
-  // ── Boot ─────────────────────────────────────
-  async function init() {
-    try {
-      const [statusRes, visionRes, goalsRes] = await Promise.all([
-        fetch(`${API}/api/status`).then(r => r.json()),
-        fetch(`${API}/api/vision`).then(r => r.json()),
-        fetch(`${API}/api/goals`).then(r => r.json()),
-      ]);
-
-      existingGoals = (goalsRes.goals || []).map(g => ({
-        id: g.id,
-        title: g.title,
-        horizon: g.horizon,
-      }));
-
-      // Determine starting step
-      if (statusRes.hasVision) {
-        // Vision already written — show it with edit option
-        const rawText = visionRes.text.replace(/^#\s*Vision Statement\s*\n+/, '').trim();
-        visionPreview.textContent = rawText;
-        visionExisting.style.display = '';
-        visionForm.style.display = 'none';
-        visionWritten = false; // They didn't write it this session
-
-        if (statusRes.goalCount > 0) {
-          // Already have goals — jump to step 2 so they can review and add more, or go further
-          renderGoalsList();
-          updateGoalsNext();
-          updateIdeaGoalPicker();
-        }
-      } else {
-        // No vision yet — start fresh
-        visionExisting.style.display = 'none';
-        visionForm.style.display = '';
-        visionText.focus();
-      }
-
-      renderGoalsList();
-      updateGoalsNext();
-      updateIdeaGoalPicker();
+      await app.saveVision(text)
     } catch (err) {
-      console.error('Failed to initialize:', err);
+      showError(visionError, err.message)
+    } finally {
+      visionSaveBtn.disabled = !visionText.value.trim()
+      visionSaveBtn.textContent = 'Save Vision & Continue'
     }
-  }
+  })
 
-  init();
+  visionEditBtn.addEventListener('click', () => {
+    visionExisting.style.display = 'none'
+    visionForm.style.display = ''
+    visionText.value = visionPreview.textContent
+    visionText.focus()
+    visionSaveBtn.disabled = false
+  })
 
-  // Non-blocking: load luca container for event emission
-  import('https://esm.sh/@soederpop/luca@0.0.25/src/browser.ts').catch(() => {});
+  visionKeepBtn.addEventListener('click', () => {
+    app.keepVision()
+  })
+
+  // -- Goals --
+  goalTitle.addEventListener('input', () => {
+    goalAddBtn.disabled = !goalTitle.value.trim()
+    hideError(goalError)
+  })
+
+  goalAddBtn.addEventListener('click', async () => {
+    const title = goalTitle.value.trim()
+    if (!title) return
+    goalAddBtn.disabled = true
+    goalAddBtn.textContent = 'Creating...'
+    hideError(goalError)
+
+    try {
+      await app.addGoal({
+        title,
+        horizon: goalHorizon.value,
+        motivation: goalMotivation.value.trim() || undefined,
+        successCriteria: goalCriteria.value.trim() || undefined,
+      })
+      goalTitle.value = ''
+      goalHorizon.value = 'medium'
+      goalMotivation.value = ''
+      goalCriteria.value = ''
+      goalTitle.focus()
+    } catch (err) {
+      showError(goalError, err.message)
+    } finally {
+      goalAddBtn.disabled = !goalTitle.value.trim()
+      goalAddBtn.textContent = 'Add Goal'
+    }
+  })
+
+  goalTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && goalTitle.value.trim()) {
+      e.preventDefault()
+      goalMotivation.focus()
+    }
+  })
+
+  goalsNextBtn.addEventListener('click', () => {
+    renderIdeasContext()
+    app.goToStep(3)
+    ideaTitle.focus()
+  })
+
+  document.getElementById('goals-back-btn').addEventListener('click', () => app.goToStep(1))
+
+  // -- Ideas --
+  ideaTitle.addEventListener('input', () => {
+    ideaAddBtn.disabled = !ideaTitle.value.trim()
+    hideError(ideaError)
+  })
+
+  ideaAddBtn.addEventListener('click', async () => {
+    const title = ideaTitle.value.trim()
+    if (!title) return
+    ideaAddBtn.disabled = true
+    ideaAddBtn.textContent = 'Creating...'
+    hideError(ideaError)
+
+    try {
+      await app.addIdea({
+        title,
+        goal: ideaGoal.value || undefined,
+        description: ideaDesc.value.trim() || undefined,
+      })
+      ideaTitle.value = ''
+      ideaDesc.value = ''
+      ideaTitle.focus()
+    } catch (err) {
+      showError(ideaError, err.message)
+    } finally {
+      ideaAddBtn.disabled = !ideaTitle.value.trim()
+      ideaAddBtn.textContent = 'Add Idea'
+    }
+  })
+
+  ideaTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && ideaTitle.value.trim()) {
+      e.preventDefault()
+      ideaDesc.focus()
+    }
+  })
+
+  document.getElementById('ideas-back-btn').addEventListener('click', () => app.goToStep(2))
+  document.getElementById('ideas-next-btn').addEventListener('click', () => app.finish())
+
+  // ═══════════════════════════════════════════════
+  // Boot — load data, then apply initial UI state
+  // ═══════════════════════════════════════════════
+  app.on('ready', () => {
+    const hasVision = store.state.get('hasVision')
+
+    if (hasVision) {
+      const rawText = store.state.get('visionText').replace(/^#\s*Vision Statement\s*\n+/, '').trim()
+      visionPreview.textContent = rawText
+      visionExisting.style.display = ''
+      visionForm.style.display = 'none'
+    } else {
+      visionExisting.style.display = 'none'
+      visionForm.style.display = ''
+      visionText.focus()
+    }
+
+    renderGoalsList()
+    updateGoalsNext()
+    updateIdeaGoalPicker()
+  })
+
+  await app.start()
 </script>
 </body>
 </html>

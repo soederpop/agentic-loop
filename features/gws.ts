@@ -74,6 +74,128 @@ export class Gws extends Feature<GwsState, GwsOptions> {
   static override stateSchema = GwsStateSchema
   static override optionsSchema = GwsOptionsSchema
 
+  static tools = {
+    gwsListProfiles: {
+      description: 'List all available GWS credential profiles',
+      schema: z.object({}),
+    },
+    gwsSendEmail: {
+      description: 'Send an email via Gmail',
+      schema: z.object({
+        to: z.string().describe('Recipient email address'),
+        subject: z.string().describe('Email subject line'),
+        body: z.string().describe('Email body text'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsSearchEmail: {
+      description: 'Search Gmail messages using a query string',
+      schema: z.object({
+        query: z.string().describe('Gmail search query (e.g. "from:someone@example.com is:unread")'),
+        maxResults: z.number().optional().describe('Maximum number of results to return'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsReadEmail: {
+      description: 'Read the full content of an email message by ID',
+      schema: z.object({
+        id: z.string().describe('Gmail message ID'),
+        markAsRead: z.boolean().optional().describe('Mark the message as read after reading'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsTriageEmail: {
+      description: 'Get a triage summary of recent Gmail messages',
+      schema: z.object({
+        max: z.number().optional().describe('Maximum number of messages to triage'),
+        query: z.string().optional().describe('Gmail search query to filter messages'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsTrashEmail: {
+      description: 'Move an email to the trash',
+      schema: z.object({
+        id: z.string().describe('Gmail message ID'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsArchiveEmail: {
+      description: 'Archive an email (remove from inbox)',
+      schema: z.object({
+        id: z.string().describe('Gmail message ID'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsValidateEmail: {
+      description: 'Validate an email message for authenticity (SPF, DKIM, DMARC) and compute a trust score',
+      schema: z.object({
+        id: z.string().describe('Gmail message ID'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsGetCalendarAgenda: {
+      description: 'View upcoming calendar events',
+      schema: z.object({
+        days: z.number().optional().describe('Number of days to look ahead'),
+        calendar: z.string().optional().describe('Calendar ID to query'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsCreateCalendarEvent: {
+      description: 'Create a new calendar event',
+      schema: z.object({
+        summary: z.string().describe('Event title'),
+        start: z.string().describe('Start time (ISO 8601 or natural language)'),
+        end: z.string().optional().describe('End time'),
+        duration: z.number().optional().describe('Duration in minutes (alternative to end)'),
+        calendar: z.string().optional().describe('Calendar ID'),
+        location: z.string().optional().describe('Event location'),
+        description: z.string().optional().describe('Event description'),
+        attendees: z.array(z.string()).optional().describe('List of attendee email addresses'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsReadSpreadsheet: {
+      description: 'Read data from a Google Sheets spreadsheet',
+      schema: z.object({
+        spreadsheet: z.string().describe('Spreadsheet ID or URL'),
+        range: z.string().describe('Cell range (e.g. "Sheet1!A1:D10")'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsAppendToSpreadsheet: {
+      description: 'Append rows to a Google Sheets spreadsheet',
+      schema: z.object({
+        spreadsheet: z.string().describe('Spreadsheet ID or URL'),
+        values: z.string().optional().describe('Comma-separated values to append'),
+        jsonValues: z.array(z.array(z.string())).optional().describe('2D array of values to append'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsSearchDrive: {
+      description: 'Search Google Drive for files',
+      schema: z.object({
+        query: z.string().describe('Drive search query'),
+        pageSize: z.number().optional().describe('Maximum number of results'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsSendChatMessage: {
+      description: 'Send a message to a Google Chat space',
+      schema: z.object({
+        space: z.string().describe('Chat space ID'),
+        text: z.string().describe('Message text'),
+        profile: z.string().optional().describe('Named credential profile to use'),
+      }),
+    },
+    gwsCheckAuth: {
+      description: 'Check whether GWS authentication is valid for the current or specified profile',
+      schema: z.object({
+        profile: z.string().optional().describe('Named credential profile to check'),
+      }),
+    },
+  }
+
   private _binaryPath: string | null = null
   private _resolved = false
 
@@ -96,6 +218,13 @@ export class Gws extends Feature<GwsState, GwsOptions> {
 
   get configDir(): string {
     return this.options.configDir || this.container.paths.resolve(this.container.os.homedir, '.config', 'gws')
+  }
+
+  /** Returns the config directory for a given profile. No profile uses ~/.config/gws, named profiles use ~/.config/gws-<name>. */
+  configDirForProfile(profile?: string | null): string {
+    const homeConfig = this.container.paths.resolve(this.container.os.homedir, '.config', 'gws')
+    if (!profile) return homeConfig
+    return `${homeConfig}-${profile}`
   }
 
   private async resolveBinary(): Promise<string | null> {
@@ -143,22 +272,26 @@ export class Gws extends Feature<GwsState, GwsOptions> {
   }
 
   private buildEnv(profile?: string): Record<string, string> {
-    const env: Record<string, string> = {
-      GOOGLE_WORKSPACE_CLI_CONFIG_DIR: this.configDir,
-    }
-
-    const targetProfile = profile || this.currentProfile
-    if (!targetProfile) return env
+    // Resolve which profile to use: per-call override > active state > default (no profile)
+    const targetProfile = profile || this.currentProfile || undefined
 
     // Handle inline credentials path (from useCredentials)
-    if (targetProfile.startsWith('__inline:')) {
+    if (targetProfile?.startsWith('__inline:')) {
       const path = targetProfile.slice('__inline:'.length)
-      return { ...env, GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: path }
+      const dir = this.configDirForProfile()
+      return {
+        GOOGLE_WORKSPACE_CLI_CONFIG_DIR: dir,
+        GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: path,
+      }
     }
 
-    const dir = `${this.configDir}/${targetProfile}`
+    // Default uses ~/.config/gws, named profile uses ~/.config/gws-<name>
+    const dir = this.configDirForProfile(targetProfile)
+    const env: Record<string, string> = {
+      GOOGLE_WORKSPACE_CLI_CONFIG_DIR: dir,
+    }
 
-    // Check for profile.json first (oauth login reference)
+    // Check for profile.json (oauth login reference)
     const profileJsonPath = `${dir}/profile.json`
     if (this.fs.exists(profileJsonPath)) {
       try {
@@ -173,15 +306,14 @@ export class Gws extends Feature<GwsState, GwsOptions> {
       } catch {}
     }
 
-    // Fallback: direct credential files in profile dir
+    // Fallback: direct credential files in the config dir
     const saPath = `${dir}/service-account.json`
     const credPath = `${dir}/credentials.json`
 
     if (this.fs.exists(saPath)) {
-      return { ...env, GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: saPath }
-    }
-    if (this.fs.exists(credPath)) {
-      return { ...env, GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE: credPath }
+      env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = saPath
+    } else if (this.fs.exists(credPath)) {
+      env.GOOGLE_WORKSPACE_CLI_CREDENTIALS_FILE = credPath
     }
 
     return env
@@ -309,11 +441,11 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     return this.state.get('activeProfile') || null
   }
 
-  /** Activates a named credential profile. Throws if the profile directory does not exist. */
+  /** Activates a named credential profile. Throws if ~/.config/gws-<name> does not exist. */
   useProfile(name: string): void {
-    const dir = `${this.configDir}/${name}`
+    const dir = this.configDirForProfile(name)
     if (!this.fs.exists(dir)) {
-      throw new Error(`GWS profile '${name}' not found in ${this.configDir}`)
+      throw new Error(`GWS profile '${name}' not found at ${dir}`)
     }
     this.state.setState({ activeProfile: name })
   }
@@ -332,15 +464,24 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     this.state.setState({ activeProfile: `__inline:${path}` })
   }
 
-  /** Lists all available credential profile names found in the profiles directory. */
+  /** Lists all available credential profile names by scanning for ~/.config/gws-* directories. */
   profiles(): string[] {
-    if (!this.fs.exists(this.configDir)) return []
+    const configParent = this.container.paths.resolve(this.container.os.homedir, '.config')
     try {
-      const entries = this.fs.readdirSync(this.configDir)
-      return entries.filter((name: string) => {
-        const dir = `${this.configDir}/${name}`
-        return this.fs.exists(`${dir}/profile.json`) || this.fs.exists(`${dir}/credentials.json`) || this.fs.exists(`${dir}/service-account.json`)
-      })
+      const entries = this.fs.readdirSync(configParent)
+      const profiles: string[] = []
+
+      for (const name of entries) {
+        if (!name.startsWith('gws-')) continue
+        const profileName = name.slice('gws-'.length)
+        if (!profileName) continue
+        const dir = `${configParent}/${name}`
+        if (this.fs.exists(`${dir}/profile.json`) || this.fs.exists(`${dir}/credentials.json`) || this.fs.exists(`${dir}/service-account.json`)) {
+          profiles.push(profileName)
+        }
+      }
+
+      return profiles
     } catch {
       return []
     }
@@ -772,6 +913,81 @@ export class Gws extends Feature<GwsState, GwsOptions> {
         profile: opts.profile,
       })
     },
+  }
+
+  // --- Tool handlers (matched by name to static tools) ---
+
+  async gwsListProfiles() {
+    const profiles = this.profiles()
+    return { profiles, activeProfile: this.currentProfile }
+  }
+
+  async gwsSendEmail(opts: { to: string; subject: string; body: string; profile?: string }) {
+    return this.gmail.send(opts)
+  }
+
+  async gwsSearchEmail(opts: { query: string; maxResults?: number; profile?: string }) {
+    return this.gmail.search(opts)
+  }
+
+  async gwsReadEmail(opts: { id: string; markAsRead?: boolean; profile?: string }) {
+    return this.gmail.readMessage(opts)
+  }
+
+  async gwsTriageEmail(opts: { max?: number; query?: string; profile?: string }) {
+    return this.gmail.triage(opts)
+  }
+
+  async gwsTrashEmail(opts: { id: string; profile?: string }) {
+    return this.gmail.trash(opts)
+  }
+
+  async gwsArchiveEmail(opts: { id: string; profile?: string }) {
+    return this.gmail.archive(opts)
+  }
+
+  async gwsValidateEmail(opts: { id: string; profile?: string }) {
+    return this.gmail.validate(opts)
+  }
+
+  async gwsGetCalendarAgenda(opts: { days?: number; calendar?: string; profile?: string }) {
+    return this.calendar.agenda(opts)
+  }
+
+  async gwsCreateCalendarEvent(opts: {
+    summary: string; start: string; end?: string; duration?: number;
+    calendar?: string; location?: string; description?: string;
+    attendees?: string[]; profile?: string
+  }) {
+    return this.calendar.insert(opts)
+  }
+
+  async gwsReadSpreadsheet(opts: { spreadsheet: string; range: string; profile?: string }) {
+    return this.sheets.read(opts)
+  }
+
+  async gwsAppendToSpreadsheet(opts: { spreadsheet: string; values?: string; jsonValues?: string[][]; profile?: string }) {
+    return this.sheets.append(opts)
+  }
+
+  async gwsSearchDrive(opts: { query: string; pageSize?: number; profile?: string }) {
+    return this.drive.search(opts)
+  }
+
+  async gwsSendChatMessage(opts: { space: string; text: string; profile?: string }) {
+    return this.chat.send(opts)
+  }
+
+  async gwsCheckAuth(opts: { profile?: string }) {
+    if (opts.profile) {
+      const prevProfile = this.currentProfile
+      this.useProfile(opts.profile)
+      const result = await this.auth.check()
+      if (prevProfile) this.useProfile(prevProfile)
+      else this.clearProfile()
+      return { authenticated: result, profile: opts.profile }
+    }
+    return { authenticated: await this.auth.check(), profile: this.currentProfile || 'default' }
   }
 }
 

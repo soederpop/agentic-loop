@@ -1,7 +1,6 @@
 ---
 title: System Setup
 description: Diagnostic preflight check — detects installed dependencies, API keys, voice tools, and native app status
-port: 9304
 tags:
   - setup
   - diagnostics

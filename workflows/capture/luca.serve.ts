@@ -7,7 +7,7 @@
  * - Wire up containerLink so the presenter can communicate with the playground
  *
  * Usage:
- *   luca serve --setup workflows/capture/luca.serve.ts --staticDir workflows/capture/public --endpoints-dir workflows/capture/endpoints --port 9300
+ *   luca serve --setup workflows/capture/luca.serve.ts --staticDir workflows/capture/public --endpoints-dir workflows/capture/endpoints --any-port
  */
 export default async function setup(server: any) {
   const container = server.container

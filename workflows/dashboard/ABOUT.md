@@ -1,7 +1,6 @@
 ---
 title: Dashboard
 description: Live system dashboard for the luca main authority process
-port: 9340
 tags: [system, dashboard, monitoring]
 ---
 

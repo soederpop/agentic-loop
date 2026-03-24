@@ -4,7 +4,7 @@
  * Read-only dashboard showing goals, ideas, projects, plans, and recent activity.
  *
  * Usage:
- *   luca serve --setup workflows/review/luca.serve.ts --staticDir workflows/review/public --endpoints-dir workflows/review/endpoints --port 9302 --no-open
+ *   luca serve --setup workflows/review/luca.serve.ts --staticDir workflows/review/public --endpoints-dir workflows/review/endpoints --any-port --no-open
  */
 export default async function setup(server: any) {
   const container = server.container

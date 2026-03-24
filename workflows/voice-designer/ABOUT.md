@@ -1,7 +1,6 @@
 ---
 title: Voice Designer
 description: Design and configure voice assistant personas, wake words, and conversation styles
-port: 9305
 tags:
   - voice
   - configuration
