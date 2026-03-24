@@ -58,11 +58,7 @@
 
 - [Luca Telegram feature: receive messages and emit events](./reports/luca-telegram-tutorial.md)
 - [Onboarding Troubleshooting Log](./reports/onboarding-troubleshooting-log.md)
-- [Project Reviewer Chat Status](./reports/project-reviewer-status.md)
-
 ## Tasks
-
-- [Refactor Project Reviewer WebSocket Streaming](./tasks/refactor-project-reviewer.md)
 
 ## Bases
 

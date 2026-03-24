@@ -30,6 +30,6 @@ An interactive environment for authoring and running prompt documents (`docs/pro
 
 ## When NOT to use
 
-- User wants to review projects (use project-reviewer)
+- User wants to review or edit projects (use project-builder)
 - User wants to build a project (use project-builder)
 - User is working on tasks or plays (different document types)

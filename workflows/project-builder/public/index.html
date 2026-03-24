@@ -649,6 +649,263 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+  /* ── Editor Modal ──────────────────── */
+  .editor-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: var(--bg);
+    flex-direction: column;
+  }
+
+  .editor-overlay.open { display: flex; }
+
+  .editor-toolbar {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .editor-toolbar-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .editor-toolbar-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+    padding: 2px 8px;
+    background: var(--surface-2);
+    border-radius: 4px;
+  }
+
+  .editor-status {
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 60px;
+    text-align: right;
+  }
+
+  .editor-status.saved { color: var(--success); }
+  .editor-status.error { color: var(--error); }
+
+  .editor-btn {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text);
+  }
+
+  .editor-btn:hover { border-color: var(--text-dim); }
+  .editor-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .editor-btn-save {
+    color: var(--success);
+    border-color: var(--success);
+    background: var(--success-dim);
+  }
+
+  .editor-btn-save:hover { opacity: 0.85; }
+
+  .editor-btn-toggle {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .editor-meta-bar {
+    padding: 8px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .editor-meta-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .editor-meta-field label {
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+  }
+
+  .editor-meta-select {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 3px 22px 3px 6px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 12 12'%3E%3Cpath fill='%236a6a80' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 6px center;
+  }
+
+  .editor-meta-select:focus { border-color: var(--accent); }
+
+  .editor-preview {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+  }
+
+  .editor-preview-content {
+    max-width: 720px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .editor-preview-content h2, .editor-preview-content h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--accent);
+    margin: 20px 0 8px;
+    font-weight: 700;
+  }
+
+  .editor-preview-content ul, .editor-preview-content ol { padding-left: 20px; margin: 8px 0; }
+  .editor-preview-content li { margin-bottom: 4px; }
+  .editor-preview-content p { margin-bottom: 8px; }
+  .editor-preview-content code { background: var(--surface-3); padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--purple); }
+  .editor-preview-content strong { color: var(--text); }
+
+  #monaco-container { flex: 1; }
+
+  /* ── Create Dialog ──────────────────── */
+  .create-dialog {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    background: rgba(0,0,0,0.7);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .create-dialog.open { display: flex; }
+
+  .create-dialog-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    width: 420px;
+    max-width: 90vw;
+  }
+
+  .create-dialog-box h3 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .create-field {
+    margin-bottom: 12px;
+  }
+
+  .create-field label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    font-weight: 600;
+  }
+
+  .create-field input, .create-field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+  }
+
+  .create-field input:focus, .create-field select:focus { border-color: var(--accent); }
+  .create-field select { appearance: none; cursor: pointer; }
+
+  .create-error { font-size: 11px; color: var(--error); margin-bottom: 8px; display: none; }
+
+  .create-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+  }
+
+  /* ── Edit buttons in cards ─────────── */
+  .edit-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 3px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .edit-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .add-plan-btn {
+    background: none;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 8px;
+    cursor: pointer;
+    width: 100%;
+    text-align: center;
+    transition: all 0.15s;
+    margin-top: 8px;
+  }
+
+  .add-plan-btn:hover { color: var(--accent); border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -661,6 +918,7 @@
   </select>
   <div class="header-right">
     <span class="header-stats" id="header-stats"></span>
+    <button class="editor-btn" id="new-project-btn">+ New Project</button>
     <button class="build-btn" id="build-btn" disabled>Build</button>
     <button class="chat-toggle-btn" id="chat-toggle-btn">
       <span class="chat-toggle-dot" id="chat-dot"></span>
@@ -708,6 +966,53 @@
   </aside>
 </div>
 
+<!-- Editor Overlay -->
+<div class="editor-overlay" id="editor-overlay">
+  <div class="editor-toolbar">
+    <span class="editor-toolbar-label" id="editor-type-label">PROJECT</span>
+    <span class="editor-toolbar-title" id="editor-title"></span>
+    <span class="editor-status" id="editor-status"></span>
+    <button class="editor-btn editor-btn-toggle" id="editor-toggle-btn">Preview</button>
+    <button class="editor-btn editor-btn-save" id="editor-save-btn" disabled>Save</button>
+    <button class="editor-btn" id="editor-close-btn">Close</button>
+  </div>
+  <div class="editor-meta-bar" id="editor-meta-bar">
+    <div class="editor-meta-field">
+      <label>Status</label>
+      <select class="editor-meta-select" id="editor-status-select"></select>
+    </div>
+    <div class="editor-meta-field" id="editor-goal-field" style="display:none">
+      <label>Goal</label>
+      <select class="editor-meta-select" id="editor-goal-select"></select>
+    </div>
+  </div>
+  <div id="monaco-container"></div>
+  <div class="editor-preview" id="editor-preview" style="display:none">
+    <div class="editor-preview-content" id="editor-preview-content"></div>
+  </div>
+</div>
+
+<!-- Create Dialog -->
+<div class="create-dialog" id="create-dialog">
+  <div class="create-dialog-box">
+    <h3 id="create-dialog-title">New Project</h3>
+    <div class="create-field">
+      <label>Title</label>
+      <input type="text" id="create-title" placeholder="Enter a title...">
+    </div>
+    <div class="create-field" id="create-goal-field" style="display:none">
+      <label>Goal</label>
+      <select id="create-goal-select"></select>
+    </div>
+    <div class="create-error" id="create-error"></div>
+    <div class="create-actions">
+      <button class="editor-btn" id="create-cancel-btn">Cancel</button>
+      <button class="editor-btn editor-btn-save" id="create-submit-btn">Create</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.46.0/min/vs/loader.js"></script>
 <script type="module">
   const API = window.location.origin
 
@@ -815,6 +1120,80 @@
     /** Fetch build status for a project */
     async fetchBuildStatus(slug) {
       return this._get(`/api/build/${slug}`)
+    }
+
+    /** Fetch all goals */
+    async fetchGoals() {
+      return this._get('/api/goals')
+    }
+
+    /** Save a project (content + meta) */
+    async saveProject(slug, body) {
+      return this._put(`/api/project/${slug}`, body)
+    }
+
+    /** Save a plan (content + meta) */
+    async savePlan(planId, body) {
+      const encoded = planId.replace(/\//g, '~')
+      return this._put(`/api/plan/${encoded}`, body)
+    }
+
+    /** Create a new project */
+    async createProject(body) {
+      return this._post('/api/projects', body)
+    }
+
+    /** Create a new plan */
+    async createPlan(body) {
+      return this._post('/api/plans', body)
+    }
+
+    async _post(endpoint, body) {
+      this.state.set('loading', true)
+      this.emit('request:start', { endpoint })
+      try {
+        const res = await fetch(`${API}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          this.emit('request:error', { endpoint, error: data.error || `HTTP ${res.status}` })
+          return data
+        }
+        this.emit('request:end', { endpoint })
+        return data
+      } catch (err) {
+        this.emit('request:error', { endpoint, error: err.message })
+        throw err
+      } finally {
+        this.state.set('loading', false)
+      }
+    }
+
+    async _put(endpoint, body) {
+      this.state.set('loading', true)
+      this.emit('request:start', { endpoint })
+      try {
+        const res = await fetch(`${API}${endpoint}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        const data = await res.json()
+        if (!res.ok) {
+          this.emit('request:error', { endpoint, error: data.error || `HTTP ${res.status}` })
+          throw new Error(data.error || `HTTP ${res.status}`)
+        }
+        this.emit('request:end', { endpoint })
+        return data
+      } catch (err) {
+        this.emit('request:error', { endpoint, error: err.message })
+        throw err
+      } finally {
+        this.state.set('loading', false)
+      }
     }
 
     async _get(endpoint) {
@@ -1281,6 +1660,7 @@
     get build() { return container.feature('buildManager') }
     get chat() { return container.feature('chatManager') }
     get api() { return container.feature('apiClient') }
+    get editor() { return container.feature('editorManager') }
 
     /** Boot the app: load data, select initial project, connect WS */
     async start() {
@@ -1339,6 +1719,221 @@
         store: this.store.snapshot(),
         build: this.build.snapshot(),
         chat: this.chat.snapshot(),
+        editor: this.editor.snapshot(),
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Feature 6: EditorManager — Monaco editor lifecycle & document editing
+  // ═══════════════════════════════════════════════════════════════════
+  const PROJECT_STATUSES = ['draft', 'approved', 'building', 'in_progress', 'completed', 'failed', 'reviewing']
+  const PLAN_STATUSES = ['pending', 'approved', 'rejected', 'building', 'in_progress', 'completed']
+
+  class EditorManager extends Feature {
+    static shortcut = 'features.editorManager'
+    static stateSchema = {
+      mode: 'string',
+      targetType: 'string',
+      targetId: 'string',
+      dirty: 'boolean',
+      saving: 'boolean',
+      open: 'boolean',
+    }
+    static eventsSchema = {
+      'editor:opened': { type: 'string', id: 'string' },
+      'editor:closed': {},
+      'mode:changed': { mode: 'string' },
+      'save:start': {},
+      'save:done': { success: 'boolean' },
+    }
+    static { Feature.register(this, 'editorManager') }
+
+    _editor = null
+    _monacoPromise = null
+    _goals = null
+    _currentMeta = {}
+
+    async afterInitialize() {
+      this.state.set('mode', 'edit')
+      this.state.set('targetType', '')
+      this.state.set('targetId', '')
+      this.state.set('dirty', false)
+      this.state.set('saving', false)
+      this.state.set('open', false)
+    }
+
+    get isOpen() { return this.state.get('open') }
+    get isDirty() { return this.state.get('dirty') }
+    get mode() { return this.state.get('mode') }
+
+    /** Lazy-load Monaco editor from CDN */
+    async _loadMonaco() {
+      if (this._monacoPromise) return this._monacoPromise
+      this._monacoPromise = new Promise(resolve => {
+        require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.46.0/min/vs' } })
+        require(['vs/editor/editor.main'], () => {
+          monaco.editor.defineTheme('agentic-dark', {
+            base: 'vs-dark',
+            inherit: true,
+            rules: [],
+            colors: {
+              'editor.background': '#0a0a0f',
+              'editor.foreground': '#e0e0e8',
+              'editor.lineHighlightBackground': '#12121a',
+              'editorLineNumber.foreground': '#3a3a50',
+              'editorCursor.foreground': '#00fff7',
+            }
+          })
+          resolve(monaco)
+        })
+      })
+      return this._monacoPromise
+    }
+
+    /** Load goals for the dropdown (cached) */
+    async loadGoals() {
+      if (this._goals) return this._goals
+      const api = container.feature('apiClient')
+      const data = await api.fetchGoals()
+      this._goals = data.goals || []
+      return this._goals
+    }
+
+    /** Open the editor for a project */
+    async openProject(slug) {
+      const store = container.feature('projectStore')
+      const project = store.current
+      if (!project || project.slug !== slug) return
+
+      this.state.set('targetType', 'project')
+      this.state.set('targetId', slug)
+      this._currentMeta = { status: project.status, goal: project.goal || '' }
+
+      await this._openEditor(project.title, project.content, 'project')
+    }
+
+    /** Open the editor for a plan */
+    async openPlan(planId) {
+      const store = container.feature('projectStore')
+      const plan = store.current?.plans?.find(p => p.id === planId)
+      if (!plan) return
+
+      this.state.set('targetType', 'plan')
+      this.state.set('targetId', planId)
+      this._currentMeta = { status: plan.status, project: plan.project }
+
+      await this._openEditor(plan.title, plan.content, 'plan')
+    }
+
+    async _openEditor(title, content, type) {
+      const m = await this._loadMonaco()
+      const el = document.getElementById('monaco-container')
+
+      if (this._editor) {
+        this._editor.dispose()
+        this._editor = null
+      }
+
+      this._editor = m.editor.create(el, {
+        value: content || '',
+        language: 'markdown',
+        theme: 'agentic-dark',
+        minimap: { enabled: false },
+        wordWrap: 'on',
+        fontSize: 13,
+        fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
+        lineHeight: 22,
+        padding: { top: 16 },
+        scrollBeyondLastLine: false,
+        renderWhitespace: 'none',
+        overviewRulerBorder: false,
+        hideCursorInOverviewRuler: true,
+      })
+
+      this._editor.onDidChangeModelContent(() => {
+        if (!this.state.get('dirty')) {
+          this.state.set('dirty', true)
+        }
+      })
+
+      this.state.set('open', true)
+      this.state.set('mode', 'edit')
+      this.state.set('dirty', false)
+      this.emit('editor:opened', { type, id: this.state.get('targetId') })
+    }
+
+    /** Toggle between edit and preview modes */
+    toggleMode() {
+      const current = this.state.get('mode')
+      const next = current === 'edit' ? 'preview' : 'edit'
+      this.state.set('mode', next)
+      this.emit('mode:changed', { mode: next })
+    }
+
+    /** Save the current document */
+    async save() {
+      if (this.state.get('saving') || !this._editor) return
+
+      this.state.set('saving', true)
+      this.emit('save:start')
+
+      const type = this.state.get('targetType')
+      const id = this.state.get('targetId')
+      const content = this._editor.getValue()
+      const api = container.feature('apiClient')
+
+      try {
+        const meta = { ...this._currentMeta }
+        if (type === 'project') {
+          await api.saveProject(id, { content, meta })
+        } else {
+          await api.savePlan(id, { content, meta })
+        }
+        this.state.set('dirty', false)
+        this.emit('save:done', { success: true })
+        await container.feature('appController').refreshProject()
+      } catch (err) {
+        this.emit('save:done', { success: false })
+      } finally {
+        this.state.set('saving', false)
+      }
+    }
+
+    /** Update meta from dropdown change */
+    setMeta(key, value) {
+      this._currentMeta[key] = value
+      if (!this.state.get('dirty')) {
+        this.state.set('dirty', true)
+      }
+    }
+
+    /** Close the editor */
+    close() {
+      if (this._editor) {
+        this._editor.dispose()
+        this._editor = null
+      }
+      this.state.set('open', false)
+      this.state.set('dirty', false)
+      this.state.set('targetType', '')
+      this.state.set('targetId', '')
+      this.emit('editor:closed')
+    }
+
+    /** Get current editor content for preview */
+    getContent() {
+      return this._editor ? this._editor.getValue() : ''
+    }
+
+    snapshot() {
+      return {
+        open: this.isOpen,
+        mode: this.mode,
+        targetType: this.state.get('targetType'),
+        targetId: this.state.get('targetId'),
+        dirty: this.isDirty,
+        saving: this.state.get('saving'),
       }
     }
   }
@@ -1350,6 +1945,7 @@
   const store = container.feature('projectStore')
   const build = container.feature('buildManager')
   const chat = container.feature('chatManager')
+  const editor = container.feature('editorManager')
   const app = container.feature('appController')
 
   // ═══════════════════════════════════════════════════════════════════
@@ -1416,6 +2012,7 @@
         <div class="project-status-card">
           <div class="project-title">${esc(project.title)}</div>
           ${project.goal ? `<div class="project-goal">Goal: ${esc(project.goal)}</div>` : ''}
+          <div style="margin-bottom:8px"><button class="edit-btn" data-edit-project="${esc(project.slug)}">Edit Project</button></div>
           <div class="progress-bar">
             <div class="progress-fill" style="width:${pct}%;background:${progressColor}"></div>
           </div>
@@ -1451,6 +2048,18 @@
       })
       listEl.appendChild(li)
     })
+
+    // Add plan button
+    const addBtn = document.createElement('button')
+    addBtn.className = 'add-plan-btn'
+    addBtn.textContent = '+ Add Plan'
+    addBtn.addEventListener('click', () => showCreateDialog('plan'))
+    listEl.parentElement.appendChild(addBtn)
+
+    // Edit project button
+    sidebarContent.querySelector('[data-edit-project]')?.addEventListener('click', () => {
+      editor.openProject(project.slug)
+    })
   }
 
   function highlightSidebarItem(index) {
@@ -1484,6 +2093,13 @@
         header.closest('.plan-card').classList.toggle('open')
       })
     })
+
+    document.querySelectorAll('[data-edit-plan]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        editor.openPlan(btn.dataset.editPlan)
+      })
+    })
   }
 
   function renderPlanCard(plan, index) {
@@ -1510,6 +2126,7 @@
             <div class="plan-card-title">${esc(plan.title)}</div>
             <div class="plan-card-subtitle">${badgeHTML(plan.status)}</div>
           </div>
+          <button class="edit-btn" data-edit-plan="${esc(plan.id)}">Edit</button>
           <div class="plan-card-chevron">&#9654;</div>
         </div>
         <div class="plan-card-body">
@@ -1831,6 +2448,221 @@
     chatInput.disabled = false
     chatSendBtn.disabled = false
   })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Editor UI wiring
+  // ═══════════════════════════════════════════════════════════════════
+  const editorOverlay = document.getElementById('editor-overlay')
+  const editorTitle = document.getElementById('editor-title')
+  const editorTypeLabel = document.getElementById('editor-type-label')
+  const editorStatusEl = document.getElementById('editor-status')
+  const editorToggleBtn = document.getElementById('editor-toggle-btn')
+  const editorSaveBtn = document.getElementById('editor-save-btn')
+  const editorCloseBtn = document.getElementById('editor-close-btn')
+  const editorStatusSelect = document.getElementById('editor-status-select')
+  const editorGoalSelect = document.getElementById('editor-goal-select')
+  const editorGoalField = document.getElementById('editor-goal-field')
+  const monacoContainer = document.getElementById('monaco-container')
+  const editorPreview = document.getElementById('editor-preview')
+  const editorPreviewContent = document.getElementById('editor-preview-content')
+  const newProjectBtn = document.getElementById('new-project-btn')
+
+  editor.on('editor:opened', async ({ type }) => {
+    editorOverlay.classList.add('open')
+    editorTypeLabel.textContent = type.toUpperCase()
+
+    const storeProject = store.current
+    if (type === 'project') {
+      editorTitle.textContent = storeProject?.title || ''
+      editorStatusSelect.innerHTML = PROJECT_STATUSES.map(s =>
+        `<option value="${s}" ${s === editor._currentMeta.status ? 'selected' : ''}>${s}</option>`
+      ).join('')
+      editorGoalField.style.display = ''
+      const goals = await editor.loadGoals()
+      editorGoalSelect.innerHTML = '<option value="">none</option>' + goals.map(g =>
+        `<option value="${g.slug}" ${g.slug === editor._currentMeta.goal ? 'selected' : ''}>${g.title}</option>`
+      ).join('')
+    } else {
+      const plan = storeProject?.plans?.find(p => p.id === editor.state.get('targetId'))
+      editorTitle.textContent = plan?.title || ''
+      editorStatusSelect.innerHTML = PLAN_STATUSES.map(s =>
+        `<option value="${s}" ${s === editor._currentMeta.status ? 'selected' : ''}>${s}</option>`
+      ).join('')
+      editorGoalField.style.display = 'none'
+    }
+
+    editorSaveBtn.disabled = true
+    editorStatusEl.textContent = ''
+    editorToggleBtn.textContent = 'Preview'
+    monacoContainer.style.display = ''
+    editorPreview.style.display = 'none'
+  })
+
+  editor.on('editor:closed', () => {
+    editorOverlay.classList.remove('open')
+  })
+
+  editor.on('mode:changed', ({ mode }) => {
+    if (mode === 'preview') {
+      monacoContainer.style.display = 'none'
+      editorPreview.style.display = ''
+      editorPreviewContent.innerHTML = renderMarkdown(editor.getContent())
+      editorToggleBtn.textContent = 'Edit'
+    } else {
+      monacoContainer.style.display = ''
+      editorPreview.style.display = 'none'
+      editorToggleBtn.textContent = 'Preview'
+      if (editor._editor) editor._editor.layout()
+    }
+  })
+
+  editor.on('save:start', () => {
+    editorSaveBtn.disabled = true
+    editorSaveBtn.textContent = 'Saving...'
+    editorStatusEl.textContent = ''
+    editorStatusEl.className = 'editor-status'
+  })
+
+  editor.on('save:done', ({ success }) => {
+    editorSaveBtn.textContent = 'Save'
+    if (success) {
+      editorStatusEl.textContent = 'Saved'
+      editorStatusEl.className = 'editor-status saved'
+      setTimeout(() => { editorStatusEl.textContent = ''; editorStatusEl.className = 'editor-status' }, 2000)
+    } else {
+      editorStatusEl.textContent = 'Save failed'
+      editorStatusEl.className = 'editor-status error'
+    }
+  })
+
+  // Dirty state → enable save button
+  const dirtyCheck = setInterval(() => {
+    if (editor.isOpen) {
+      editorSaveBtn.disabled = !editor.isDirty || editor.state.get('saving')
+    }
+  }, 200)
+
+  editorToggleBtn.addEventListener('click', () => editor.toggleMode())
+  editorSaveBtn.addEventListener('click', () => editor.save())
+  editorCloseBtn.addEventListener('click', () => {
+    if (editor.isDirty && !confirm('You have unsaved changes. Close anyway?')) return
+    editor.close()
+  })
+
+  editorStatusSelect.addEventListener('change', () => editor.setMeta('status', editorStatusSelect.value))
+  editorGoalSelect.addEventListener('change', () => editor.setMeta('goal', editorGoalSelect.value))
+
+  // Keyboard shortcut: Cmd/Ctrl+S to save
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 's' && editor.isOpen) {
+      e.preventDefault()
+      if (editor.isDirty) editor.save()
+    }
+  })
+
+  // ═══════════════════════════════════════════════════════════════════
+  // Create dialog wiring
+  // ═══════════════════════════════════════════════════════════════════
+  const createDialog = document.getElementById('create-dialog')
+  const createDialogTitle = document.getElementById('create-dialog-title')
+  const createTitleInput = document.getElementById('create-title')
+  const createGoalField = document.getElementById('create-goal-field')
+  const createGoalSelect = document.getElementById('create-goal-select')
+  const createErrorEl = document.getElementById('create-error')
+  const createCancelBtn = document.getElementById('create-cancel-btn')
+  const createSubmitBtn = document.getElementById('create-submit-btn')
+
+  let createType = 'project'
+
+  async function showCreateDialog(type) {
+    createType = type
+    createDialogTitle.textContent = type === 'project' ? 'New Project' : 'New Plan'
+    createTitleInput.value = ''
+    createErrorEl.style.display = 'none'
+    createSubmitBtn.disabled = false
+    createSubmitBtn.textContent = 'Create'
+
+    if (type === 'project') {
+      createGoalField.style.display = ''
+      const goals = await editor.loadGoals()
+      createGoalSelect.innerHTML = '<option value="">none</option>' + goals.map(g =>
+        `<option value="${g.slug}">${g.title}</option>`
+      ).join('')
+    } else {
+      createGoalField.style.display = 'none'
+    }
+
+    createDialog.classList.add('open')
+    createTitleInput.focus()
+  }
+
+  function closeCreateDialog() {
+    createDialog.classList.remove('open')
+  }
+
+  createCancelBtn.addEventListener('click', closeCreateDialog)
+
+  createDialog.addEventListener('click', (e) => {
+    if (e.target === createDialog) closeCreateDialog()
+  })
+
+  createTitleInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') createSubmitBtn.click()
+    if (e.key === 'Escape') closeCreateDialog()
+  })
+
+  createSubmitBtn.addEventListener('click', async () => {
+    const title = createTitleInput.value.trim()
+    if (!title) {
+      createErrorEl.textContent = 'Title is required'
+      createErrorEl.style.display = ''
+      return
+    }
+
+    createSubmitBtn.disabled = true
+    createSubmitBtn.textContent = 'Creating...'
+    createErrorEl.style.display = 'none'
+
+    try {
+      if (createType === 'project') {
+        const result = await api.createProject({ title, goal: createGoalSelect.value })
+        if (result.error) {
+          createErrorEl.textContent = result.error
+          createErrorEl.style.display = ''
+          createSubmitBtn.disabled = false
+          createSubmitBtn.textContent = 'Create'
+          return
+        }
+        closeCreateDialog()
+        await store.loadProjects()
+        const slug = result.project?.slug || title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+        app.selectProject(slug)
+        await app.refreshProject()
+        editor.openProject(slug)
+      } else {
+        const projectSlug = store.current?.slug
+        if (!projectSlug) return
+        const result = await api.createPlan({ title, project: projectSlug })
+        if (result.error) {
+          createErrorEl.textContent = result.error
+          createErrorEl.style.display = ''
+          createSubmitBtn.disabled = false
+          createSubmitBtn.textContent = 'Create'
+          return
+        }
+        closeCreateDialog()
+        await app.refreshProject()
+        if (result.planId) editor.openPlan(result.planId)
+      }
+    } catch (err) {
+      createErrorEl.textContent = 'Failed to create'
+      createErrorEl.style.display = ''
+      createSubmitBtn.disabled = false
+      createSubmitBtn.textContent = 'Create'
+    }
+  })
+
+  newProjectBtn.addEventListener('click', () => showCreateDialog('project'))
 
   // ═══════════════════════════════════════════════════════════════════
   // DOM event listeners → feature method calls

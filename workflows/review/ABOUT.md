@@ -29,5 +29,5 @@ Use this when the user wants to understand the current state of things without c
 
 ## When NOT to use
 
-- If the user wants to review a specific project in depth with an assistant — use **Project Reviewer** instead
+- If the user wants to review or edit a specific project in depth with an assistant — use **Project Builder** instead
 - If the user wants to act on something (create, edit, shape) — route to the appropriate workflow instead

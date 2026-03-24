@@ -1,31 +1,34 @@
 ---
 title: Project Builder
-description: Build projects by executing their plans with real-time progress tracking and an AI chat assistant
+description: Create, edit, review, and build projects and plans with a Monaco editor and AI chat assistant
 tags:
   - build
   - projects
   - assistant
   - chat
+  - editor
 ---
 
 # Project Builder
 
-An interactive build session for a project. Shows the project overview and all its plans with real-time build progress, then lets you chat with any available assistant about the project while building. Select a project, pick an assistant, run the build, and watch plans execute live.
+The unified project workspace. Create and edit project and plan documents with a Monaco editor, review them with an AI assistant, and execute builds with real-time progress tracking.
 
 ## When to use
 
-Use this when the user wants to actually build a project — execute its plans, monitor progress, and have an assistant available for questions or guidance during the build.
+- Creating new projects or plans
+- Editing project/plan markdown content and metadata (status, goal)
+- Building a project — executing its plans with live progress
+- Reviewing a project with an assistant — open the chat drawer and ask for a review
 
 ## Trigger signals
 
 - "Build [project name]"
-- "Run the plans for [project name]"
-- "Execute [project name]"
-- "Start building [project name]"
-- "I want to build [project name] with the project builder"
+- "Edit [project name]"
+- "Create a new project"
+- "I want to work on [project name]"
+- "Review [project name]"
 
 ## When NOT to use
 
-- If the user wants to review a project without building — use **Project Reviewer** instead
 - If the user wants a quick status overview — use **Status Briefing** instead
-- If the user hasn't created any projects yet — there's nothing to build
+- If the user wants to shape an idea into a project — use **Shape** instead

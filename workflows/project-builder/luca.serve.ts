@@ -103,6 +103,7 @@ export default async function setup(server: any) {
 
   // ── Share state with endpoints ──
   app.locals.docs = docs
+  app.locals.serializePlan = serializePlan
   app.locals.serializeProject = serializeProject
   app.locals.getBuilder = getBuilder
   app.locals.wireBuilderEvents = wireBuilderEvents
