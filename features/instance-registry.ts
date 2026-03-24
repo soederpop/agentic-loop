@@ -65,8 +65,6 @@ export const InstanceEntrySchema = z.object({
   ports: z.object({
     authority: z.number(),
     content: z.number(),
-    presenterExpress: z.number(),
-    presenterLink: z.number(),
   }),
 })
 export type InstanceEntry = z.infer<typeof InstanceEntrySchema>
@@ -101,8 +99,6 @@ export class InstanceRegistry extends Feature<
   static BASE_PORTS = {
     authority: 4410,
     content: 4100,
-    presenterExpress: 9210,
-    presenterLink: 9211,
   }
 
   get registryDir() {
@@ -195,8 +191,6 @@ export class InstanceRegistry extends Feature<
     return {
       authority: await findPort(InstanceRegistry.BASE_PORTS.authority),
       content: await findPort(InstanceRegistry.BASE_PORTS.content),
-      presenterExpress: await findPort(InstanceRegistry.BASE_PORTS.presenterExpress),
-      presenterLink: await findPort(InstanceRegistry.BASE_PORTS.presenterLink),
     }
   }
 
