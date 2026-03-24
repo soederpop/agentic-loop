@@ -41,4 +41,4 @@ docs/TABLE-OF-CONTENTS.md
 
 # the examples folder I can use to teach the agent shit
 examples/
-shared/
+shared/*.*
