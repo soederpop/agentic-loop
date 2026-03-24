@@ -7,7 +7,7 @@ tags:
   - notebook
   - agentic-loop
   - authoring
-status: ready
+status: promoted
 ---
 
 # Playbook Designer Workflow
