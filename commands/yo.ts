@@ -56,9 +56,9 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
   const isChief = target === 'chief' || target === 'chiefofstaff'
 
   // Check if luca main authority is running — if so, relay through it
-  const { readCurrentInstance } = await import('../features/instance-registry')
+  const instanceRegistry = container.feature('instanceRegistry')
   const networking = container.feature('networking')
-  const instance = readCurrentInstance()
+  const instance = instanceRegistry.getSelf()
   const mainPort = instance?.ports.authority ?? 4410
   const authorityRunning = instance ? !(await networking.isPortOpen(mainPort)) : false
 

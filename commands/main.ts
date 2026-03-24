@@ -17,7 +17,6 @@ export const argsSchema = CommandOptionsSchema.extend({
   concurrencyOneOff: z.number().default(4).describe('Max concurrent one-off tasks'),
   concurrencyScheduled: z.number().default(2).describe('Max concurrent scheduled tasks'),
   voiceService: z.boolean().default(true).describe('Enable voice service (use --no-voice-service to disable)'),
-  presenterService: z.boolean().default(true).describe('Enable presenter service (use --no-presenter-service to disable)'),
 })
 
 type MainOptions = z.infer<typeof argsSchema>
@@ -264,7 +263,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     scheduler.stop()
     builder.stopWatcher()
     if (voiceService) voiceService.stop().catch(() => {})
-    if (presenter) presenter.stop().catch(() => {})
     log('main', 'All subsystems paused. Process alive, WebSocket still listening.')
     recordEvent('main', 'paused')
   }
@@ -278,11 +276,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     if (voiceService) {
       try { await voiceService.start() } catch (err: any) {
         log('voice', `failed to resume: ${err?.message || err}`)
-      }
-    }
-    if (presenter) {
-      try { await presenter.start() } catch (err: any) {
-        log('presenter', `failed to resume: ${err?.message || err}`)
       }
     }
     log('main', 'All subsystems resumed.')
@@ -317,16 +310,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         socketPath: windowManager.state.get('socketPath'),
         windowCount: windowManager.state.get('windowCount'),
       } : { listening: false, disabled: true },
-      presenter: presenter ? {
-        running: presenter.state.get('running'),
-        expressPort: presenter.state.get('expressPort'),
-        linkPort: presenter.state.get('linkPort'),
-        windowManagerConnected: presenter.windowManagerConnected,
-      } : { running: false, disabled: true },
-      contentServer: {
-        running: contentServerRunning,
-        port: contentPort,
-      },
       instance: {
         id: instanceEntry.id,
         cwd: instanceEntry.cwd,
@@ -385,7 +368,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       builder,
       voiceService,
       windowManager,
-      presenter,
       log,
       events,
       getStatusSnapshot,
@@ -433,9 +415,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         break
       case 'eval':
         handleEval(payload, ws, respond)
-        break
-      case 'present':
-        handlePresent(payload, ws, respond)
         break
       default:
         respond({ error: `unknown action: ${action}` })
@@ -512,101 +491,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     }
 
     return { matched: true, result: resultData, source: 'handler' }
-  }
-
-  async function handlePresent(payload: any, ws: any, respond: (data: any) => void) {
-    if (!presenter || !presenter.state.get('running')) {
-      respond({ error: 'presenter service not running' })
-      return
-    }
-
-    const link = presenter.link
-    if (!link) {
-      respond({ error: 'presenter containerLink not available' })
-      return
-    }
-
-    const sessionId = payload?.sessionId || Date.now().toString()
-    const pageUrl = payload?.pageUrl
-    const forward = (type: string, data: any) => {
-      try { ws.send(JSON.stringify({ type: 'presenter:event', sessionId, event: type, data })) } catch {}
-    }
-
-    // Spawn window from the authority process (we have the connected wm)
-    let windowId: string | undefined
-    if (pageUrl) {
-      if (windowManager?.isClientConnected) {
-        try {
-          const result = await windowManager.spawn({ url: pageUrl, width: 1200, height: 900 })
-          if (result?.windowId) {
-            windowId = String(result.windowId)
-            log('presenter', `spawned window ${windowId}`)
-
-            windowManager.on('windowClosed', (wmMsg: any) => {
-              if (String(wmMsg?.windowId || '') === windowId) {
-                forward('windowClosed', { windowId })
-              }
-            })
-            windowManager.on('clientDisconnected', () => {
-              forward('clientDisconnected', {})
-            })
-          }
-        } catch (err: any) {
-          log('presenter', `window spawn failed: ${err?.message || err}`)
-        }
-      }
-
-      // Fall back to opener if no native window
-      if (!windowId) {
-        try {
-          const opener = container.feature('opener')
-          await opener.open(pageUrl)
-          log('presenter', 'opened in browser (no window manager)')
-        } catch {
-          log('presenter', `could not open automatically: ${pageUrl}`)
-        }
-      }
-    }
-
-    const onConnection = (uuid: string, meta: any) => {
-      log('presenter', `browser connected: ${uuid}`)
-      recordEvent('presenter', 'connection', { uuid })
-      forward('connection', { uuid, meta })
-    }
-    const onEvent = (_uuid: string, eventName: string, data: any) => {
-      log('presenter', `event: ${eventName}`)
-      recordEvent('presenter', eventName, data)
-      forward(eventName, data)
-    }
-    const onDisconnection = (uuid: string) => {
-      log('presenter', `browser disconnected: ${uuid}`)
-      recordEvent('presenter', 'disconnection', { uuid })
-      forward('disconnection', { uuid, connectionCount: link.connectionCount })
-      if (link.connectionCount === 0) {
-        cleanup()
-      }
-    }
-
-    const cleanup = () => {
-      try { link.off('connection', onConnection) } catch {}
-      try { link.off('event', onEvent) } catch {}
-      try { link.off('disconnection', onDisconnection) } catch {}
-    }
-
-    link.on('connection', onConnection)
-    link.on('event', onEvent)
-    link.on('disconnection', onDisconnection)
-
-    ws.on('close', cleanup)
-    setTimeout(cleanup, 5 * 60 * 1000)
-
-    respond({
-      ok: true,
-      sessionId,
-      windowId,
-      expressPort: presenter.expressPort,
-      linkPort: presenter.linkPort,
-    })
   }
 
   async function handleEval(payload: any, ws: any, respond: (data: any) => void) {
@@ -821,7 +705,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('voice', 'disabled via --no-voice-service')
   }
 
-  // 4. Window Manager — start eagerly so it's ready for presenter or any other feature
+  // 4. Window Manager
   let windowManager: any = null
 
   try {
@@ -850,59 +734,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('windowManager', `failed to start: ${err?.message || err}`)
   }
 
-  // 5. Presenter Service
-  let presenter: any = null
-
-  if (options.presenterService) {
-    presenter = container.feature('presenter', {
-      expressPort: ports.presenterExpress,
-      linkPort: ports.presenterLink,
-    })
-
-    try {
-      await presenter.start()
-      log('presenter', `serving on http://localhost:${presenter.expressPort} (ws: ${presenter.linkPort})`)
-      if (presenter.windowManagerConnected) {
-        log('presenter', 'window manager already connected')
-      } else {
-        log('presenter', 'window manager not connected — will auto-launch if .app bundle is available')
-      }
-    } catch (err: any) {
-      log('presenter', `failed to start: ${err?.message || err}`)
-    }
-  } else {
-    log('presenter', 'disabled via --no-presenter-service')
-  }
-
-  // 6. Content Server (cnotes serve)
-  let contentServerRunning = true
-  const cnotesBin = container.paths.resolve('node_modules/.bin/cnotes')
-  const contentPort = ports.content
-  const cnotesProcess = proc.spawnAndCapture(cnotesBin, ['serve', '--port', String(contentPort), '--force'], {
-    onOutput: (data: string) => {
-      for (const line of data.split('\n')) {
-        if (line) log('content', line)
-      }
-    },
-    onError: (data: string) => {
-      for (const line of data.split('\n')) {
-        if (line) log('content', `[stderr] ${line}`)
-      }
-    },
-  })
-
-  cnotesProcess.then((result: any) => {
-    contentServerRunning = false
-    if (result.exitCode !== 0) {
-      log('content', `exited with code ${result.exitCode}`)
-    }
-  }).catch((err: any) => {
-    contentServerRunning = false
-    log('content', `error: ${err?.message || err}`)
-  })
-
-  log('content', `serving on http://localhost:${contentPort}`)
-
   // --- Status summary ---
   log('main', '')
   log('main', `luca main running (pid ${process.pid})`)
@@ -919,7 +750,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Builder: ${status.builder.buildsInProgress.length} building`)
     log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.handlerCount} handlers`)
     log('main', `WindowManager: ${status.windowManager.listening ? `listening` : 'off'}, client ${status.windowManager.clientConnected ? 'connected' : 'disconnected'}, ${status.windowManager.windowCount || 0} windows`)
-    log('main', `Presenter: ${status.presenter.running ? `running (http: ${status.presenter.expressPort}, ws: ${status.presenter.linkPort})` : 'stopped'}`)
     log('main', '')
   })
 
@@ -932,7 +762,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     builder.stopWatcher()
 
     voiceService?.stop().catch(() => {})
-    presenter?.stop().catch(() => {})
     windowManager?.stop().catch(() => {})
 
     wss.stop().catch(() => {})
@@ -1152,12 +981,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
         ? chalk.green('●') + ' voice ' + (status.voice.clientConnected ? chalk.green('connected') : chalk.gray('waiting'))
         : chalk.yellow('●') + ' voice',
       wmIndicator,
-      status.presenter?.running
-        ? chalk.green('●') + ` presenter ${chalk.gray(`http:${status.presenter.expressPort} ws:${status.presenter.linkPort}`)}`
-        : chalk.yellow('●') + ' presenter',
-      status.contentServer?.running
-        ? chalk.green('●') + ` content ${chalk.gray(`:${status.contentServer.port}`)}`
-        : chalk.red('●') + ' content',
     ]
     output.push(' ' + indicators.join(chalk.gray('  │  ')))
 
@@ -1431,7 +1254,7 @@ async function runConsole(container: any, options: MainOptions, ui: any) {
 
   console.log()
   console.log(ui.colors.dim('  Remote console — evaluating in the running luca main process.'))
-  console.log(ui.colors.dim('  Live objects: scheduler, builder, voiceService, windowManager, presenter, container'))
+  console.log(ui.colors.dim('  Live objects: scheduler, builder, voiceService, windowManager, container'))
   console.log(ui.colors.dim('  Last result available as _'))
   console.log(ui.colors.dim('  Type .exit to quit.'))
   console.log()

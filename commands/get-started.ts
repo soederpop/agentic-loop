@@ -30,9 +30,9 @@ export default async function getStarted(options: z.infer<typeof argsSchema>, co
   const dim = colors.dim
 
   // Check if the main authority process is running via instance registry
-  const { readCurrentInstance } = await import('../features/instance-registry')
+  const instanceRegistry = container.feature('instanceRegistry')
   const networking = container.feature('networking')
-  const instance = readCurrentInstance()
+  const instance = instanceRegistry.getSelf()
   const mainPort = instance?.ports.authority ?? 4410
   const authorityRunning = instance ? !(await networking.isPortOpen(mainPort)) : false
 
