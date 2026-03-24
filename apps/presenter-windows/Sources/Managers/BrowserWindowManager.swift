@@ -72,6 +72,12 @@ public final class BrowserWindowManager {
             navigateWindow(command, completion: completion)
         case "eval":
             evaluateWindow(command, completion: completion)
+        case "move":
+            moveWindow(command, completion: completion)
+        case "resize":
+            resizeWindow(command, completion: completion)
+        case "setframe":
+            setWindowFrame(command, completion: completion)
         case "screengrab", "screenshot", "capture":
             captureWindow(command, completion: completion)
         case "video", "record":
@@ -361,6 +367,61 @@ public final class BrowserWindowManager {
         }
     }
 
+    private func moveWindow(_ command: WindowCommand, completion: @escaping (Result<[String: JSONValue], Error>) -> Void) {
+        guard let target = resolveTargetWindow(command.windowId) else {
+            completion(.failure(NSError(domain: "BrowserWindowManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "no target window"])))
+            return
+        }
+        let (uuid, controller) = target
+        let x = command.request?.x
+        let y = command.request?.y
+        guard x != nil || y != nil else {
+            completion(.failure(NSError(domain: "BrowserWindowManager", code: 11, userInfo: [NSLocalizedDescriptionKey: "move requires x and/or y"])))
+            return
+        }
+        controller.setFrame(x: x, y: y, width: nil, height: nil, animate: true)
+        completion(.success([
+            "ok": .bool(true),
+            "windowId": .string(uuid.uuidString)
+        ]))
+    }
+
+    private func resizeWindow(_ command: WindowCommand, completion: @escaping (Result<[String: JSONValue], Error>) -> Void) {
+        guard let target = resolveTargetWindow(command.windowId) else {
+            completion(.failure(NSError(domain: "BrowserWindowManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "no target window"])))
+            return
+        }
+        let (uuid, controller) = target
+        let w = command.request?.width
+        let h = command.request?.height
+        guard w != nil || h != nil else {
+            completion(.failure(NSError(domain: "BrowserWindowManager", code: 12, userInfo: [NSLocalizedDescriptionKey: "resize requires width and/or height"])))
+            return
+        }
+        controller.setFrame(x: nil, y: nil, width: w, height: h, animate: true)
+        completion(.success([
+            "ok": .bool(true),
+            "windowId": .string(uuid.uuidString)
+        ]))
+    }
+
+    private func setWindowFrame(_ command: WindowCommand, completion: @escaping (Result<[String: JSONValue], Error>) -> Void) {
+        guard let target = resolveTargetWindow(command.windowId) else {
+            completion(.failure(NSError(domain: "BrowserWindowManager", code: 2, userInfo: [NSLocalizedDescriptionKey: "no target window"])))
+            return
+        }
+        let (uuid, controller) = target
+        let x = command.request?.x
+        let y = command.request?.y
+        let w = command.request?.width
+        let h = command.request?.height
+        controller.setFrame(x: x, y: y, width: w, height: h, animate: true)
+        completion(.success([
+            "ok": .bool(true),
+            "windowId": .string(uuid.uuidString)
+        ]))
+    }
+
     private func resolveTargetWindow(_ windowId: String?) -> (UUID, any WindowControlling)? {
         if let windowId, let uuid = UUID(uuidString: windowId), let controller = windows[uuid] {
             return (uuid, controller)
@@ -410,6 +471,7 @@ private protocol WindowControlling: AnyObject {
     func focus()
     func bringToFront()
     func closeWindow()
+    func setFrame(x: CGFloat?, y: CGFloat?, width: CGFloat?, height: CGFloat?, animate: Bool)
     func capturePNG(to path: String) throws -> WindowCaptureResult
     func windowNumberForCapture() -> Int?
 }

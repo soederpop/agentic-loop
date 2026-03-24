@@ -100,6 +100,18 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
         window?.close()
     }
 
+    func setFrame(x: CGFloat?, y: CGFloat?, width: CGFloat?, height: CGFloat?, animate: Bool) {
+        guard let window else { return }
+        let current = window.frame
+        let newFrame = NSRect(
+            x: x ?? current.origin.x,
+            y: y ?? current.origin.y,
+            width: width ?? current.width,
+            height: height ?? current.height
+        )
+        window.setFrame(newFrame, display: true, animate: animate)
+    }
+
     func capturePNG(to path: String) throws -> WindowCaptureResult {
         guard let window, let contentView = window.contentView else {
             throw NSError(domain: "TerminalWindowController", code: 12, userInfo: [NSLocalizedDescriptionKey: "window is unavailable"])

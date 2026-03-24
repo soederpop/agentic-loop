@@ -305,6 +305,21 @@ export class WindowHandle {
   async video(path: string, opts?: { durationMs?: number }): Promise<WindowAckResult> {
     return this.manager.video({ windowId: this.windowId, path, durationMs: opts?.durationMs })
   }
+
+  /** Move this window to a new position. Supports percentage strings (e.g. "50%"). */
+  async move(x: DimensionValue, y: DimensionValue): Promise<WindowAckResult> {
+    return this.manager.move(this.windowId, x, y)
+  }
+
+  /** Resize this window. Supports percentage strings (e.g. "50%"). */
+  async resize(width: DimensionValue, height: DimensionValue): Promise<WindowAckResult> {
+    return this.manager.resize(this.windowId, width, height)
+  }
+
+  /** Set this window's full frame (position + size). Supports percentage strings. */
+  async setFrame(frame: { x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }): Promise<WindowAckResult> {
+    return this.manager.setFrame(this.windowId, frame)
+  }
 }
 
 // --- Private types ---
@@ -382,10 +397,151 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
   static override eventsSchema = WindowManagerEventsSchema
   static { Feature.register(this, 'windowManager') }
 
+  static tools = {
+    wmListWindows: {
+      description: 'List all currently open windows with their IDs, types, and metadata',
+      schema: z.object({}),
+    },
+    wmSpawnBrowser: {
+      description: 'Open a new browser window with an optional URL and position/size',
+      schema: z.object({
+        url: z.string().optional().describe('URL to load in the window'),
+        width: z.union([z.number(), z.string()]).optional().describe('Window width in points or percentage (e.g. "50%")'),
+        height: z.union([z.number(), z.string()]).optional().describe('Window height in points or percentage (e.g. "50%")'),
+        x: z.union([z.number(), z.string()]).optional().describe('Window x position in points or percentage'),
+        y: z.union([z.number(), z.string()]).optional().describe('Window y position in points or percentage'),
+        alwaysOnTop: z.boolean().optional().describe('Keep the window above other windows'),
+      }),
+    },
+    wmSpawnTerminal: {
+      description: 'Open a new terminal window running a command',
+      schema: z.object({
+        command: z.string().describe('Command to run in the terminal'),
+        args: z.array(z.string()).optional().describe('Arguments for the command'),
+        cwd: z.string().optional().describe('Working directory'),
+        title: z.string().optional().describe('Window title'),
+        width: z.union([z.number(), z.string()]).optional().describe('Window width in points or percentage'),
+        height: z.union([z.number(), z.string()]).optional().describe('Window height in points or percentage'),
+        x: z.union([z.number(), z.string()]).optional().describe('Window x position in points or percentage'),
+        y: z.union([z.number(), z.string()]).optional().describe('Window y position in points or percentage'),
+      }),
+    },
+    wmCloseWindow: {
+      description: 'Close a window by ID. If no ID is given, closes the most recent window.',
+      schema: z.object({
+        windowId: z.string().optional().describe('Window ID to close'),
+      }),
+    },
+    wmCloseAllWindows: {
+      description: 'Close all currently open windows',
+      schema: z.object({}),
+    },
+    wmFocusWindow: {
+      description: 'Bring a window to the front. If no ID is given, focuses the most recent window.',
+      schema: z.object({
+        windowId: z.string().optional().describe('Window ID to focus'),
+      }),
+    },
+    wmNavigate: {
+      description: 'Navigate a browser window to a new URL',
+      schema: z.object({
+        windowId: z.string().describe('Window ID'),
+        url: z.string().describe('URL to navigate to'),
+      }),
+    },
+    wmMoveWindow: {
+      description: 'Move a window to a new position. Supports percentage values (e.g. "25%").',
+      schema: z.object({
+        windowId: z.string().describe('Window ID'),
+        x: z.union([z.number(), z.string()]).describe('New x position'),
+        y: z.union([z.number(), z.string()]).describe('New y position'),
+      }),
+    },
+    wmResizeWindow: {
+      description: 'Resize a window. Supports percentage values (e.g. "50%").',
+      schema: z.object({
+        windowId: z.string().describe('Window ID'),
+        width: z.union([z.number(), z.string()]).describe('New width'),
+        height: z.union([z.number(), z.string()]).describe('New height'),
+      }),
+    },
+    wmSetFrame: {
+      description: 'Set a window\'s position and size in one call. All fields optional. Supports percentages.',
+      schema: z.object({
+        windowId: z.string().describe('Window ID'),
+        x: z.union([z.number(), z.string()]).optional().describe('X position'),
+        y: z.union([z.number(), z.string()]).optional().describe('Y position'),
+        width: z.union([z.number(), z.string()]).optional().describe('Width'),
+        height: z.union([z.number(), z.string()]).optional().describe('Height'),
+      }),
+    },
+    wmArrangeWindows: {
+      description: 'Arrange all open windows in a layout pattern: "grid" tiles evenly, "stack" cascades, "row" places side-by-side horizontally, "column" stacks vertically',
+      schema: z.object({
+        pattern: z.enum(['grid', 'stack', 'row', 'column']).describe('Layout pattern to apply'),
+        gap: z.number().optional().describe('Gap in points between windows (default 0)'),
+      }),
+    },
+    wmScreenshot: {
+      description: 'Capture a PNG screenshot of a window',
+      schema: z.object({
+        windowId: z.string().optional().describe('Window ID (defaults to most recent)'),
+        path: z.string().describe('Output file path for the PNG'),
+      }),
+    },
+    wmEval: {
+      description: 'Evaluate JavaScript in a browser window\'s web view and return the result',
+      schema: z.object({
+        windowId: z.string().describe('Window ID'),
+        code: z.string().describe('JavaScript code to evaluate'),
+      }),
+    },
+    wmSpawnLayout: {
+      description: 'Spawn multiple windows at once from a layout configuration. Each entry is either a browser window (with url, position, size) or a terminal (with command, args, cwd).',
+      schema: z.object({
+        windows: z.array(z.object({
+          type: z.enum(['window', 'tty']).optional().describe('Window type: "window" for browser (default), "tty" for terminal'),
+          url: z.string().optional().describe('URL for browser windows'),
+          command: z.string().optional().describe('Command for terminal windows'),
+          args: z.array(z.string()).optional().describe('Args for terminal command'),
+          cwd: z.string().optional().describe('Working directory for terminal'),
+          title: z.string().optional().describe('Window title (terminal)'),
+          width: z.union([z.number(), z.string()]).optional().describe('Width'),
+          height: z.union([z.number(), z.string()]).optional().describe('Height'),
+          x: z.union([z.number(), z.string()]).optional().describe('X position'),
+          y: z.union([z.number(), z.string()]).optional().describe('Y position'),
+        })).describe('Array of window configurations to spawn'),
+      }),
+    },
+    wmStartRecording: {
+      description: 'Start recording video of a window to disk. Non-blocking — returns a recordingId you can use to stop early. Duration defaults to 30s, max 5 minutes.',
+      schema: z.object({
+        windowId: z.string().optional().describe('Window ID (defaults to most recent)'),
+        path: z.string().describe('Output file path for the video'),
+        durationMs: z.number().optional().describe('Recording duration in milliseconds (default 30000, max 300000)'),
+      }),
+    },
+    wmStopRecording: {
+      description: 'Stop an active video recording by its recording ID',
+      schema: z.object({
+        recordingId: z.string().describe('The recording ID returned by wmStartRecording'),
+      }),
+    },
+    wmListRecordings: {
+      description: 'List all active video recordings',
+      schema: z.object({}),
+    },
+    wmGetStatus: {
+      description: 'Get the window manager connection status: whether the IPC server is listening, whether the native app is connected, and the current mode (broker/producer)',
+      schema: z.object({}),
+    },
+  }
+
   // --- Shared state ---
   private _pending = new Map<string, PendingRequest>()
   private _handles = new Map<string, WindowHandle>()
   private _mode: 'broker' | 'producer' | null = null
+  private _activeRecordings = new Map<string, { windowId?: string; path: string; startedAt: number; durationMs: number; timer: ReturnType<typeof setTimeout>; promise: Promise<WindowAckResult> }>()
 
   // --- Broker-only state ---
   private _server?: NetServer              // app-facing socket server
@@ -593,6 +749,12 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     }
     this._pending.clear()
     this._handles.clear()
+
+    // --- Recording cleanup ---
+    for (const [, rec] of this._activeRecordings) {
+      clearTimeout(rec.timer)
+    }
+    this._activeRecordings.clear()
 
     // --- Producer cleanup ---
     if (this._controlClient) {
@@ -804,6 +966,61 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
   }
 
   /**
+   * Move a window to a new position.
+   *
+   * @param windowId - The window ID
+   * @param x - New x position (absolute points or percentage string like "25%")
+   * @param y - New y position (absolute points or percentage string like "10%")
+   * @returns The window ack result
+   */
+  async move(windowId: string, x: DimensionValue, y: DimensionValue): Promise<WindowAckResult> {
+    const resolved = this.resolveDimensions({ x, y })
+    return this.sendWindowCommand({
+      action: 'move',
+      windowId,
+      x: resolved.x,
+      y: resolved.y,
+    })
+  }
+
+  /**
+   * Resize a window.
+   *
+   * @param windowId - The window ID
+   * @param width - New width (absolute points or percentage string like "50%")
+   * @param height - New height (absolute points or percentage string like "70%")
+   * @returns The window ack result
+   */
+  async resize(windowId: string, width: DimensionValue, height: DimensionValue): Promise<WindowAckResult> {
+    const resolved = this.resolveDimensions({ width, height })
+    return this.sendWindowCommand({
+      action: 'resize',
+      windowId,
+      width: resolved.width,
+      height: resolved.height,
+    })
+  }
+
+  /**
+   * Set a window's full frame (position and/or size).
+   *
+   * @param windowId - The window ID
+   * @param frame - Object with x, y, width, height (all optional, supports percentage strings)
+   * @returns The window ack result
+   */
+  async setFrame(windowId: string, frame: { x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }): Promise<WindowAckResult> {
+    const resolved = this.resolveDimensions(frame)
+    return this.sendWindowCommand({
+      action: 'setFrame',
+      windowId,
+      ...(resolved.x != null ? { x: resolved.x } : {}),
+      ...(resolved.y != null ? { y: resolved.y } : {}),
+      ...(resolved.width != null ? { width: resolved.width } : {}),
+      ...(resolved.height != null ? { height: resolved.height } : {}),
+    })
+  }
+
+  /**
    * Get a WindowHandle for chainable operations on a specific window.
    * Returns the tracked handle if one exists, otherwise creates a new one.
    *
@@ -883,6 +1100,242 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     if (!this._client) return false
     this._client.socket.write(JSON.stringify(msg) + '\n')
     return true
+  }
+
+  // --- Tool handlers (matched by name to static tools) ---
+
+  async wmListWindows() {
+    const windows = this.state.get('windows') ?? {}
+    return {
+      count: Object.keys(windows).length,
+      windows: Object.values(windows).map((w: any) => ({
+        windowId: w.windowId,
+        kind: w.kind || 'unknown',
+        openedAt: w.openedAt,
+      })),
+    }
+  }
+
+  async wmSpawnBrowser(opts: { url?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean }) {
+    const handle = await this.spawn(opts)
+    return { windowId: handle.windowId, result: handle.result }
+  }
+
+  async wmSpawnTerminal(opts: { command: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }) {
+    const handle = await this.spawnTTY(opts)
+    return { windowId: handle.windowId, result: handle.result }
+  }
+
+  async wmCloseWindow(opts: { windowId?: string }) {
+    return this.close(opts.windowId)
+  }
+
+  async wmCloseAllWindows() {
+    const windows = this.state.get('windows') ?? {}
+    const ids = Object.keys(windows)
+    const results = await Promise.all(ids.map((id) => this.close(id)))
+    return { closed: ids.length, results }
+  }
+
+  async wmFocusWindow(opts: { windowId?: string }) {
+    return this.focus(opts.windowId)
+  }
+
+  async wmNavigate(opts: { windowId: string; url: string }) {
+    return this.navigate(opts.windowId, opts.url)
+  }
+
+  async wmMoveWindow(opts: { windowId: string; x: DimensionValue; y: DimensionValue }) {
+    return this.move(opts.windowId, opts.x, opts.y)
+  }
+
+  async wmResizeWindow(opts: { windowId: string; width: DimensionValue; height: DimensionValue }) {
+    return this.resize(opts.windowId, opts.width, opts.height)
+  }
+
+  async wmSetFrame(opts: { windowId: string; x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }) {
+    const { windowId, ...frame } = opts
+    return this.setFrame(windowId, frame)
+  }
+
+  async wmArrangeWindows(opts: { pattern: 'grid' | 'stack' | 'row' | 'column'; gap?: number }) {
+    const windows = this.state.get('windows') ?? {}
+    const ids = Object.keys(windows)
+    if (ids.length === 0) return { arranged: 0 }
+
+    const gap = opts.gap ?? 0
+    const display = this.getPrimaryDisplay()
+    const n = ids.length
+    const results: WindowAckResult[] = []
+
+    switch (opts.pattern) {
+      case 'grid': {
+        const cols = Math.ceil(Math.sqrt(n))
+        const rows = Math.ceil(n / cols)
+        const cellW = Math.floor((display.width - gap * (cols + 1)) / cols)
+        const cellH = Math.floor((display.height - gap * (rows + 1)) / rows)
+        for (let i = 0; i < n; i++) {
+          const col = i % cols
+          const row = Math.floor(i / cols)
+          results.push(await this.setFrame(ids[i], {
+            x: gap + col * (cellW + gap),
+            y: gap + row * (cellH + gap),
+            width: cellW,
+            height: cellH,
+          }))
+        }
+        break
+      }
+      case 'stack': {
+        const offset = 30
+        const w = Math.floor(display.width * 0.6)
+        const h = Math.floor(display.height * 0.6)
+        for (let i = 0; i < n; i++) {
+          results.push(await this.setFrame(ids[i], {
+            x: gap + i * offset,
+            y: gap + i * offset,
+            width: w,
+            height: h,
+          }))
+        }
+        break
+      }
+      case 'row': {
+        const cellW = Math.floor((display.width - gap * (n + 1)) / n)
+        for (let i = 0; i < n; i++) {
+          results.push(await this.setFrame(ids[i], {
+            x: gap + i * (cellW + gap),
+            y: gap,
+            width: cellW,
+            height: display.height - gap * 2,
+          }))
+        }
+        break
+      }
+      case 'column': {
+        const cellH = Math.floor((display.height - gap * (n + 1)) / n)
+        for (let i = 0; i < n; i++) {
+          results.push(await this.setFrame(ids[i], {
+            x: gap,
+            y: gap + i * (cellH + gap),
+            width: display.width - gap * 2,
+            height: cellH,
+          }))
+        }
+        break
+      }
+    }
+
+    return { arranged: n, pattern: opts.pattern, results }
+  }
+
+  async wmScreenshot(opts: { windowId?: string; path: string }) {
+    return this.screengrab(opts)
+  }
+
+  private static MAX_RECORDING_MS = 300_000 // 5 minutes
+  private static DEFAULT_RECORDING_MS = 30_000 // 30 seconds
+
+  async wmStartRecording(opts: { windowId?: string; path: string; durationMs?: number }) {
+    const durationMs = Math.min(
+      opts.durationMs ?? WindowManager.DEFAULT_RECORDING_MS,
+      WindowManager.MAX_RECORDING_MS,
+    )
+    const recordingId = randomUUID()
+
+    // Fire the video command with the clamped duration — non-blocking
+    const promise = this.video({ windowId: opts.windowId, path: opts.path, durationMs })
+
+    // Auto-cleanup when the recording finishes (naturally or stopped)
+    promise.then(() => this._activeRecordings.delete(recordingId))
+      .catch(() => this._activeRecordings.delete(recordingId))
+
+    // Safety timer to clean up the tracking entry if something goes wrong
+    const timer = setTimeout(() => {
+      this._activeRecordings.delete(recordingId)
+    }, durationMs + 5000)
+
+    this._activeRecordings.set(recordingId, {
+      windowId: opts.windowId,
+      path: opts.path,
+      startedAt: Date.now(),
+      durationMs,
+      timer,
+      promise,
+    })
+
+    return {
+      recordingId,
+      windowId: opts.windowId,
+      path: opts.path,
+      durationMs,
+      status: 'recording',
+    }
+  }
+
+  async wmStopRecording(opts: { recordingId: string }) {
+    const recording = this._activeRecordings.get(opts.recordingId)
+    if (!recording) {
+      return { ok: false, error: `No active recording with id ${opts.recordingId}` }
+    }
+
+    clearTimeout(recording.timer)
+    this._activeRecordings.delete(opts.recordingId)
+
+    // Send a stopVideo command to the native app
+    const result = await this.sendWindowCommand({
+      action: 'stopVideo',
+      ...(recording.windowId ? { windowId: recording.windowId } : {}),
+    })
+
+    return {
+      ok: true,
+      recordingId: opts.recordingId,
+      path: recording.path,
+      recordedMs: Date.now() - recording.startedAt,
+      result,
+    }
+  }
+
+  async wmListRecordings() {
+    const recordings = Array.from(this._activeRecordings.entries()).map(([id, r]) => ({
+      recordingId: id,
+      windowId: r.windowId,
+      path: r.path,
+      startedAt: r.startedAt,
+      durationMs: r.durationMs,
+      elapsedMs: Date.now() - r.startedAt,
+    }))
+    return { count: recordings.length, recordings }
+  }
+
+  async wmEval(opts: { windowId: string; code: string }) {
+    return this.eval(opts.windowId, opts.code)
+  }
+
+  async wmSpawnLayout(opts: { windows: Array<{ type?: 'window' | 'tty'; url?: string; command?: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }> }) {
+    const config: LayoutEntry[] = opts.windows.map((entry) => {
+      if (entry.type === 'tty' || entry.command) {
+        return { type: 'tty' as const, command: entry.command!, args: entry.args, cwd: entry.cwd, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y }
+      }
+      return { type: 'window' as const, url: entry.url, width: entry.width, height: entry.height, x: entry.x, y: entry.y }
+    })
+    const handles = await this.spawnLayout(config)
+    return {
+      spawned: handles.length,
+      windows: handles.map((h) => ({ windowId: h.windowId, result: h.result })),
+    }
+  }
+
+  async wmGetStatus() {
+    return {
+      listening: this.isListening,
+      clientConnected: this.isClientConnected,
+      mode: this._mode,
+      windowCount: this.state.get('windowCount') ?? 0,
+      pendingOperations: (this.state.get('pendingOperations') ?? []).length,
+      producerCount: this.state.get('producerCount') ?? 0,
+    }
   }
 
   // =====================================================================
