@@ -98,11 +98,6 @@ export const schemas = {
 
 	ls: z.object({}).describe('List the available documents in the contentbase collection'),
 
-	present: z.object({
-		url: z.string().describe('The URL to present to the user in a viewer window'),
-		title: z.string().optional().default('Presenter').describe('Window title'),
-		mode: z.enum(['display', 'input']).optional().default('input').describe('display = view only, input = collect feedback from the user'),
-	}).describe('Show the user a URL in a native presenter window. In input mode (default), the user can type feedback and submit it — you will receive their response. Use this to show dashboards, docs, diagrams, or anything visual and get the user\'s reaction. To present any document (plan, project, idea, task, etc.), use http://localhost:4100/docs/{slug} where slug matches the doc id without .md extension (e.g. http://localhost:4100/docs/projects/my-project).'),
 }
 
 export async function ls() : Promise<string> {
@@ -362,60 +357,6 @@ export async function getOverallStatusSummary(
 	}
 
 	return result
-}
-
-export async function present(options: z.infer<typeof schemas.present>): Promise<{ action: string; feedback?: string }> {
-	const { url, title = 'Presenter', mode = 'input' } = options
-	const proc = assistant.container.proc
-
-	return new Promise((resolve) => {
-		let resolved = false
-		let feedbackStarted = false
-		let feedbackLines: string[] = []
-
-		const done = (result: { action: string; feedback?: string }) => {
-			if (resolved) return
-			resolved = true
-			try { child.kill() } catch {}
-			resolve(result)
-		}
-
-		const child = proc.spawn('luca', ['present', '--url', url, '--title', title, '--mode', mode])
-
-		child.stdout?.on('data', (buf: Buffer) => {
-			const chunk = buf.toString()
-			const lines = chunk.split('\n')
-			for (const line of lines) {
-				if (feedbackStarted) {
-					if (line.includes('__END_FEEDBACK_TEXT__')) {
-						feedbackStarted = false
-						done({ action: 'submitted', feedback: feedbackLines.join('\n').trim() || '(no feedback provided)' })
-						return
-					}
-					feedbackLines.push(line)
-					continue
-				}
-
-				if (line.includes('__BEGIN_FEEDBACK_TEXT__')) {
-					feedbackStarted = true
-					feedbackLines = []
-					continue
-				}
-
-				if (line.includes('__PRESENTER_EVENT__=windowClosed') || line.includes('__PRESENTER_EVENT__=disconnected')) {
-					done({ action: 'closed' })
-					return
-				}
-			}
-		})
-
-		child.on('exit', () => {
-			done({ action: 'closed' })
-		})
-
-		// Safety timeout
-		assistant.container.sleep(5 * 60 * 1000).then(() => done({ action: 'closed' }))
-	})
 }
 
 // --- getOverallStatusSummary implementation ---

@@ -2,7 +2,7 @@
 agent: claude
 schedule: every-ten-minutes
 running: false
-lastRanAt: 1773978474887
+lastRanAt: 1774337031351
 ---
 
 # Turn one of my ideas into a Project Plan
@@ -23,7 +23,7 @@ Commit your work, and only your work. No destructive git actions period.
 
 ## Example of a well structured project and plan
 
-Syntactically, we need a couple of things to make the projects / plans relate to eachother, which helps them power the project builder UI 
+Syntactically, we need a couple of things to make the projects / plans relate to eachother, which helps them power the project builder UI
 
 The marketing-website project document lives in the projects/marketing-website.md
 
@@ -45,7 +45,7 @@ This should have a markdown list with links to the individual plan documents.
 - [Backend](../plans/marketing-website/backend.md)
 ```
 
-Each plan lives in the `plans/:project-name/:slug.md` and should reference the project by its slug in its YAML frontmatter 
+Each plan lives in the `plans/:project-name/:slug.md` and should reference the project by its slug in its YAML frontmatter
 
 ```markdown
 ---
@@ -74,7 +74,7 @@ This structure allows us to turn this project / plans into an multi-stage agent 
 
 At each stage of the delivery, from plan 1, to plan 2, to plan 3, there should be some usable, demoable, thing of value.  Think of the analogy of building a car, wouldn't it be better to go from a skateboard to a scooter to a motorbike to a motorcyle to a car than from an idea to waiting the whole time until you have the whole car?
 
-That is the key thing that should determine the boundaries between plans.  
+That is the key thing that should determine the boundaries between plans.
 
 Even if the usable thing is a script / command based demo to prove that the lan worked.
 
