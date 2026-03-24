@@ -4,8 +4,8 @@ export default async function setup(server: any) {
 
   // The dashboard HTML connects directly to the luca main WebSocket.
   // Read port from instance registry, fall back to env var or default.
-  const { readCurrentInstance } = await import('../../features/instance-registry')
-  const instance = readCurrentInstance()
+  const registry = container.feature('instanceRegistry')
+  const instance = registry.getSelf()
   const wsPort = instance?.ports.authority ?? parseInt(process.env.LUCA_MAIN_PORT || '4410', 10)
   app.locals.wsPort = wsPort
 

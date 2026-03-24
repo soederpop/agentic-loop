@@ -636,13 +636,13 @@ class DashboardStore extends Feature {
     '#FDCB6E', '#E84393',
   ]
 
-  _events = []
+  _eventEntries = []
   _logs = []
   _sourceColorMap = {}
   _nextColorIdx = 0
 
   /** Get all accumulated events */
-  get events() { return this._events }
+  get events() { return this._eventEntries }
 
   /** Get all accumulated logs */
   get logs() { return this._logs }
@@ -685,9 +685,9 @@ class DashboardStore extends Feature {
       this._logs = data.recentLogs.slice(-maxLogs)
       this.state.set('logCount', this._logs.length)
     }
-    if (data?.recentEvents?.length && this._events.length === 0) {
-      this._events = data.recentEvents.slice(-maxEvents)
-      this.state.set('eventCount', this._events.length)
+    if (data?.recentEvents?.length && this._eventEntries.length === 0) {
+      this._eventEntries = data.recentEvents.slice(-maxEvents)
+      this.state.set('eventCount', this._eventEntries.length)
     }
 
     this.state.set('dirty', true)
@@ -698,9 +698,9 @@ class DashboardStore extends Feature {
   /** Add an event entry */
   addEvent(evt) {
     const max = this.options?.maxEvents || 300
-    this._events.push(evt)
-    if (this._events.length > max) this._events.shift()
-    this.state.set('eventCount', this._events.length)
+    this._eventEntries.push(evt)
+    if (this._eventEntries.length > max) this._eventEntries.shift()
+    this.state.set('eventCount', this._eventEntries.length)
     this.state.set('dirty', true)
     this.emit('event:added', evt)
     this.emit('data:changed')
@@ -811,8 +811,6 @@ class DashboardApp extends Feature {
           builder: status.builder?.watching || false,
           voice: status.voice?.running || false,
           windowManager: status.windowManager?.listening || false,
-          presenter: status.presenter?.running || false,
-          contentServer: status.contentServer?.running || false,
         },
         git: status.git ? {
           branch: status.git.branch,
@@ -922,15 +920,6 @@ function renderIndicators(status) {
     inds.push(ind(false, 'wm'))
   }
 
-  const pres = s.presenter || {}
-  if (pres.running) {
-    inds.push(ind(true, 'presenter', `http:${pres.expressPort} ws:${pres.linkPort}`))
-  } else {
-    inds.push(ind(false, 'presenter', '', true))
-  }
-
-  const cs = s.contentServer || {}
-  inds.push(ind(cs.running, 'content', cs.running ? `:${cs.port}` : ''))
 
   $indicators.innerHTML = inds.join('')
 }

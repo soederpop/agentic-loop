@@ -113,7 +113,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
   // --- Register this instance in the shared registry ---
   const registry = container.feature('instanceRegistry')
-  const ports = (options as any)._registryPorts as import('../features/instance-registry').InstanceEntry['ports']
+  const ports = (options as any)._registryPorts
   const instanceEntry = registry.register(ports)
 
   // --- Subscribers map (declared early so broadcastLog can reference it) ---
@@ -712,17 +712,8 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     windowManager = container.feature('windowManager')
     windowManager.listen()
 
-    let wmConnectedOnce = false
-    windowManager.on('clientConnected', () => {
-      if (!wmConnectedOnce) {
-        log('windowManager', 'native app connected')
-        wmConnectedOnce = true
-      }
-      recordEvent('windowManager', 'clientConnected')
-    })
     windowManager.on('clientDisconnected', () => {
       log('windowManager', 'native app disconnected')
-      wmConnectedOnce = false
       recordEvent('windowManager', 'clientDisconnected')
     })
     windowManager.on('error', (err: any) => {

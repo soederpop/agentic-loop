@@ -212,8 +212,8 @@ export default async function setup(server: any) {
   }
 
   async function checkAuthority() {
-    const { readCurrentInstance } = await import('../../features/instance-registry')
-    const instance = readCurrentInstance()
+    const registry = server.container.feature('instanceRegistry')
+    const instance = registry.getSelf()
     const port = instance?.ports.authority
     const running = port ? await portListening(port) : false
     return {
