@@ -34,14 +34,8 @@ export default async function setup(server: any) {
     return { found: result.ok && result.stdout.length > 0, path: result.stdout }
   }
 
-  async function portListening(port: number): Promise<boolean> {
-    try {
-      const resp = await fetch(`http://localhost:${port}/`)
-      return resp.ok || resp.status < 500
-    } catch {
-      return false
-    }
-  }
+  const networking = container.feature('networking')
+
 
   function envKeyPresent(key: string): boolean {
     return !!process.env[key]
@@ -215,7 +209,7 @@ export default async function setup(server: any) {
     const registry = server.container.feature('instanceRegistry')
     const instance = registry.getSelf()
     const port = instance?.ports.authority
-    const running = port ? await portListening(port) : false
+    const running = port ? !(await networking.isPortOpen(port)) : false
     return {
       capability: 'authority', group: 'authority', title: 'Authority Process',
       description: `luca main process${port ? ` (port ${port})` : ''}`,
