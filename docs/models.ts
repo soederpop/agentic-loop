@@ -118,7 +118,7 @@ export const Prompt = defineModel("Prompt", {
 				z.string(), 
 				z.object({ 
 					type: z.enum(['string','number']).default('string'), 
-					question: z.string().describe("The question to ask the user for input, otherwise the key is used as the question"),
+					question: z.string().optional().describe("The question to ask the user for input, otherwise the key is used as the question"),
 				})
 			).describe('inputs will be replaced in the prompt, where {{double}} brackets are used to match the name').optional()
 	})

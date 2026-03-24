@@ -4,1008 +4,634 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assistant Designer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-  :root {
-    --bg: #0a0a0f;
-    --surface: #12121a;
-    --surface-2: #16161f;
-    --surface-3: #1a1a26;
-    --border: #1e1e2e;
-    --border-light: #2a2a3e;
-    --text: #e0e0e8;
-    --text-dim: #6a6a80;
-    --text-faint: #3a3a50;
-    --accent: #00fff7;
-    --accent-dim: #00fff720;
-    --accent-glow: #00fff740;
-    --purple: #c084fc;
-    --purple-dim: #c084fc20;
-    --success: #39ff14;
-    --success-dim: #39ff1420;
-    --warning: #f59e0b;
-    --warning-dim: #f59e0b20;
-    --error: #ff003c;
-    --error-dim: #ff003c20;
-    --blue: #60a5fa;
-    --blue-dim: #60a5fa20;
-    --orange: #fb923c;
-    --orange-dim: #fb923c20;
-    --input-bg: #0e0e16;
-    --mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', monospace;
-  }
+:root {
+  --bg: #08080c;
+  --surface: #0e0e14;
+  --surface-2: #13131b;
+  --surface-3: #181822;
+  --border: #1c1c2a;
+  --border-light: #262638;
+  --text: #c8c8d8;
+  --text-dim: #5a5a72;
+  --text-faint: #33334a;
+  --accent: #4ade80;
+  --accent-dim: #4ade8018;
+  --accent-glow: #4ade8030;
+  --warn: #fbbf24;
+  --warn-dim: #fbbf2418;
+  --error: #f87171;
+  --error-dim: #f8717118;
+  --blue: #60a5fa;
+  --blue-dim: #60a5fa18;
+  --purple: #a78bfa;
+  --purple-dim: #a78bfa18;
+  --orange: #fb923c;
+  --mono: 'IBM Plex Mono', monospace;
+  --sans: 'IBM Plex Sans', sans-serif;
+  --radius: 3px;
+}
 
-  html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 13px;
-    line-height: 1.6;
-  }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+body { display: flex; flex-direction: column; overflow: hidden; }
 
-  body { display: flex; flex-direction: column; overflow: hidden; }
+/* ── Header ─────────────────────── */
+.header {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface);
+  flex-shrink: 0;
+}
+.header-title { font-size: 10px; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; }
+.header .sep { width: 1px; height: 14px; background: var(--border-light); }
+.header .spacer { flex: 1; }
 
-  /* ── Header ─────────────────────────── */
-  .header {
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-shrink: 0;
-    background: var(--surface);
-  }
+.assistant-name-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600;
+  padding: 3px 8px; width: 160px; outline: none;
+}
+.assistant-name-input:focus { border-color: var(--accent); }
 
-  .header h1 {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
-  }
+.model-select {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 3px 6px; outline: none;
+}
 
-  .header .divider { width: 1px; height: 16px; background: var(--border); }
-  .header .spacer { flex: 1; }
+.badge {
+  font-size: 9px; padding: 2px 6px; border-radius: 2px; font-weight: 600;
+  letter-spacing: 0.5px; text-transform: uppercase;
+}
+.badge-deployed { background: var(--accent-dim); color: var(--accent); }
+.badge-draft { background: var(--warn-dim); color: var(--warn); }
 
-  .model-select {
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 4px 8px;
-    outline: none;
-  }
+.btn {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 3px 10px;
+  cursor: pointer; transition: all 0.1s; white-space: nowrap;
+}
+.btn:hover { border-color: var(--border-light); background: var(--surface-3); }
+.btn-deploy {
+  background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600;
+}
+.btn-deploy:hover { background: var(--accent-glow); }
+.btn-deploy.deploying { opacity: 0.5; pointer-events: none; }
+.btn-sm { font-size: 10px; padding: 2px 7px; }
+.btn-danger { color: var(--error); border-color: var(--error); }
+.btn-danger:hover { background: var(--error-dim); }
 
-  .header-stat {
-    font-size: 11px;
-    color: var(--text-dim);
-  }
-  .header-stat span { color: var(--accent); font-weight: 600; }
+.local-toggle { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-dim); }
+.local-toggle input { accent-color: var(--orange); }
 
-  /* ── Buttons ─────────────────────────── */
-  .btn {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 4px 10px;
-    cursor: pointer;
-    transition: all 0.12s;
-    white-space: nowrap;
-  }
-  .btn:hover { border-color: var(--border-light); background: var(--surface-3); }
-  .btn:active { transform: scale(0.97); }
-  .btn-accent { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-  .btn-accent:hover { background: var(--accent-glow); }
-  .btn-danger { border-color: var(--error); color: var(--error); background: var(--error-dim); }
-  .btn-success { border-color: var(--success); color: var(--success); background: var(--success-dim); }
-  .btn-purple { border-color: var(--purple); color: var(--purple); background: var(--purple-dim); }
-  .btn-sm { padding: 2px 6px; font-size: 10px; }
+/* ── Main Layout ─────────────────── */
+.main { flex: 1; display: flex; overflow: hidden; }
 
-  /* ── Layout ─────────────────────────── */
-  .main {
-    flex: 1;
-    display: flex;
-    overflow: hidden;
-  }
+.panel { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
+.panel-left { width: 50%; min-width: 300px; }
+.panel-right { flex: 1; min-width: 300px; border-right: none; }
 
-  .panel {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border-right: 1px solid var(--border);
-  }
-  .panel:last-child { border-right: none; }
+.tabs {
+  display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
+}
+.tab {
+  padding: 6px 14px; font-family: var(--mono); font-size: 10px; font-weight: 600;
+  color: var(--text-dim); background: none; border: none; border-bottom: 2px solid transparent;
+  cursor: pointer; text-transform: uppercase; letter-spacing: 1px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-  .panel-left { width: 340px; min-width: 280px; }
-  .panel-center { flex: 1; min-width: 360px; }
-  .panel-right { width: 360px; min-width: 280px; }
+.tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+.tab-content.active { display: flex; }
 
-  .panel-header {
-    padding: 8px 12px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
+/* ── File Editor ─────────────────── */
+.file-header {
+  padding: 4px 10px; font-size: 10px; color: var(--text-dim);
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+}
+.file-header .filename { color: var(--blue); font-weight: 600; }
+.file-header .path { color: var(--text-faint); }
 
-  .panel-header h2 {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
+.editor {
+  flex: 1; width: 100%; background: var(--bg); color: var(--text);
+  font-family: var(--mono); font-size: 12px; line-height: 1.7;
+  padding: 10px 12px; border: none; outline: none; resize: none;
+  tab-size: 2;
+}
+.editor::placeholder { color: var(--text-faint); }
 
-  .panel-header .spacer { flex: 1; }
+/* ── Tool Cards ──────────────────── */
+.tools-panel { flex: 1; overflow-y: auto; padding: 8px; }
 
-  .panel-body {
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
+.tool-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  margin-bottom: 8px; overflow: hidden;
+}
+.tool-card-header {
+  padding: 6px 10px; display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid var(--border); background: var(--surface-2);
+  cursor: pointer;
+}
+.tool-card-header:hover { background: var(--surface-3); }
+.tool-name-input {
+  background: transparent; border: none; color: var(--accent); font-family: var(--mono);
+  font-size: 12px; font-weight: 600; outline: none; flex: 1; min-width: 0;
+}
+.tool-desc-input {
+  background: transparent; border: none; color: var(--text-dim); font-family: var(--mono);
+  font-size: 11px; outline: none; width: 100%; padding: 4px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tool-desc-input::placeholder { color: var(--text-faint); }
 
-  /* ── Tabs ─────────────────────────── */
-  .tabs {
-    display: flex;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-  }
-  .tab {
-    padding: 6px 14px;
-    font-size: 11px;
-    font-family: var(--mono);
-    color: var(--text-dim);
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    background: none;
-    border-top: none;
-    border-left: none;
-    border-right: none;
-    transition: all 0.12s;
-  }
-  .tab:hover { color: var(--text); }
-  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tool-section-label {
+  font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px;
+  padding: 6px 10px 2px; font-weight: 600;
+}
+.tool-editor {
+  width: 100%; background: var(--bg); color: var(--text);
+  font-family: var(--mono); font-size: 11px; line-height: 1.6;
+  padding: 6px 10px; border: none; outline: none; resize: vertical;
+  min-height: 60px; tab-size: 2;
+}
 
-  .tab-content { display: none; flex: 1; overflow: hidden; flex-direction: column; }
-  .tab-content.active { display: flex; }
+.add-tool-btn {
+  width: 100%; padding: 8px; background: var(--surface); border: 1px dashed var(--border-light);
+  border-radius: var(--radius); color: var(--text-dim); font-family: var(--mono);
+  font-size: 11px; cursor: pointer; text-align: center;
+}
+.add-tool-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
-  /* ── System Prompt Editor ─────────────── */
-  .prompt-editor {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 0;
-  }
+/* ── Chat ────────────────────────── */
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 12px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.msg { padding: 6px 10px; border-radius: var(--radius); font-size: 12px; max-width: 90%; }
+.msg-user {
+  align-self: flex-end; background: var(--surface-3); border: 1px solid var(--border-light);
+}
+.msg-assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
+.msg-assistant pre { white-space: pre-wrap; word-break: break-word; }
+.msg-tool {
+  align-self: flex-start; background: var(--blue-dim); border: 1px solid var(--blue);
+  font-size: 11px; color: var(--blue);
+}
+.msg-error { align-self: center; background: var(--error-dim); border: 1px solid var(--error); color: var(--error); font-size: 11px; }
+.msg-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); margin-bottom: 2px; font-weight: 600; }
 
-  .prompt-editor textarea {
-    flex: 1;
-    background: var(--input-bg);
-    border: none;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    line-height: 1.6;
-    padding: 12px;
-    resize: none;
-    outline: none;
-  }
+.chat-input-area {
+  padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 6px;
+}
+.chat-input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px;
+  outline: none; resize: none; min-height: 32px; max-height: 120px;
+}
+.chat-input:focus { border-color: var(--accent); }
 
-  .prompt-editor textarea::placeholder { color: var(--text-faint); }
+.not-deployed {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: var(--text-faint); font-size: 12px; text-align: center; padding: 20px;
+}
 
-  .prompt-status {
-    padding: 4px 12px;
-    font-size: 10px;
-    color: var(--text-faint);
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-  .prompt-status .saved { color: var(--success); }
-  .prompt-status .unsaved { color: var(--warning); }
+/* ── REPL ────────────────────────── */
+.repl-output { flex: 1; overflow-y: auto; padding: 8px 10px; font-size: 11px; }
+.repl-entry { margin-bottom: 6px; }
+.repl-input-line { color: var(--accent); }
+.repl-input-line::before { content: '> '; color: var(--text-faint); }
+.repl-result { color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
+.repl-error { color: var(--error); white-space: pre-wrap; }
 
-  /* ── Tool Editor ─────────────────────── */
-  .tools-panel {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
+.repl-input-area { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
+.repl-input {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 8px;
+  outline: none; resize: none; min-height: 24px; max-height: 80px;
+}
+.repl-input:focus { border-color: var(--accent); }
 
-  .tool-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
-  }
+/* ── Code Preview ────────────────── */
+.preview-panel { flex: 1; overflow-y: auto; padding: 10px; }
+.preview-file { margin-bottom: 12px; }
+.preview-file-header {
+  font-size: 10px; color: var(--blue); font-weight: 600; padding: 4px 0;
+  border-bottom: 1px solid var(--border); margin-bottom: 4px;
+}
+.preview-code {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px; font-size: 11px; white-space: pre-wrap; word-break: break-word;
+  color: var(--text-dim); line-height: 1.6; max-height: 400px; overflow-y: auto;
+}
 
-  .tool-card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    margin-bottom: 8px;
-    overflow: hidden;
-  }
+/* ── Loader Select ───────────────── */
+.loader-dropdown {
+  position: relative; display: inline-block;
+}
+.loader-menu {
+  display: none; position: absolute; top: 100%; left: 0; z-index: 100;
+  background: var(--surface-2); border: 1px solid var(--border-light); border-radius: var(--radius);
+  min-width: 180px; max-height: 200px; overflow-y: auto; margin-top: 2px;
+}
+.loader-menu.open { display: block; }
+.loader-item {
+  padding: 5px 10px; font-family: var(--mono); font-size: 11px; color: var(--text);
+  cursor: pointer; border: none; background: none; width: 100%; text-align: left;
+}
+.loader-item:hover { background: var(--accent-dim); color: var(--accent); }
 
-  .tool-card-header {
-    padding: 8px 10px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    user-select: none;
-  }
+/* ── Scrollbar ───────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 
-  .tool-card-header:hover { background: var(--surface-3); }
-
-  .tool-name {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--purple);
-    flex: 1;
-  }
-
-  .tool-arrow {
-    font-size: 10px;
-    color: var(--text-faint);
-    transition: transform 0.15s;
-  }
-  .tool-card.expanded .tool-arrow { transform: rotate(90deg); }
-
-  .tool-card-body {
-    display: none;
-    padding: 0 10px 10px;
-    border-top: 1px solid var(--border);
-  }
-  .tool-card.expanded .tool-card-body { display: block; }
-
-  .tool-field {
-    margin-top: 8px;
-  }
-  .tool-field label {
-    display: block;
-    font-size: 10px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 3px;
-  }
-
-  .tool-field input,
-  .tool-field textarea {
-    width: 100%;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 6px 8px;
-    outline: none;
-  }
-  .tool-field input:focus,
-  .tool-field textarea:focus { border-color: var(--accent); }
-
-  .tool-field textarea {
-    min-height: 80px;
-    resize: vertical;
-    line-height: 1.5;
-  }
-
-  .tool-actions {
-    margin-top: 8px;
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
-  }
-
-  .add-tool-bar {
-    padding: 8px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-  }
-
-  /* ── Chat ─────────────────────────── */
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 12px;
-  }
-
-  .msg {
-    margin-bottom: 12px;
-    max-width: 100%;
-  }
-
-  .msg-role {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 2px;
-  }
-  .msg-role.user { color: var(--blue); }
-  .msg-role.assistant { color: var(--purple); }
-  .msg-role.tool { color: var(--orange); }
-
-  .msg-body {
-    font-size: 12px;
-    line-height: 1.6;
-    color: var(--text);
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .msg-tool-call {
-    background: var(--purple-dim);
-    border: 1px solid #c084fc30;
-    border-radius: 4px;
-    padding: 6px 8px;
-    margin-top: 4px;
-    font-size: 11px;
-  }
-
-  .msg-tool-call .tool-label {
-    color: var(--purple);
-    font-weight: 600;
-    font-size: 11px;
-  }
-
-  .msg-tool-result {
-    background: var(--orange-dim);
-    border: 1px solid #fb923c30;
-    border-radius: 4px;
-    padding: 6px 8px;
-    margin-top: 4px;
-    font-size: 11px;
-    color: var(--orange);
-  }
-
-  .chat-input-area {
-    padding: 10px 12px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-    display: flex;
-    gap: 8px;
-  }
-
-  .chat-input {
-    flex: 1;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 8px 10px;
-    outline: none;
-    resize: none;
-    min-height: 38px;
-    max-height: 120px;
-  }
-  .chat-input:focus { border-color: var(--accent); }
-
-  .streaming-indicator {
-    display: none;
-    padding: 4px 12px;
-    font-size: 10px;
-    color: var(--accent);
-    animation: pulse 1.5s infinite;
-  }
-  .streaming-indicator.active { display: block; }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
-  }
-
-  /* ── REPL ─────────────────────────── */
-  .repl-output {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px;
-    font-size: 12px;
-  }
-
-  .repl-entry { margin-bottom: 8px; }
-  .repl-input-line { color: var(--accent); }
-  .repl-input-line::before { content: '> '; color: var(--text-faint); }
-  .repl-result { color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
-  .repl-error { color: var(--error); white-space: pre-wrap; }
-
-  .repl-input-area {
-    padding: 8px 10px;
-    border-top: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-    display: flex;
-    gap: 6px;
-    align-items: flex-end;
-  }
-
-  .repl-input {
-    flex: 1;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--accent);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 6px 8px;
-    outline: none;
-    resize: none;
-    min-height: 32px;
-    max-height: 80px;
-  }
-  .repl-input:focus { border-color: var(--accent); }
-
-  /* ── Tool Sampler ─────────────────────── */
-  .sampler {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    padding: 10px;
-    gap: 8px;
-    overflow-y: auto;
-  }
-
-  .sampler-field label {
-    display: block;
-    font-size: 10px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 3px;
-  }
-
-  .sampler-field select,
-  .sampler-field input,
-  .sampler-field textarea {
-    width: 100%;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 6px 8px;
-    outline: none;
-  }
-  .sampler-field textarea { min-height: 60px; resize: vertical; }
-
-  .sampler-result {
-    flex: 1;
-    overflow-y: auto;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px;
-    font-size: 11px;
-    white-space: pre-wrap;
-    word-break: break-word;
-    min-height: 100px;
-  }
-
-  /* ── Scrollbars ─────────────────────── */
-  ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
-
-  /* ── Presets popover ─────────────────── */
-  .presets-menu {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 4px;
-    z-index: 100;
-    min-width: 200px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  }
-  .presets-menu.open { display: block; }
-  .presets-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 6px 10px;
-    background: none;
-    border: none;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    cursor: pointer;
-    border-radius: 4px;
-  }
-  .presets-menu button:hover { background: var(--surface-3); }
-  .presets-menu button .preset-desc { color: var(--text-dim); font-size: 10px; display: block; }
-
-  .relative { position: relative; }
-
-  /* ── Config Bar ─────────────────────── */
-  .config-row {
-    padding: 8px 12px;
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-  }
-  .config-row label {
-    font-size: 10px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-  .config-row input {
-    width: 60px;
-    background: var(--input-bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 11px;
-    padding: 3px 6px;
-    outline: none;
-  }
+/* ── Streaming indicator ─────────── */
+.streaming-indicator { display: none; }
+.streaming-indicator.active { display: inline; }
+.streaming-dot {
+  display: inline-block; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--accent); margin-left: 4px;
+  animation: pulse 1s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
 </style>
 </head>
 <body>
 
-<!-- ── Header ──────────────────────────── -->
+<!-- ── Header ────────────────────── -->
 <div class="header">
-  <h1>Assistant Designer</h1>
-  <div class="divider"></div>
-  <label style="font-size:10px;color:var(--text-dim)">MODEL</label>
-  <select class="model-select" id="modelSelect">
-    <option value="claude-sonnet-4-20250514">Sonnet 4</option>
-    <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
-    <option value="claude-opus-4-20250514">Opus 4</option>
-  </select>
-  <div class="divider"></div>
-  <div class="header-stat">Tools: <span id="toolCount">0</span></div>
-  <div class="header-stat">Messages: <span id="msgCount">0</span></div>
-  <div class="spacer"></div>
-  <div class="relative">
-    <button class="btn" onclick="togglePresets()">Presets</button>
-    <div class="presets-menu" id="presetsMenu">
-      <button onclick="loadPreset('blank')">Blank<span class="preset-desc">Empty assistant</span></button>
-      <button onclick="loadPreset('coder')">Coder<span class="preset-desc">Code assistant with file tools</span></button>
-      <button onclick="loadPreset('researcher')">Researcher<span class="preset-desc">Web research with search + fetch</span></button>
-      <button onclick="loadPreset('data-analyst')">Data Analyst<span class="preset-desc">SQL queries + chart generation</span></button>
-    </div>
+  <span class="header-title">assistant designer</span>
+  <span class="sep"></span>
+
+  <div class="loader-dropdown">
+    <button class="btn btn-sm" onclick="toggleLoaderMenu()">Load</button>
+    <div class="loader-menu" id="loaderMenu"></div>
   </div>
-  <button class="btn btn-accent" onclick="exportConfig()">Export</button>
-  <button class="btn btn-danger" onclick="clearChat()">Clear Chat</button>
+
+  <input class="assistant-name-input" id="assistantName" value="my-assistant"
+    placeholder="assistant-name" oninput="onNameChange(this.value)">
+
+  <span class="sep"></span>
+
+  <label class="local-toggle">
+    <input type="checkbox" id="localToggle" onchange="toggleLocal()"> local
+  </label>
+  <select class="model-select" id="modelSelect" onchange="onModelChange(this.value)">
+    <option value="">loading...</option>
+  </select>
+
+  <span class="spacer"></span>
+
+  <span class="badge" id="statusBadge">
+    <span class="badge-draft">draft</span>
+  </span>
+
+  <span class="streaming-indicator" id="streamingIndicator">
+    <span class="streaming-dot"></span>
+  </span>
+
+  <button class="btn btn-deploy" id="deployBtn" onclick="deploy()">Deploy</button>
 </div>
 
-<!-- ── Main Layout ─────────────────────── -->
+<!-- ── Main ──────────────────────── -->
 <div class="main">
-
-  <!-- ── Left Panel: System Prompt + Tools ── -->
+  <!-- ── Left: Editor Tabs ── -->
   <div class="panel panel-left">
     <div class="tabs">
-      <button class="tab active" onclick="switchTab(this, 'left', 'prompt-tab')">System Prompt</button>
-      <button class="tab" onclick="switchTab(this, 'left', 'tools-tab')">Tools</button>
-      <button class="tab" onclick="switchTab(this, 'left', 'config-tab')">Config</button>
+      <button class="tab active" onclick="switchTab(this,'left','core-tab')">CORE.md</button>
+      <button class="tab" onclick="switchTab(this,'left','tools-tab')">Tools</button>
+      <button class="tab" onclick="switchTab(this,'left','hooks-tab')">Hooks</button>
+      <button class="tab" onclick="switchTab(this,'left','preview-tab')">Preview</button>
     </div>
 
-    <div class="tab-content active" id="prompt-tab">
-      <div class="prompt-editor">
-        <textarea id="systemPrompt" placeholder="You are a helpful assistant..."
-          spellcheck="false">You are a helpful assistant.</textarea>
-        <div class="prompt-status">
-          <span id="promptStatus" class="saved">synced</span>
-          <div class="spacer"></div>
-          <span id="promptLen">25 chars</span>
-        </div>
+    <!-- CORE.md editor -->
+    <div class="tab-content active" id="core-tab" style="display:flex;flex-direction:column;">
+      <div class="file-header">
+        <span class="filename">CORE.md</span>
+        <span class="path">assistants/<span id="pathName">my-assistant</span>/</span>
+      </div>
+      <textarea class="editor" id="coreEditor" placeholder="# My Assistant&#10;&#10;You are a helpful assistant.&#10;&#10;Write your system prompt here as markdown..."
+        oninput="onCoreChange()"></textarea>
+    </div>
+
+    <!-- Tools editor -->
+    <div class="tab-content" id="tools-tab" style="display:flex;flex-direction:column;">
+      <div class="file-header">
+        <span class="filename">tools.ts</span>
+        <span class="path">assistants/<span id="pathName2">my-assistant</span>/</span>
+        <span class="spacer" style="flex:1"></span>
+      </div>
+      <div class="tools-panel" id="toolsPanel">
+        <!-- Tool cards rendered here -->
+      </div>
+      <div style="padding:8px;">
+        <button class="add-tool-btn" onclick="addTool()">+ add tool</button>
       </div>
     </div>
 
-    <div class="tab-content" id="tools-tab">
-      <div class="tools-panel">
-        <div class="tool-list" id="toolList">
-          <div style="padding:20px;text-align:center;color:var(--text-faint);font-size:11px;">
-            No tools defined.<br>Click "Add Tool" below.
-          </div>
-        </div>
-        <div class="add-tool-bar">
-          <button class="btn btn-purple" onclick="addTool()" style="width:100%">+ Add Tool</button>
-        </div>
+    <!-- Hooks editor -->
+    <div class="tab-content" id="hooks-tab" style="display:flex;flex-direction:column;">
+      <div class="file-header">
+        <span class="filename">hooks.ts</span>
+        <span class="path">assistants/<span id="pathName3">my-assistant</span>/</span>
       </div>
+      <textarea class="editor" id="hooksEditor" placeholder="import type { Assistant } from '@soederpop/luca/agi'&#10;&#10;export function created(assistant: Assistant) {&#10;  // called when assistant is created&#10;}&#10;&#10;export async function formatSystemPrompt(prompt: string) {&#10;  // modify the system prompt before each turn&#10;  return prompt&#10;}"
+        oninput="onHooksChange()"></textarea>
     </div>
 
-    <div class="tab-content" id="config-tab">
-      <div style="padding:12px;display:flex;flex-direction:column;gap:12px;">
-        <div class="sampler-field">
-          <label>Max Tokens</label>
-          <input type="number" id="maxTokens" value="4096" min="1" max="128000" onchange="syncConfig()">
-        </div>
-        <div class="sampler-field">
-          <label>Temperature</label>
-          <input type="number" id="temperature" value="1" min="0" max="1" step="0.1" onchange="syncConfig()">
-        </div>
-        <div style="margin-top:16px;">
-          <button class="btn btn-accent" onclick="exportConfig()" style="width:100%">Export Config JSON</button>
-        </div>
-        <div>
-          <button class="btn" onclick="importConfig()" style="width:100%">Import Config JSON</button>
-        </div>
+    <!-- Preview -->
+    <div class="tab-content" id="preview-tab" style="display:flex;flex-direction:column;">
+      <div class="file-header">
+        <span class="filename">generated files</span>
+        <span class="spacer" style="flex:1"></span>
+        <button class="btn btn-sm" onclick="refreshPreview()">refresh</button>
       </div>
+      <div class="preview-panel" id="previewPanel"></div>
     </div>
   </div>
 
-  <!-- ── Center Panel: Chat ── -->
-  <div class="panel panel-center">
-    <div class="panel-header">
-      <h2>Chat</h2>
-      <div class="spacer"></div>
-      <div class="streaming-indicator" id="streamingIndicator">streaming...</div>
-    </div>
-    <div class="chat-messages" id="chatMessages">
-      <div style="padding:40px 20px;text-align:center;color:var(--text-faint);font-size:12px;">
-        Send a message to start chatting with your assistant.<br>
-        Changes to the system prompt and tools apply immediately.
-      </div>
-    </div>
-    <div class="chat-input-area">
-      <textarea class="chat-input" id="chatInput" placeholder="Type a message..."
-        rows="1" onkeydown="handleChatKey(event)"></textarea>
-      <button class="btn btn-accent" onclick="sendMessage()" id="sendBtn">Send</button>
-    </div>
-  </div>
-
-  <!-- ── Right Panel: REPL + Sampler ── -->
+  <!-- ── Right: Chat + REPL ── -->
   <div class="panel panel-right">
     <div class="tabs">
-      <button class="tab active" onclick="switchTab(this, 'right', 'repl-tab')">REPL</button>
-      <button class="tab" onclick="switchTab(this, 'right', 'sampler-tab')">Tool Sampler</button>
+      <button class="tab active" onclick="switchTab(this,'right','chat-tab')">Chat</button>
+      <button class="tab" onclick="switchTab(this,'right','repl-tab')">REPL</button>
     </div>
 
-    <div class="tab-content active" id="repl-tab" style="display:flex;flex-direction:column;">
+    <!-- Chat -->
+    <div class="tab-content active" id="chat-tab" style="display:flex;flex-direction:column;">
+      <div class="chat-messages" id="chatMessages">
+        <div class="not-deployed" id="notDeployedMsg">
+          Design your assistant on the left, then click <strong style="color:var(--accent)">Deploy</strong> to start chatting.
+        </div>
+      </div>
+      <div class="chat-input-area">
+        <textarea class="chat-input" id="chatInput" placeholder="Send a message..."
+          rows="1" onkeydown="handleChatKey(event)"></textarea>
+        <button class="btn" id="sendBtn" onclick="sendMessage()">Send</button>
+      </div>
+    </div>
+
+    <!-- REPL -->
+    <div class="tab-content" id="repl-tab" style="display:flex;flex-direction:column;">
       <div class="repl-output" id="replOutput">
-        <div style="color:var(--text-faint);font-size:11px;margin-bottom:8px;">
+        <div style="color:var(--text-faint);font-size:10px;margin-bottom:6px;">
           // REPL — evaluate JS expressions<br>
-          // `state` holds the assistant config<br>
-          // `state.systemPrompt`, `state.tools`, `state.messages`<br>
-          // `container` is the Luca container<br>
+          // `state` — the designer state<br>
+          // `assistant` — the deployed assistant instance<br>
+          // `container` — the Luca container<br>
         </div>
       </div>
       <div class="repl-input-area">
-        <textarea class="repl-input" id="replInput" placeholder="state.tools.length"
+        <textarea class="repl-input" id="replInput" placeholder="assistant.availableTools"
           rows="1" onkeydown="handleReplKey(event)"></textarea>
-        <button class="btn btn-accent btn-sm" onclick="evalRepl()">Run</button>
-      </div>
-    </div>
-
-    <div class="tab-content" id="sampler-tab">
-      <div class="sampler">
-        <div class="sampler-field">
-          <label>Tool</label>
-          <select id="samplerTool" onchange="updateSamplerSchema()">
-            <option value="">-- select a tool --</option>
-          </select>
-        </div>
-        <div class="sampler-field">
-          <label>Schema</label>
-          <div id="samplerSchema" style="font-size:10px;color:var(--text-dim);padding:4px;background:var(--input-bg);border-radius:4px;min-height:40px;white-space:pre-wrap;overflow:auto;max-height:120px;border:1px solid var(--border);">
-            Select a tool to see its schema
-          </div>
-        </div>
-        <div class="sampler-field">
-          <label>User Message (to elicit tool call)</label>
-          <textarea id="samplerMessage" placeholder="e.g. Search for 'typescript generics'"></textarea>
-        </div>
-        <div>
-          <button class="btn btn-purple" onclick="sampleTool()" style="width:100%">Sample Tool Call</button>
-        </div>
-        <div class="sampler-field">
-          <label>Result</label>
-        </div>
-        <div class="sampler-result" id="samplerResult">
-          <span style="color:var(--text-faint)">Results will appear here...</span>
-        </div>
+        <button class="btn btn-sm" onclick="evalRepl()">Run</button>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-// ── State ──────────────────────────────
+// ── State ──────────────────────────
 const state = {
-  systemPrompt: 'You are a helpful assistant.',
+  assistantName: 'my-assistant',
+  systemPrompt: '',
   tools: [],
-  messages: [],
-  model: 'claude-sonnet-4-20250514',
+  hooksSource: '',
+  model: 'gpt-4o',
+  provider: 'openai',
   maxTokens: 4096,
   temperature: 1,
+  deployed: false,
 };
 
-let promptSaveTimer = null;
+let allModels = [];
 let isStreaming = false;
 let replHistory = [];
 let replHistoryIdx = -1;
+let saveTimer = null;
 
-// ── Init ───────────────────────────────
+// ── Init ───────────────────────────
 async function init() {
   try {
+    // Load current state from server
     const res = await fetch('/api/state');
     const data = await res.json();
-    state.systemPrompt = data.systemPrompt || state.systemPrompt;
-    state.tools = data.tools || [];
-    state.model = data.model || state.model;
-    state.maxTokens = data.maxTokens || state.maxTokens;
-    state.temperature = data.temperature ?? state.temperature;
+    Object.assign(state, data);
 
-    document.getElementById('systemPrompt').value = state.systemPrompt;
-    document.getElementById('modelSelect').value = state.model;
-    document.getElementById('maxTokens').value = state.maxTokens;
-    document.getElementById('temperature').value = state.temperature;
-    updatePromptLen();
+    document.getElementById('assistantName').value = state.assistantName;
+    document.getElementById('coreEditor').value = state.systemPrompt;
+    document.getElementById('hooksEditor').value = state.hooksSource;
+    updatePathNames();
     renderTools();
-    updateCounts();
-  } catch (e) {
-    console.error('Init failed:', e);
-  }
+    updateStatusBadge();
+  } catch {}
+
+  // Load models
+  try {
+    const res = await fetch('/api/models');
+    const data = await res.json();
+    allModels = data.models || [];
+    renderModelSelect();
+  } catch {}
+
+  // Load available assistants for the loader menu
+  loadAssistantList();
 }
 init();
 
-// ── Tabs ───────────────────────────────
-function switchTab(btn, panelSide, tabId) {
-  const panel = btn.closest('.panel');
-  panel.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  panel.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+// ── Tab Switching ──────────────────
+function switchTab(btn, panel, tabId) {
+  const container = btn.closest('.panel');
+  container.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  container.querySelectorAll('.tab-content').forEach(c => { c.classList.remove('active'); c.style.display = 'none'; });
   btn.classList.add('active');
-  document.getElementById(tabId).classList.add('active');
+  const target = document.getElementById(tabId);
+  target.classList.add('active');
+  target.style.display = 'flex';
+
+  if (tabId === 'preview-tab') refreshPreview();
 }
 
-// ── System Prompt ──────────────────────
-const promptEl = document.getElementById('systemPrompt');
-promptEl.addEventListener('input', () => {
-  state.systemPrompt = promptEl.value;
-  updatePromptLen();
-  document.getElementById('promptStatus').className = 'unsaved';
-  document.getElementById('promptStatus').textContent = 'unsaved';
+// ── Model / Provider ───────────────
+function renderModelSelect() {
+  const sel = document.getElementById('modelSelect');
+  const providers = state.provider === 'lm-studio' ? ['lm-studio'] : ['openai'];
+  const filtered = allModels.filter(m => providers.includes(m.provider));
 
-  clearTimeout(promptSaveTimer);
-  promptSaveTimer = setTimeout(syncPrompt, 800);
-});
-
-function updatePromptLen() {
-  document.getElementById('promptLen').textContent = `${state.systemPrompt.length} chars`;
-}
-
-async function syncPrompt() {
-  try {
-    await fetch('/api/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ systemPrompt: state.systemPrompt }),
-    });
-    document.getElementById('promptStatus').className = 'saved';
-    document.getElementById('promptStatus').textContent = 'synced';
-  } catch (e) {
-    document.getElementById('promptStatus').className = 'unsaved';
-    document.getElementById('promptStatus').textContent = 'sync failed';
-  }
-}
-
-// ── Model ──────────────────────────────
-document.getElementById('modelSelect').addEventListener('change', async (e) => {
-  state.model = e.target.value;
-  await fetch('/api/state', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: state.model }),
-  });
-});
-
-// ── Config ─────────────────────────────
-async function syncConfig() {
-  state.maxTokens = parseInt(document.getElementById('maxTokens').value) || 4096;
-  state.temperature = parseFloat(document.getElementById('temperature').value) ?? 1;
-  await fetch('/api/state', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ maxTokens: state.maxTokens, temperature: state.temperature }),
-  });
-}
-
-// ── Tools ──────────────────────────────
-function addTool(def) {
-  const tool = def || {
-    name: `tool_${state.tools.length + 1}`,
-    description: 'Describe what this tool does',
-    input_schema: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'The input query' }
-      },
-      required: ['query']
-    },
-    mock_result: '{"result": "mock data"}',
-  };
-  state.tools.push(tool);
-  renderTools();
-  syncTools();
-  updateCounts();
-}
-
-function removeTool(idx) {
-  state.tools.splice(idx, 1);
-  renderTools();
-  syncTools();
-  updateCounts();
-}
-
-function updateTool(idx, field, value) {
-  if (field === 'input_schema') {
-    try {
-      state.tools[idx].input_schema = JSON.parse(value);
-    } catch { return; }
-  } else {
-    state.tools[idx][field] = value;
-  }
-  syncToolsDebounced();
-}
-
-let toolSyncTimer = null;
-function syncToolsDebounced() {
-  clearTimeout(toolSyncTimer);
-  toolSyncTimer = setTimeout(syncTools, 600);
-}
-
-async function syncTools() {
-  try {
-    await fetch('/api/state', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tools: state.tools }),
-    });
-    updateSamplerToolList();
-  } catch (e) {
-    console.error('Tool sync failed:', e);
-  }
-}
-
-function renderTools() {
-  const list = document.getElementById('toolList');
-  if (state.tools.length === 0) {
-    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text-faint);font-size:11px;">
-      No tools defined.<br>Click "Add Tool" below.
-    </div>`;
-    updateSamplerToolList();
+  if (filtered.length === 0) {
+    sel.innerHTML = '<option value="">No models</option>';
     return;
   }
 
-  list.innerHTML = state.tools.map((t, i) => `
-    <div class="tool-card" id="tool-${i}">
-      <div class="tool-card-header" onclick="toggleToolCard(${i})">
-        <span class="tool-name">${esc(t.name)}</span>
-        <span class="tool-arrow">▶</span>
-      </div>
-      <div class="tool-card-body">
-        <div class="tool-field">
-          <label>Name</label>
-          <input value="${esc(t.name)}" onchange="updateTool(${i},'name',this.value);this.closest('.tool-card').querySelector('.tool-name').textContent=this.value">
-        </div>
-        <div class="tool-field">
-          <label>Description</label>
-          <textarea onchange="updateTool(${i},'description',this.value)">${esc(t.description)}</textarea>
-        </div>
-        <div class="tool-field">
-          <label>Input Schema (JSON)</label>
-          <textarea onchange="updateTool(${i},'input_schema',this.value)" style="min-height:100px">${JSON.stringify(t.input_schema, null, 2)}</textarea>
-        </div>
-        <div class="tool-field">
-          <label>Mock Result (returned when tool is called in chat)</label>
-          <textarea onchange="updateTool(${i},'mock_result',this.value)">${esc(t.mock_result || '')}</textarea>
-        </div>
-        <div class="tool-actions">
-          <button class="btn btn-sm" onclick="duplicateTool(${i})">Duplicate</button>
-          <button class="btn btn-sm btn-danger" onclick="removeTool(${i})">Remove</button>
-        </div>
-      </div>
-    </div>
-  `).join('');
+  const groups = {};
+  for (const m of filtered) {
+    if (!groups[m.provider]) groups[m.provider] = [];
+    groups[m.provider].push(m);
+  }
 
-  updateSamplerToolList();
+  let html = '';
+  for (const [provider, models] of Object.entries(groups)) {
+    const label = provider === 'lm-studio' ? 'LM Studio' : 'OpenAI';
+    html += `<optgroup label="${label}">`;
+    for (const m of models) {
+      html += `<option value="${esc(m.id)}" data-provider="${esc(m.provider)}">${esc(m.name)}</option>`;
+    }
+    html += '</optgroup>';
+  }
+
+  sel.innerHTML = html;
+  if (filtered.find(m => m.id === state.model)) {
+    sel.value = state.model;
+  } else {
+    sel.value = filtered[0].id;
+    state.model = filtered[0].id;
+  }
 }
 
-function toggleToolCard(idx) {
-  document.getElementById(`tool-${idx}`).classList.toggle('expanded');
+function onModelChange(val) {
+  state.model = val;
+  const opt = document.querySelector(`#modelSelect option[value="${CSS.escape(val)}"]`);
+  if (opt) state.provider = opt.dataset.provider;
+  syncState();
 }
 
-function duplicateTool(idx) {
-  const orig = state.tools[idx];
-  addTool({
-    ...JSON.parse(JSON.stringify(orig)),
-    name: orig.name + '_copy',
+function toggleLocal() {
+  const isLocal = document.getElementById('localToggle').checked;
+  state.provider = isLocal ? 'lm-studio' : 'openai';
+  renderModelSelect();
+  syncState();
+}
+
+// ── Name ───────────────────────────
+function onNameChange(val) {
+  state.assistantName = val.replace(/[^a-zA-Z0-9_-]/g, '');
+  updatePathNames();
+  syncState();
+}
+
+function updatePathNames() {
+  document.querySelectorAll('[id^="pathName"]').forEach(el => el.textContent = state.assistantName);
+}
+
+// ── CORE.md ────────────────────────
+function onCoreChange() {
+  state.systemPrompt = document.getElementById('coreEditor').value;
+  debouncedSync();
+}
+
+// ── Hooks ──────────────────────────
+function onHooksChange() {
+  state.hooksSource = document.getElementById('hooksEditor').value;
+  debouncedSync();
+}
+
+// ── Tools ──────────────────────────
+function renderTools() {
+  const panel = document.getElementById('toolsPanel');
+  panel.innerHTML = '';
+
+  state.tools.forEach((tool, i) => {
+    const card = document.createElement('div');
+    card.className = 'tool-card';
+    card.innerHTML = `
+      <div class="tool-card-header">
+        <input class="tool-name-input" value="${esc(tool.name)}" placeholder="toolName"
+          oninput="updateTool(${i}, 'name', this.value)">
+        <button class="btn btn-sm btn-danger" onclick="removeTool(${i})">×</button>
+      </div>
+      <input class="tool-desc-input" value="${esc(tool.description)}" placeholder="Tool description..."
+        oninput="updateTool(${i}, 'description', this.value)">
+      <div class="tool-section-label">schema (zod)</div>
+      <textarea class="tool-editor" rows="3" placeholder="z.object({&#10;  query: z.string().describe('The search query')&#10;})"
+        oninput="updateTool(${i}, 'schema', this.value)">${esc(tool.schema)}</textarea>
+      <div class="tool-section-label">handler</div>
+      <textarea class="tool-editor" rows="4" placeholder="// args has the parsed schema fields&#10;return { result: 'hello' }"
+        oninput="updateTool(${i}, 'handler', this.value)">${esc(tool.handler)}</textarea>
+    `;
+    panel.appendChild(card);
   });
 }
 
-// ── Chat ───────────────────────────────
-function appendMessage(role, content, extras) {
-  const container = document.getElementById('chatMessages');
-
-  // Remove placeholder
-  if (container.querySelector('[style*="text-align:center"]')) {
-    container.innerHTML = '';
-  }
-
-  const div = document.createElement('div');
-  div.className = 'msg';
-
-  let html = `<div class="msg-role ${role}">${role}</div>`;
-
-  if (typeof content === 'string') {
-    html += `<div class="msg-body">${esc(content)}</div>`;
-  }
-
-  if (extras?.toolCalls) {
-    for (const tc of extras.toolCalls) {
-      html += `<div class="msg-tool-call">
-        <span class="tool-label">${esc(tc.name)}</span>
-        <pre style="margin-top:4px;font-size:10px;color:var(--text-dim)">${esc(JSON.stringify(tc.input, null, 2))}</pre>
-      </div>`;
-    }
-  }
-
-  if (extras?.toolResults) {
-    for (const tr of extras.toolResults) {
-      html += `<div class="msg-tool-result">
-        <span style="font-weight:600">${esc(tr.name)}</span>: ${esc(tr.result)}
-      </div>`;
-    }
-  }
-
-  div.innerHTML = html;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  return div;
+function addTool() {
+  state.tools.push({
+    name: 'newTool',
+    description: '',
+    schema: 'z.object({\n  \n})',
+    handler: "return { result: 'not implemented' }",
+  });
+  renderTools();
+  debouncedSync();
 }
 
-function getStreamingDiv() {
-  let div = document.getElementById('streaming-msg');
-  if (!div) {
-    const container = document.getElementById('chatMessages');
-    if (container.querySelector('[style*="text-align:center"]')) {
-      container.innerHTML = '';
-    }
-    div = document.createElement('div');
-    div.className = 'msg';
-    div.id = 'streaming-msg';
-    div.innerHTML = `<div class="msg-role assistant">assistant</div><div class="msg-body" id="streaming-body"></div>`;
-    container.appendChild(div);
-  }
-  return div;
+function removeTool(i) {
+  state.tools.splice(i, 1);
+  renderTools();
+  debouncedSync();
 }
 
+function updateTool(i, field, value) {
+  state.tools[i][field] = value;
+  debouncedSync();
+}
+
+// ── Deploy ─────────────────────────
+async function deploy() {
+  const btn = document.getElementById('deployBtn');
+  btn.classList.add('deploying');
+  btn.textContent = 'Deploying...';
+
+  try {
+    // Save state first
+    await syncState();
+
+    const res = await fetch('/api/deploy', { method: 'POST' });
+    const data = await res.json();
+
+    if (data.ok) {
+      state.deployed = true;
+      updateStatusBadge();
+      document.getElementById('notDeployedMsg').style.display = 'none';
+      appendMessage('system', `Deployed "${state.assistantName}" with ${(data.tools || []).length} tools.`);
+    } else {
+      appendMessage('error', `Deploy failed: ${data.error}`);
+    }
+  } catch (err) {
+    appendMessage('error', `Deploy error: ${err.message}`);
+  } finally {
+    btn.classList.remove('deploying');
+    btn.textContent = 'Deploy';
+  }
+}
+
+function updateStatusBadge() {
+  const badge = document.getElementById('statusBadge');
+  if (state.deployed) {
+    badge.innerHTML = '<span class="badge badge-deployed">deployed</span>';
+  } else {
+    badge.innerHTML = '<span class="badge badge-draft">draft</span>';
+  }
+}
+
+// ── Chat ───────────────────────────
 async function sendMessage() {
   const input = document.getElementById('chatInput');
   const msg = input.value.trim();
   if (!msg || isStreaming) return;
 
   input.value = '';
-  autoResizeTextarea(input);
   appendMessage('user', msg);
-  state.messages.push({ role: 'user', content: msg });
+
+  if (!state.deployed) {
+    appendMessage('error', 'Deploy the assistant first.');
+    return;
+  }
 
   isStreaming = true;
   document.getElementById('streamingIndicator').classList.add('active');
@@ -1022,8 +648,6 @@ async function sendMessage() {
     const decoder = new TextDecoder();
     let buffer = '';
     let currentText = '';
-    let toolCalls = [];
-    let toolResults = [];
     let streamDiv = null;
 
     while (true) {
@@ -1035,61 +659,46 @@ async function sendMessage() {
       buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          var eventType = line.slice(7).trim();
-        }
+        if (line.startsWith('event: ')) var eventType = line.slice(7).trim();
         if (!line.startsWith('data: ')) continue;
-        const data = JSON.parse(line.slice(6));
+
+        let data;
+        try { data = JSON.parse(line.slice(6)); } catch { continue; }
 
         if (eventType === 'chunk') {
-          if (!streamDiv) streamDiv = getStreamingDiv();
+          if (!streamDiv) streamDiv = createStreamDiv();
           currentText += data.text;
-          document.getElementById('streaming-body').textContent = currentText;
-          document.getElementById('chatMessages').scrollTop = document.getElementById('chatMessages').scrollHeight;
+          streamDiv.querySelector('.msg-body').textContent = currentText;
+          scrollChat();
         }
 
         if (eventType === 'tool_start') {
-          // Finalize any text before showing tool
-          if (streamDiv) {
-            streamDiv.id = '';
-            streamDiv = null;
-          }
-        }
-
-        if (eventType === 'tool_end') {
-          toolCalls.push({ name: data.name, input: data.input });
-          appendMessage('assistant', null, { toolCalls: [{ name: data.name, input: data.input }] });
-        }
-
-        if (eventType === 'tool_result') {
-          toolResults.push({ name: data.name, result: data.result });
-          appendMessage('tool', null, { toolResults: [{ name: data.name, result: data.result }] });
-          // After tool results, a new streaming response starts
+          if (streamDiv) { streamDiv.classList.remove('streaming'); streamDiv = null; }
+          appendMessage('tool', `→ ${data.name}(${JSON.stringify(data.args || {}).slice(0, 100)})`);
           currentText = '';
         }
 
+        if (eventType === 'tool_result') {
+          const preview = typeof data.result === 'string' ? data.result.slice(0, 200) : JSON.stringify(data.result).slice(0, 200);
+          appendMessage('tool', `← ${data.name}: ${preview}`);
+        }
+
+        if (eventType === 'tool_error') {
+          appendMessage('error', `Tool error (${data.name}): ${data.error}`);
+        }
+
         if (eventType === 'done') {
-          if (streamDiv) {
-            streamDiv.id = '';
-            streamDiv = null;
-          }
+          if (streamDiv) { streamDiv.classList.remove('streaming'); streamDiv = null; }
         }
 
         if (eventType === 'error') {
-          if (streamDiv) { streamDiv.id = ''; streamDiv = null; }
-          appendMessage('assistant', `Error: ${data.message}`);
+          if (streamDiv) { streamDiv.classList.remove('streaming'); streamDiv = null; }
+          appendMessage('error', data.message);
         }
       }
     }
-
-    // Sync message count from server
-    const stateRes = await fetch('/api/state');
-    const stateData = await stateRes.json();
-    state.messages = []; // We track via server
-    updateCounts(stateData.messageCount);
-
   } catch (err) {
-    appendMessage('assistant', `Error: ${err.message}`);
+    appendMessage('error', err.message);
   } finally {
     isStreaming = false;
     document.getElementById('streamingIndicator').classList.remove('active');
@@ -1097,25 +706,39 @@ async function sendMessage() {
   }
 }
 
-function handleChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
+function createStreamDiv() {
+  const el = document.createElement('div');
+  el.className = 'msg msg-assistant streaming';
+  el.innerHTML = '<div class="msg-label">assistant</div><pre class="msg-body"></pre>';
+  document.getElementById('chatMessages').appendChild(el);
+  scrollChat();
+  return el;
+}
+
+function appendMessage(type, text) {
+  const el = document.createElement('div');
+  const cls = type === 'user' ? 'msg-user' : type === 'tool' ? 'msg-tool' : type === 'error' ? 'msg-error' : 'msg-assistant';
+  el.className = `msg ${cls}`;
+  if (type === 'system') {
+    el.style.cssText = 'align-self:center;color:var(--text-dim);font-size:10px;background:var(--surface);border:1px solid var(--border);';
   }
+  el.innerHTML = type === 'assistant' || type === 'system'
+    ? `<div class="msg-label">${type}</div><pre class="msg-body">${esc(text)}</pre>`
+    : esc(text);
+  document.getElementById('chatMessages').appendChild(el);
+  scrollChat();
 }
 
-async function clearChat() {
-  await fetch('/api/messages', { method: 'DELETE' });
-  state.messages = [];
-  document.getElementById('chatMessages').innerHTML = `
-    <div style="padding:40px 20px;text-align:center;color:var(--text-faint);font-size:12px;">
-      Send a message to start chatting with your assistant.<br>
-      Changes to the system prompt and tools apply immediately.
-    </div>`;
-  updateCounts(0);
+function scrollChat() {
+  const c = document.getElementById('chatMessages');
+  c.scrollTop = c.scrollHeight;
 }
 
-// ── REPL ───────────────────────────────
+function handleChatKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+// ── REPL ───────────────────────────
 async function evalRepl() {
   const input = document.getElementById('replInput');
   const code = input.value.trim();
@@ -1151,10 +774,7 @@ async function evalRepl() {
 }
 
 function handleReplKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    evalRepl();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); evalRepl(); }
   if (e.key === 'ArrowUp' && replHistory.length > 0) {
     e.preventDefault();
     replHistoryIdx = Math.max(0, replHistoryIdx - 1);
@@ -1167,344 +787,116 @@ function handleReplKey(e) {
   }
 }
 
-// ── Tool Sampler ───────────────────────
-function updateSamplerToolList() {
-  const sel = document.getElementById('samplerTool');
-  const current = sel.value;
-  sel.innerHTML = '<option value="">-- select a tool --</option>' +
-    state.tools.map(t => `<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('');
-  if (current && state.tools.find(t => t.name === current)) {
-    sel.value = current;
-  }
-  updateSamplerSchema();
-}
-
-function updateSamplerSchema() {
-  const name = document.getElementById('samplerTool').value;
-  const el = document.getElementById('samplerSchema');
-  if (!name) {
-    el.textContent = 'Select a tool to see its schema';
-    return;
-  }
-  const tool = state.tools.find(t => t.name === name);
-  if (tool) {
-    el.textContent = JSON.stringify(tool.input_schema, null, 2);
-  }
-}
-
-async function sampleTool() {
-  const toolName = document.getElementById('samplerTool').value;
-  const userMessage = document.getElementById('samplerMessage').value.trim();
-  const resultEl = document.getElementById('samplerResult');
-
-  if (!toolName) {
-    resultEl.innerHTML = '<span style="color:var(--error)">Select a tool first</span>';
-    return;
-  }
-  if (!userMessage) {
-    resultEl.innerHTML = '<span style="color:var(--error)">Enter a message to elicit the tool call</span>';
-    return;
-  }
-
-  resultEl.innerHTML = '<span style="color:var(--accent)">Sampling...</span>';
-
-  try {
-    const response = await fetch('/api/sample-tool', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ toolName, userMessage }),
-    });
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    let jsonAccum = '';
-    let result = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('event: ')) var evType = line.slice(7).trim();
-        if (!line.startsWith('data: ')) continue;
-        const data = JSON.parse(line.slice(6));
-
-        if (evType === 'tool_json_delta') {
-          jsonAccum += data.partial;
-          resultEl.textContent = jsonAccum;
-        }
-        if (evType === 'tool_complete') {
-          result = JSON.stringify(data.input, null, 2);
-          resultEl.innerHTML = `<span style="color:var(--purple);font-weight:600">${esc(data.name)}</span>\n${esc(result)}`;
-        }
-        if (evType === 'chunk') {
-          resultEl.textContent += data.text;
-        }
-        if (evType === 'error') {
-          resultEl.innerHTML = `<span style="color:var(--error)">${esc(data.message)}</span>`;
-        }
-      }
-    }
-  } catch (err) {
-    resultEl.innerHTML = `<span style="color:var(--error)">${esc(err.message)}</span>`;
-  }
-}
-
-// ── Presets ─────────────────────────────
-const PRESETS = {
-  blank: {
-    systemPrompt: 'You are a helpful assistant.',
-    tools: [],
-  },
-  coder: {
-    systemPrompt: `You are an expert software engineer. You help users write, review, and debug code. Use your tools to read and write files when needed. Always explain your reasoning before making changes.`,
-    tools: [
-      {
-        name: 'read_file',
-        description: 'Read the contents of a file',
-        input_schema: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: 'File path to read' }
-          },
-          required: ['path']
-        },
-        mock_result: '{"content": "// File contents here\\nfunction hello() {\\n  return \\"world\\";\\n}"}',
-      },
-      {
-        name: 'write_file',
-        description: 'Write content to a file, creating it if needed',
-        input_schema: {
-          type: 'object',
-          properties: {
-            path: { type: 'string', description: 'File path to write' },
-            content: { type: 'string', description: 'Content to write' }
-          },
-          required: ['path', 'content']
-        },
-        mock_result: '{"success": true}',
-      },
-      {
-        name: 'search_code',
-        description: 'Search for a pattern across the codebase',
-        input_schema: {
-          type: 'object',
-          properties: {
-            pattern: { type: 'string', description: 'Regex pattern to search for' },
-            file_glob: { type: 'string', description: 'Optional file glob filter (e.g. "*.ts")' }
-          },
-          required: ['pattern']
-        },
-        mock_result: '{"matches": [{"file": "src/index.ts", "line": 42, "text": "  const result = await search(pattern)"}]}',
-      }
-    ],
-  },
-  researcher: {
-    systemPrompt: `You are a research assistant. You help users find and synthesize information from the web. Always cite your sources and present findings in a clear, organized way.`,
-    tools: [
-      {
-        name: 'web_search',
-        description: 'Search the web for information',
-        input_schema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'Search query' },
-            num_results: { type: 'number', description: 'Number of results (1-10)', default: 5 }
-          },
-          required: ['query']
-        },
-        mock_result: '{"results": [{"title": "Example Result", "url": "https://example.com", "snippet": "This is a relevant result about the topic..."}]}',
-      },
-      {
-        name: 'fetch_page',
-        description: 'Fetch and extract text content from a URL',
-        input_schema: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'URL to fetch' }
-          },
-          required: ['url']
-        },
-        mock_result: '{"title": "Page Title", "text": "The main content of the page extracted as clean text..."}',
-      }
-    ],
-  },
-  'data-analyst': {
-    systemPrompt: `You are a data analyst assistant. You help users explore datasets, write SQL queries, and generate visualizations. Think step by step about the data before writing queries.`,
-    tools: [
-      {
-        name: 'run_sql',
-        description: 'Execute a SQL query against the database',
-        input_schema: {
-          type: 'object',
-          properties: {
-            query: { type: 'string', description: 'SQL query to execute' },
-            database: { type: 'string', description: 'Database name', default: 'main' }
-          },
-          required: ['query']
-        },
-        mock_result: '{"columns": ["id", "name", "value"], "rows": [[1, "alpha", 42], [2, "beta", 87]], "rowCount": 2}',
-      },
-      {
-        name: 'list_tables',
-        description: 'List all tables in the database',
-        input_schema: {
-          type: 'object',
-          properties: {
-            database: { type: 'string', description: 'Database name', default: 'main' }
-          },
-          required: []
-        },
-        mock_result: '{"tables": [{"name": "users", "columns": 5, "rows": 1234}, {"name": "events", "columns": 8, "rows": 56789}]}',
-      },
-      {
-        name: 'generate_chart',
-        description: 'Generate a chart from data',
-        input_schema: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', enum: ['bar', 'line', 'pie', 'scatter'], description: 'Chart type' },
-            title: { type: 'string', description: 'Chart title' },
-            data: { type: 'object', description: 'Chart data with labels and values' }
-          },
-          required: ['type', 'data']
-        },
-        mock_result: '{"url": "/charts/chart_001.png", "message": "Chart generated successfully"}',
-      }
-    ],
-  },
-};
-
-function loadPreset(name) {
-  const preset = PRESETS[name];
-  if (!preset) return;
-
-  state.systemPrompt = preset.systemPrompt;
-  state.tools = JSON.parse(JSON.stringify(preset.tools));
-
-  document.getElementById('systemPrompt').value = state.systemPrompt;
-  updatePromptLen();
-  renderTools();
-
-  fetch('/api/state', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ systemPrompt: state.systemPrompt, tools: state.tools }),
-  });
-
-  togglePresets();
-  updateCounts();
-}
-
-function togglePresets() {
-  document.getElementById('presetsMenu').classList.toggle('open');
-}
-
-// Close presets when clicking outside
-document.addEventListener('click', (e) => {
-  if (!e.target.closest('.relative')) {
-    document.getElementById('presetsMenu').classList.remove('open');
-  }
-});
-
-// ── Export / Import ────────────────────
-async function exportConfig() {
+// ── Preview ────────────────────────
+async function refreshPreview() {
+  const panel = document.getElementById('previewPanel');
   try {
     const res = await fetch('/api/export');
     const data = await res.json();
-    const json = JSON.stringify(data, null, 2);
 
-    await navigator.clipboard.writeText(json);
-
-    // Flash feedback
-    const btn = document.querySelector('.btn-accent');
-    const orig = btn.textContent;
-    btn.textContent = 'Copied!';
-    setTimeout(() => btn.textContent = orig, 1500);
-  } catch (e) {
-    console.error('Export failed:', e);
+    let html = '';
+    for (const [name, content] of Object.entries(data.files || {})) {
+      html += `<div class="preview-file">
+        <div class="preview-file-header">assistants/${esc(data.assistantName)}/${esc(name)}</div>
+        <pre class="preview-code">${esc(content)}</pre>
+      </div>`;
+    }
+    panel.innerHTML = html;
+  } catch (err) {
+    panel.innerHTML = `<div style="color:var(--error)">${esc(err.message)}</div>`;
   }
 }
 
-function importConfig() {
-  const json = prompt('Paste your assistant config JSON:');
-  if (!json) return;
+// ── Load Assistant ─────────────────
+async function loadAssistantList() {
   try {
-    const config = JSON.parse(json);
-    if (config.system) {
-      state.systemPrompt = config.system;
-      document.getElementById('systemPrompt').value = state.systemPrompt;
-    }
-    if (config.tools) {
-      state.tools = config.tools.map(t => ({
-        name: t.name,
-        description: t.description,
-        input_schema: t.input_schema,
-        mock_result: '',
-      }));
-    }
-    if (config.model) {
-      state.model = config.model;
-      document.getElementById('modelSelect').value = state.model;
-    }
-    if (config.max_tokens) {
-      state.maxTokens = config.max_tokens;
-      document.getElementById('maxTokens').value = state.maxTokens;
-    }
-    if (config.temperature !== undefined) {
-      state.temperature = config.temperature;
-      document.getElementById('temperature').value = state.temperature;
-    }
-    renderTools();
-    updatePromptLen();
-    fetch('/api/state', {
-      method: 'PUT',
+    const res = await fetch('/api/load');
+    const data = await res.json();
+    const menu = document.getElementById('loaderMenu');
+    menu.innerHTML = (data.assistants || []).map(a =>
+      `<button class="loader-item" onclick="loadAssistant('${esc(a.name)}')">${esc(a.name)}</button>`
+    ).join('');
+  } catch {}
+}
+
+function toggleLoaderMenu() {
+  const menu = document.getElementById('loaderMenu');
+  menu.classList.toggle('open');
+  if (menu.classList.contains('open')) {
+    loadAssistantList();
+    setTimeout(() => document.addEventListener('click', closeLoaderMenu, { once: true }), 0);
+  }
+}
+
+function closeLoaderMenu() {
+  document.getElementById('loaderMenu').classList.remove('open');
+}
+
+async function loadAssistant(name) {
+  closeLoaderMenu();
+  try {
+    const res = await fetch('/api/load', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        systemPrompt: state.systemPrompt,
-        tools: state.tools,
-        model: state.model,
-        maxTokens: state.maxTokens,
-        temperature: state.temperature,
-      }),
+      body: JSON.stringify({ name }),
     });
-    updateCounts();
-  } catch (e) {
-    alert('Invalid JSON: ' + e.message);
+    const data = await res.json();
+    if (data.ok) {
+      state.assistantName = data.assistantName;
+      state.systemPrompt = data.systemPrompt;
+      state.tools = data.tools || [];
+      state.hooksSource = data.hooksSource || '';
+      state.deployed = false;
+
+      document.getElementById('assistantName').value = state.assistantName;
+      document.getElementById('coreEditor').value = state.systemPrompt;
+      document.getElementById('hooksEditor').value = state.hooksSource;
+      updatePathNames();
+      renderTools();
+      updateStatusBadge();
+    }
+  } catch (err) {
+    appendMessage('error', `Load failed: ${err.message}`);
   }
 }
 
-// ── Helpers ─────────────────────────────
-function esc(str) {
-  if (!str) return '';
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
+// ── Sync State ─────────────────────
+async function syncState() {
+  await fetch('/api/state', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      assistantName: state.assistantName,
+      systemPrompt: state.systemPrompt,
+      tools: state.tools,
+      hooksSource: state.hooksSource,
+      model: state.model,
+      provider: state.provider,
+      maxTokens: state.maxTokens,
+      temperature: state.temperature,
+    }),
+  });
 }
 
-function updateCounts(msgCount) {
-  document.getElementById('toolCount').textContent = state.tools.length;
-  if (msgCount !== undefined) {
-    document.getElementById('msgCount').textContent = msgCount;
-  }
+function debouncedSync() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(syncState, 500);
 }
 
-function autoResizeTextarea(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+// ── Utils ──────────────────────────
+function esc(s) {
+  if (typeof s !== 'string') s = String(s ?? '');
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
-document.getElementById('chatInput').addEventListener('input', function() {
-  autoResizeTextarea(this);
-});
-
-document.getElementById('replInput').addEventListener('input', function() {
-  autoResizeTextarea(this);
+// Auto-resize textareas
+document.querySelectorAll('.chat-input, .repl-input').forEach(el => {
+  el.addEventListener('input', function() {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, parseInt(getComputedStyle(this).maxHeight)) + 'px';
+  });
 });
 </script>
 </body>

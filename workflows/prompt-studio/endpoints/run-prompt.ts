@@ -28,15 +28,19 @@ export async function post(_params: any, ctx: any) {
   const proc = container.feature('proc')
   const promptId = `prompts/${slug}`
 
+  let inputsFile: string | null = null
+
   try {
     // Build the luca prompt command
     const args = ['prompt', agent, promptId, '--permission-mode', 'bypassPermissions']
 
-    // Pass inputs as --input key=value pairs
-    for (const [key, value] of Object.entries(inputs)) {
-      if (value !== undefined && value !== '') {
-        args.push('--input', `${key}=${value}`)
-      }
+    // Write inputs to a temp JSON file if provided
+    const hasInputs = Object.keys(inputs).length > 0
+    if (hasInputs) {
+      const fs = container.feature('fs')
+      inputsFile = container.paths.resolve(`/tmp/prompt-studio-inputs-${Date.now()}.json`)
+      await fs.writeFile(inputsFile, JSON.stringify(inputs, null, 2))
+      args.push('--inputs-file', inputsFile)
     }
 
     console.log(`[run-prompt] spawning: luca ${args.join(' ')}`)
@@ -95,6 +99,11 @@ export async function post(_params: any, ctx: any) {
   } catch (err: any) {
     console.error(`[run-prompt] catch error:`, err)
     send('error', { message: err.message || String(err) })
+  }
+
+  // Clean up temp inputs file
+  if (inputsFile) {
+    try { container.feature('fs').removeFile(inputsFile) } catch (_e) {}
   }
 
   console.log(`[run-prompt] ending response`)

@@ -1,8 +1,9 @@
 /**
  * Assistant Designer Workflow — setup hook for luca serve
  *
- * Manages a live assistant definition (system prompt, tools, conversation)
- * and proxies to the Anthropic or OpenAI-compatible APIs for chat and tool sampling.
+ * Design assistants visually: edit CORE.md, tools.ts (Zod schemas + handlers),
+ * and hooks.ts. Deploy writes real files to assistants/<name>/ and creates
+ * a live assistant instance. Chat goes through assistant.ask().
  *
  * Usage:
  *   luca serve --setup workflows/assistant-designer/luca.serve.ts --staticDir workflows/assistant-designer/public --endpoints-dir workflows/assistant-designer/endpoints --port 9330
@@ -11,16 +12,17 @@
 export interface ToolDef {
   name: string
   description: string
-  input_schema: Record<string, any>
-  mock_result?: string
+  schema: string    // Zod source code, e.g. "z.object({ query: z.string() })"
+  handler: string   // Function body source code
 }
 
 export interface DesignerState {
-  systemPrompt: string
+  assistantName: string
+  systemPrompt: string   // becomes CORE.md
   tools: ToolDef[]
-  messages: Array<{ role: string; content: any }>
+  hooksSource: string    // raw hooks.ts source
   model: string
-  provider: 'anthropic' | 'openai' | 'lm-studio'
+  provider: 'openai' | 'lm-studio'
   maxTokens: number
   temperature: number
 }
@@ -31,36 +33,30 @@ export default async function setup(server: any) {
 
   await container.helpers.discover('features')
 
+  const assistantsManager = container.feature('assistantsManager') as any
+  await assistantsManager.discover()
+
   const designerState: DesignerState = {
-    systemPrompt: 'You are a helpful assistant.',
+    assistantName: 'my-assistant',
+    systemPrompt: '# My Assistant\n\nYou are a helpful assistant.',
     tools: [],
-    messages: [],
-    model: 'claude-sonnet-4-20250514',
-    provider: 'anthropic',
+    hooksSource: '',
+    model: 'gpt-4o',
+    provider: 'openai',
     maxTokens: 4096,
     temperature: 1,
   }
 
-  // Helper: get an OpenAI client for the current provider
-  function getOpenAIClient(provider?: string) {
-    const p = provider || designerState.provider
-    if (p === 'lm-studio') {
-      return container.client('openai', {
-        baseURL: 'http://localhost:1234/v1',
-        apiKey: 'lm-studio',
-      })
-    }
-    // Default OpenAI
-    return container.client('openai')
-  }
+  // The live assistant instance, created on deploy
+  let assistant: any = null
 
   // Create a shared VM context for the REPL
   const vm = container.feature('vm')
   const replContext = vm.createContext({
     container,
     console,
-    state: designerState,
-    getOpenAIClient,
+    get assistant() { return assistant },
+    get state() { return designerState },
     Date,
     Promise,
     setTimeout,
@@ -79,15 +75,18 @@ export default async function setup(server: any) {
     Buffer,
     process,
     require,
-    fetch,
+    fetch: globalThis.fetch,
   })
 
   app.locals.designerState = designerState
   app.locals.container = container
+  app.locals.assistantsManager = assistantsManager
   app.locals.vm = vm
   app.locals.replContext = replContext
-  app.locals.apiKey = process.env.ANTHROPIC_API_KEY
-  app.locals.getOpenAIClient = getOpenAIClient
+
+  // Getter/setter for the live assistant instance
+  app.locals.getAssistant = () => assistant
+  app.locals.setAssistant = (a: any) => { assistant = a }
 
   console.log('[assistant-designer] workflow API ready')
 }

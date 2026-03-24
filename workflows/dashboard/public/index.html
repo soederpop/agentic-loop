@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LUCA MAIN</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface-2: #16161f;
+    --surface-3: #1a1a26;
+    --border: #1e1e2e;
+    --border-light: #2a2a3e;
+    --text: #e0e0e8;
+    --text-dim: #6a6a80;
+    --text-faint: #3a3a50;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --accent-glow: #00fff740;
+    --success: #39ff14;
+    --success-dim: #39ff1420;
+    --warning: #f59e0b;
+    --warning-dim: #f59e0b20;
+    --error: #ff003c;
+    --error-dim: #ff003c20;
+    --purple: #c084fc;
+    --blue: #60a5fa;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Header ──────────────────────────── */
+  .header {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    z-index: 10;
+  }
+
+  .header-top {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+
+  .header h1 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .header-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+  }
+
+  .paused-tag {
+    background: var(--warning);
+    color: #000;
+    font-weight: 700;
+    font-size: 10px;
+    padding: 1px 8px;
+    border-radius: 3px;
+    display: none;
+  }
+
+  .paused-tag.visible { display: inline-block; }
+
+  .ws-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--error);
+    transition: background 0.3s;
+  }
+
+  .ws-indicator.connected { background: var(--success); box-shadow: 0 0 6px var(--success); }
+
+  /* ── Subsystem Indicators ──────────── */
+  .indicators {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 11px;
+  }
+
+  .ind {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 0;
+  }
+
+  .ind + .ind::before {
+    content: '';
+    display: inline-block;
+    width: 1px;
+    height: 14px;
+    background: var(--border);
+    margin-right: 6px;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .dot.on { background: var(--success); box-shadow: 0 0 4px var(--success); }
+  .dot.warn { background: var(--warning); box-shadow: 0 0 4px var(--warning); }
+  .dot.off { background: var(--error); }
+
+  .ind-label { color: var(--text-dim); }
+  .ind-detail { color: var(--text-faint); font-size: 10px; }
+
+  /* ── Body Layout ─────────────────────── */
+  .body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .col-left {
+    width: 38%;
+    min-width: 280px;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .col-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Panel (reusable box) ────────────── */
+  .panel {
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .panel.grow { flex: 1; }
+
+  .panel-title {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-faint);
+    padding: 8px 14px 4px;
+    flex-shrink: 0;
+  }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 14px 8px;
+  }
+
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 2px; }
+
+  /* ── Stats Panel ─────────────────────── */
+  .stat-row {
+    font-size: 12px;
+    padding: 1px 0;
+  }
+
+  .stat-label { color: var(--text-dim); }
+  .stat-value { color: var(--text); }
+  .stat-branch { color: var(--accent); }
+  .stat-changed { color: var(--warning); }
+  .stat-added { color: var(--success); }
+  .stat-deleted { color: var(--error); }
+
+  .folder-row {
+    padding-left: 12px;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .folder-name { color: var(--text); }
+
+  .commit-row {
+    font-size: 11px;
+    color: var(--text-dim);
+    padding: 1px 0 1px 8px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .spacer-row { height: 6px; }
+
+  /* ── Tasks Panel ─────────────────────── */
+  .task-row {
+    font-size: 12px;
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .task-marker {
+    font-size: 10px;
+  }
+
+  .task-marker.sched { color: var(--warning); }
+  .task-marker.build { color: var(--blue); }
+  .task-none { color: var(--text-faint); font-size: 11px; }
+
+  /* ── Content Models Panel ────────────── */
+  .content-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 12px;
+  }
+
+  .content-item {
+    font-size: 12px;
+    display: flex;
+    gap: 6px;
+    padding: 1px 0;
+  }
+
+  .content-name { font-weight: 600; }
+  .content-count { color: var(--text-faint); }
+
+  /* ── Event Log Panel ─────────────────── */
+  .evt-row {
+    font-size: 11px;
+    padding: 1px 0;
+    display: flex;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .evt-time { color: var(--text-faint); flex-shrink: 0; width: 60px; }
+  .evt-key { flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
+  .evt-detail { color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; }
+
+  .evt-key.ok { color: var(--success); }
+  .evt-key.err { color: var(--error); }
+  .evt-key.warn { color: var(--warning); }
+  .evt-key.neutral { color: var(--text-dim); }
+
+  /* ── Log Stream Panel ────────────────── */
+  .log-row {
+    font-size: 12px;
+    padding: 1px 0;
+    display: flex;
+    gap: 8px;
+    line-height: 1.4;
+  }
+
+  .log-time { color: var(--text-faint); flex-shrink: 0; width: 60px; font-size: 11px; }
+  .log-source {
+    flex-shrink: 0;
+    font-weight: 600;
+    font-size: 11px;
+  }
+  .log-text {
+    color: var(--text);
+    word-break: break-word;
+    white-space: pre-wrap;
+  }
+
+  /* ── Disconnected Overlay ────────────── */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 10, 15, 0.85);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .overlay.visible { opacity: 1; pointer-events: auto; }
+
+  .overlay-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 32px 40px;
+    text-align: center;
+  }
+
+  .overlay-card h2 {
+    color: var(--error);
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .overlay-card p {
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-bottom: 4px;
+  }
+
+  .overlay-card .retry-info {
+    color: var(--text-faint);
+    font-size: 11px;
+    margin-top: 12px;
+  }
+
+  .overlay-card .retry-info .countdown {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── Loading state ───────────────────── */
+  .loading-msg {
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 20px 14px;
+  }
+
+  .loading-msg::after {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    margin-left: 8px;
+    vertical-align: middle;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Animations ──────────────────────── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .fade-in { animation: fadeIn 0.15s ease; }
+</style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────── -->
+<div class="header">
+  <div class="header-top">
+    <h1>LUCA MAIN</h1>
+    <span class="paused-tag" id="pausedTag">PAUSED</span>
+    <div class="header-meta">
+      <span id="uptimeLabel"></span>
+      <span id="pidLabel"></span>
+      <div class="ws-indicator" id="wsIndicator" title="WebSocket connection"></div>
+    </div>
+  </div>
+  <div class="indicators" id="indicators"></div>
+</div>
+
+<!-- ── Body ────────────────────────────────────────────────────── -->
+<div class="body">
+  <div class="col-left">
+    <div class="panel" id="statsPanel">
+      <div class="panel-title">Stats</div>
+      <div class="panel-body" id="statsBody">
+        <div class="loading-msg">Connecting</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Tasks In Progress</div>
+      <div class="panel-body" id="tasksBody">
+        <div class="task-none">none</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Content</div>
+      <div class="panel-body" id="contentBody"></div>
+    </div>
+
+    <div class="panel grow">
+      <div class="panel-title">Event Log</div>
+      <div class="panel-body" id="eventsBody"></div>
+    </div>
+  </div>
+
+  <div class="col-right">
+    <div class="panel grow">
+      <div class="panel-title">Log Stream</div>
+      <div class="panel-body" id="logsBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Disconnect Overlay ──────────────────────────────────────── -->
+<div class="overlay" id="overlay">
+  <div class="overlay-card">
+    <h2>Disconnected</h2>
+    <p>Lost connection to luca main</p>
+    <p class="retry-info">Reconnecting in <span class="countdown" id="countdown">3</span>s</p>
+  </div>
+</div>
+
+<script>
+// ── Config ────────────────────────────────────────────────────────
+const MAX_EVENTS = 300
+const MAX_LOGS = 500
+const RENDER_INTERVAL = 250
+const REFRESH_INTERVAL = 5000
+const RECONNECT_DELAY = 3000
+
+// ── Color palette for log sources ─────────────────────────────────
+const SOURCE_COLORS = [
+  '#4ECDC4', '#FF6B6B', '#FFD166', '#06D6A0', '#118AB2',
+  '#EF476F', '#73D2DE', '#FCB69F', '#A8E6CF', '#FDCB6E',
+  '#6C5CE7', '#00B894', '#E17055', '#0984E3', '#FDCB6E', '#E84393',
+]
+const MODEL_COLORS = [
+  '#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2',
+  '#EF476F', '#73D2DE', '#6C5CE7', '#00B894', '#E17055',
+  '#FDCB6E', '#E84393',
+]
+const sourceColorMap = {}
+let nextColorIdx = 0
+
+function getSourceColor(source) {
+  if (!sourceColorMap[source]) {
+    sourceColorMap[source] = SOURCE_COLORS[nextColorIdx % SOURCE_COLORS.length]
+    nextColorIdx++
+  }
+  return sourceColorMap[source]
+}
+
+// ── State ─────────────────────────────────────────────────────────
+let ws = null
+let status = null
+let events = []
+let logs = []
+let needsRender = true
+let connected = false
+let reconnectTimer = null
+
+// ── DOM refs ──────────────────────────────────────────────────────
+const $indicators = document.getElementById('indicators')
+const $uptimeLabel = document.getElementById('uptimeLabel')
+const $pidLabel = document.getElementById('pidLabel')
+const $pausedTag = document.getElementById('pausedTag')
+const $wsIndicator = document.getElementById('wsIndicator')
+const $statsBody = document.getElementById('statsBody')
+const $tasksBody = document.getElementById('tasksBody')
+const $contentBody = document.getElementById('contentBody')
+const $eventsBody = document.getElementById('eventsBody')
+const $logsBody = document.getElementById('logsBody')
+const $overlay = document.getElementById('overlay')
+const $countdown = document.getElementById('countdown')
+
+// ── WebSocket Connection ──────────────────────────────────────────
+async function connect() {
+  // Get the WS port from the server config endpoint
+  let wsUrl = 'ws://localhost:4410'
+  try {
+    const res = await fetch('/api/config')
+    if (res.ok) {
+      const cfg = await res.json()
+      wsUrl = cfg.wsUrl || wsUrl
+    }
+  } catch {}
+
+  if (ws) {
+    try { ws.close() } catch {}
+  }
+
+  ws = new WebSocket(wsUrl)
+
+  ws.onopen = () => {
+    connected = true
+    $wsIndicator.classList.add('connected')
+    $overlay.classList.remove('visible')
+    // Request initial state
+    ws.send(JSON.stringify({ type: 'query', id: 'init' }))
+  }
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data)
+
+      if (msg.type === 'state' || msg.type === 'response') {
+        status = msg.data
+        // Seed from initial snapshot
+        if (msg.data?.recentLogs?.length && logs.length === 0) {
+          logs = msg.data.recentLogs.slice(-MAX_LOGS)
+        }
+        if (msg.data?.recentEvents?.length && events.length === 0) {
+          events = msg.data.recentEvents.slice(-MAX_EVENTS)
+        }
+        needsRender = true
+      }
+
+      if (msg.type === 'event') {
+        events.push(msg)
+        if (events.length > MAX_EVENTS) events.shift()
+        needsRender = true
+      }
+
+      if (msg.type === 'log') {
+        logs.push(msg)
+        if (logs.length > MAX_LOGS) logs.shift()
+        needsRender = true
+      }
+    } catch {}
+  }
+
+  ws.onerror = () => {}
+
+  ws.onclose = () => {
+    connected = false
+    $wsIndicator.classList.remove('connected')
+    showDisconnected()
+  }
+}
+
+function showDisconnected() {
+  $overlay.classList.add('visible')
+  let secs = Math.ceil(RECONNECT_DELAY / 1000)
+  $countdown.textContent = secs
+
+  if (reconnectTimer) clearInterval(reconnectTimer)
+
+  const tick = setInterval(() => {
+    secs--
+    $countdown.textContent = Math.max(0, secs)
+    if (secs <= 0) clearInterval(tick)
+  }, 1000)
+
+  reconnectTimer = setTimeout(() => {
+    clearInterval(tick)
+    connect()
+  }, RECONNECT_DELAY)
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function render() {
+  if (!status) return
+
+  // Header
+  $uptimeLabel.textContent = `up ${formatUptime(status.uptime)}`
+  $pidLabel.textContent = `pid ${status.pid}`
+  $pausedTag.classList.toggle('visible', !!status.paused)
+
+  // Subsystem indicators
+  renderIndicators()
+
+  // Stats (git + scheduler)
+  renderStats()
+
+  // Tasks
+  renderTasks()
+
+  // Content models
+  renderContent()
+
+  // Event log
+  renderEvents()
+
+  // Log stream
+  renderLogs()
+}
+
+function renderIndicators() {
+  const s = status
+  const inds = []
+
+  // Scheduler
+  const schedRunning = s.scheduler?.running
+  inds.push(ind(schedRunning, 'scheduler', schedRunning ? `${s.scheduler.taskCount}t` : ''))
+
+  // Builder
+  inds.push(ind(s.builder?.watching, 'builder'))
+
+  // Voice
+  const voice = s.voice || {}
+  if (voice.disabled) {
+    inds.push(ind(false, 'voice', 'disabled', true))
+  } else {
+    inds.push(ind(voice.running, 'voice', voice.running ? (voice.clientConnected ? 'connected' : 'waiting') : '', !voice.running))
+  }
+
+  // Window Manager
+  const wm = s.windowManager || {}
+  if (wm.listening) {
+    const wmDetail = wm.clientConnected ? 'connected' + (wm.windowCount ? ` ${wm.windowCount}w` : '') : 'waiting'
+    inds.push(ind(wm.clientConnected, 'wm', wmDetail, !wm.clientConnected))
+  } else {
+    inds.push(ind(false, 'wm'))
+  }
+
+  // Presenter
+  const pres = s.presenter || {}
+  if (pres.running) {
+    inds.push(ind(true, 'presenter', `http:${pres.expressPort} ws:${pres.linkPort}`))
+  } else {
+    inds.push(ind(false, 'presenter', '', true))
+  }
+
+  // Content server
+  const cs = s.contentServer || {}
+  inds.push(ind(cs.running, 'content', cs.running ? `:${cs.port}` : ''))
+
+  $indicators.innerHTML = inds.join('')
+}
+
+function ind(on, label, detail, isWarn) {
+  const dotClass = on ? 'on' : (isWarn ? 'warn' : 'off')
+  const detailHtml = detail ? ` <span class="ind-detail">${esc(detail)}</span>` : ''
+  return `<span class="ind"><span class="dot ${dotClass}"></span><span class="ind-label">${esc(label)}</span>${detailHtml}</span>`
+}
+
+function renderStats() {
+  const g = status.git
+  const sched = status.scheduler
+  let html = ''
+
+  if (g) {
+    if (g.branch) {
+      html += `<div class="stat-row"><span class="stat-label">branch: </span><span class="stat-branch">${esc(g.branch)}</span></div>`
+    }
+
+    const totalM = g.modified?.length || 0
+    const totalA = g.untracked?.length || 0
+    const totalD = g.deleted?.length || 0
+    const total = totalM + totalA + totalD
+
+    if (total > 0) {
+      const parts = []
+      if (totalM) parts.push(`<span class="stat-changed">${totalM} changed</span>`)
+      if (totalA) parts.push(`<span class="stat-added">+${totalA} new</span>`)
+      if (totalD) parts.push(`<span class="stat-deleted">-${totalD} deleted</span>`)
+      html += `<div class="stat-row"><span class="stat-value">${total} files dirty: </span>${parts.join(' <span class="stat-label">&middot;</span> ')}</div>`
+
+      // Folder breakdown
+      const dirs = Object.entries(g.summary || {}).sort((a, b) =>
+        (b[1].added + b[1].modified + b[1].deleted) - (a[1].added + a[1].modified + a[1].deleted)
+      )
+      for (const [dir, counts] of dirs) {
+        const dp = []
+        if (counts.modified) dp.push(`<span class="stat-changed">${counts.modified}</span>`)
+        if (counts.added) dp.push(`<span class="stat-added">+${counts.added}</span>`)
+        if (counts.deleted) dp.push(`<span class="stat-deleted">-${counts.deleted}</span>`)
+        html += `<div class="folder-row"><span class="folder-name">${esc(dir)}/</span> ${dp.join('/')}</div>`
+      }
+    } else {
+      html += `<div class="stat-row" style="color:var(--text-faint)">working tree clean</div>`
+    }
+
+    // Recent commits
+    if (g.recentCommits?.length) {
+      html += `<div class="spacer-row"></div>`
+      for (const title of g.recentCommits) {
+        html += `<div class="commit-row">${esc(title)}</div>`
+      }
+    }
+  }
+
+  // Scheduler stats
+  if (sched?.inProgress?.length) {
+    html += `<div class="spacer-row"></div>`
+    html += `<div class="stat-row"><span class="stat-changed">${sched.inProgress.length} task(s) running</span> <span class="stat-label">${sched.dueOneOff} one-off due, ${sched.dueScheduled} scheduled due</span></div>`
+  }
+
+  $statsBody.innerHTML = html || '<div class="loading-msg">Waiting for data</div>'
+}
+
+function renderTasks() {
+  const sched = status.scheduler || {}
+  const builder = status.builder || {}
+  const rows = []
+
+  for (const taskId of (sched.inProgress || [])) {
+    rows.push(`<div class="task-row"><span class="task-marker sched">&#9658;</span>${esc(taskId)}</div>`)
+  }
+  for (const slug of (builder.buildsInProgress || [])) {
+    rows.push(`<div class="task-row"><span class="task-marker build">&#9658;</span>build: ${esc(slug)}</div>`)
+  }
+
+  $tasksBody.innerHTML = rows.length ? rows.join('') : '<div class="task-none">none</div>'
+}
+
+function renderContent() {
+  const counts = status.content || {}
+  const names = Object.keys(counts)
+
+  if (!names.length) {
+    $contentBody.innerHTML = '<span style="color:var(--text-faint);font-size:11px">loading...</span>'
+    return
+  }
+
+  let html = '<div class="content-grid">'
+  names.forEach((name, i) => {
+    const color = MODEL_COLORS[i % MODEL_COLORS.length]
+    html += `<div class="content-item"><span class="content-name" style="color:${color}">${esc(name)}</span><span class="content-count">${counts[name]}</span></div>`
+  })
+  html += '</div>'
+  $contentBody.innerHTML = html
+}
+
+function renderEvents() {
+  const body = $eventsBody
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40
+
+  const visible = events.slice(-200)
+  let html = ''
+  for (const evt of visible) {
+    const time = new Date(evt.ts).toISOString().slice(11, 19)
+    const key = `${evt.source}:${evt.event}`
+    const evtClass = classifyEvent(evt)
+
+    let detail = ''
+    if (evt.data?.taskId) detail = evt.data.taskId
+    else if (evt.data?.reason) detail = evt.data.reason
+    else if (evt.event === 'tick' && evt.data) {
+      const d = evt.data
+      detail = d.dueIds?.length ? `${d.dueOneOff}oo ${d.dueScheduled}s ${d.inProgress}ip` : `${d.totalTasks}t ok`
+    }
+
+    html += `<div class="evt-row fade-in"><span class="evt-time">${time}</span><span class="evt-key ${evtClass}">${esc(key)}</span><span class="evt-detail">${esc(detail)}</span></div>`
+  }
+  body.innerHTML = html
+  if (atBottom) body.scrollTop = body.scrollHeight
+}
+
+function classifyEvent(evt) {
+  const e = evt.event || ''
+  if (e.includes('error') || e.includes('FAIL') || e.includes('crash')) return 'err'
+  if (e.includes('complete') || e.includes('started')) return 'ok'
+  if (e.includes('skipped')) return 'warn'
+  return 'neutral'
+}
+
+function renderLogs() {
+  const body = $logsBody
+  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40
+
+  const visible = logs.slice(-300)
+  let html = ''
+  for (const entry of visible) {
+    const time = new Date(entry.ts).toISOString().slice(11, 19)
+    const color = getSourceColor(entry.source)
+    html += `<div class="log-row"><span class="log-time">${time}</span><span class="log-source" style="color:${color}">[${esc(entry.source)}]</span><span class="log-text">${esc(entry.text || '')}</span></div>`
+  }
+  body.innerHTML = html
+  if (atBottom) body.scrollTop = body.scrollHeight
+}
+
+// ── Helpers ───────────────────────────────────────────────────────
+function formatUptime(secs) {
+  const s = Math.floor(secs)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ${s % 60}s`
+  const h = Math.floor(m / 60)
+  return `${h}h ${m % 60}m`
+}
+
+function esc(str) {
+  if (!str) return ''
+  const d = document.createElement('div')
+  d.textContent = String(str)
+  return d.innerHTML
+}
+
+// ── Render Loop ───────────────────────────────────────────────────
+setInterval(() => {
+  if (needsRender) {
+    needsRender = false
+    render()
+  }
+}, RENDER_INTERVAL)
+
+// ── Periodic Refresh ──────────────────────────────────────────────
+setInterval(() => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'query', id: 'refresh' }))
+  }
+}, REFRESH_INTERVAL)
+
+// ── Boot ──────────────────────────────────────────────────────────
+connect()
+</script>
+</body>
+</html>

@@ -146,7 +146,23 @@
   .prompt-item:hover { background: var(--surface-2); }
   .prompt-item.active { background: var(--surface-3); border: 1px solid var(--border-light); }
 
-  .prompt-item-title { font-size: 11px; color: var(--text); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .prompt-item-row { display: flex; align-items: center; gap: 4px; }
+  .prompt-item-title { font-size: 11px; color: var(--text); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .prompt-item-queue-btn {
+    display: none;
+    background: var(--purple-dim);
+    border: 1px solid var(--purple);
+    border-radius: 4px;
+    color: var(--purple);
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 5px;
+    cursor: pointer;
+    flex-shrink: 0;
+    line-height: 1.2;
+  }
+  .prompt-item:hover .prompt-item-queue-btn { display: block; }
+  .prompt-item-queue-btn:hover { background: #c084fc30; }
   .prompt-item-meta { font-size: 9px; color: var(--text-dim); margin-top: 1px; display: flex; gap: 6px; }
 
   .tag { display: inline-block; font-size: 9px; padding: 1px 5px; border-radius: 3px; background: var(--surface-3); color: var(--text-dim); }
@@ -389,22 +405,34 @@
 
   .queue-header h3 { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-dim); font-weight: 600; }
 
-  .queue-scroll { flex: 1; overflow-y: auto; padding: 12px 16px; }
+  .queue-scroll {
+    flex: 1;
+    overflow: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    align-items: stretch;
+  }
 
   .queue-empty {
     padding: 40px 20px;
     text-align: center;
     color: var(--text-dim);
     font-size: 12px;
+    width: 100%;
   }
 
   .queue-item {
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    margin-bottom: 10px;
     overflow: hidden;
     animation: slideUp 0.15s ease-out;
+    flex: 1 1 0;
+    min-width: 280px;
+    display: flex;
+    flex-direction: column;
   }
 
   .queue-item.running { border-color: var(--success); }
@@ -419,6 +447,7 @@
     background: var(--surface-2);
     cursor: pointer;
     user-select: none;
+    flex-shrink: 0;
   }
 
   .queue-item-header:hover { background: var(--surface-3); }
@@ -435,15 +464,40 @@
   .queue-item-dot.complete { background: var(--success); }
   .queue-item-dot.error { background: var(--error); }
 
-  .queue-item-title { font-size: 12px; color: var(--text); flex: 1; }
+  .queue-item-title { font-size: 12px; color: var(--text); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .queue-item-agent { font-size: 10px; color: var(--text-dim); }
   .queue-item-status { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
 
-  .queue-item-chevron { color: var(--text-faint); font-size: 12px; transition: transform 0.2s; }
-  .queue-item.expanded .queue-item-chevron { transform: rotate(90deg); }
+  .queue-item-chevron { display: none; }
 
-  .queue-item-body { display: none; border-top: 1px solid var(--border); max-height: 400px; overflow-y: auto; }
-  .queue-item.expanded .queue-item-body { display: block; }
+  .queue-item-body { border-top: 1px solid var(--border); flex: 1; overflow-y: auto; }
+
+  .queue-item-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  .qi-action-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-dim);
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 6px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    transition: all 0.15s;
+  }
+
+  .qi-action-btn:hover { border-color: var(--text-dim); color: var(--text); }
+  .qi-action-btn.edit { color: var(--orange); border-color: var(--orange); }
+  .qi-action-btn.edit:hover { background: var(--orange-dim); }
+  .qi-action-btn.rerun { color: var(--accent); border-color: var(--accent); }
+  .qi-action-btn.rerun:hover { background: var(--accent-dim); }
 
   .queue-item-output {
     padding: 12px 16px;
@@ -622,45 +676,280 @@
   </div>
 </div>
 
+<!-- Queue Inputs Modal (used for add + edit) -->
+<div class="modal-overlay" id="queue-inputs-modal">
+  <div class="modal" style="width:420px;">
+    <h2 id="queue-inputs-title">Queue Prompt</h2>
+    <div id="queue-inputs-fields"></div>
+    <div class="modal-actions">
+      <button class="btn" id="queue-inputs-cancel">Cancel</button>
+      <button class="btn btn-purple" id="queue-inputs-add">Add to Queue</button>
+    </div>
+  </div>
+</div>
+
+
 <!-- Monaco Editor Loader -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
 <script type="module">
   const API = window.location.origin
 
-  // ── State ──────────────────────────────
-  let prompts = []
-  let currentPrompt = null
-  let currentRawContent = ''
-  let monacoEditor = null
-  let monacoReady = false
-  let saveTimeout = null
-  let queue = [] // { id, slug, title, agent, inputs, status, output, eventSource }
+  // ── Load Luca browser container (default export is the singleton) ──
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
 
-  // ── Elements ───────────────────────────
-  const promptList = document.getElementById('prompt-list')
-  const promptTitle = document.getElementById('prompt-title')
-  const saveIndicator = document.getElementById('save-indicator')
-  const agentSelect = document.getElementById('agent-select')
-  const queueBtn = document.getElementById('queue-btn')
-  const runQueueBtn = document.getElementById('run-queue-btn')
-  const notebookScroll = document.getElementById('notebook-scroll')
-  const queueScroll = document.getElementById('queue-scroll')
-  const queueEmpty = document.getElementById('queue-empty')
-  const queueBadge = document.getElementById('queue-badge')
-  const inputsBar = document.getElementById('inputs-bar')
-  const replToggle = document.getElementById('repl-toggle')
-  const replBody = document.getElementById('repl-body')
-  const replInput = document.getElementById('repl-input')
-  const replSend = document.getElementById('repl-send')
-  const replHistory = document.getElementById('repl-history')
+  // Get Feature base class from the registry
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
 
-  // ── Monaco Init ────────────────────────
+  // ── PromptStudio Feature (real Luca Feature — registered, stateful, observable) ──
+  class PromptStudio extends Feature {
+    static shortcut = 'features.promptStudio'
+    static { Feature.register(this, 'promptStudio') }
+
+    _idCounter = 0
+    _prompts = []
+    _queue = []
+    _currentPrompt = null
+    _currentRawContent = ''
+
+    async afterInitialize() {
+      this.state.set('ready', false)
+      await this.loadPrompts()
+      await this.loadAssistants()
+      this.state.set('ready', true)
+      this.emit('ready')
+    }
+
+    get prompts() { return this._prompts }
+    get queue() { return this._queue }
+    get currentPrompt() { return this._currentPrompt }
+    get currentRawContent() { return this._currentRawContent }
+
+    async loadPrompts() {
+      const res = await fetch(`${API}/api/prompts`)
+      const data = await res.json()
+      this._prompts = data.prompts || []
+      this.state.set('promptCount', this._prompts.length)
+      this.emit('prompts:loaded', this._prompts)
+      return this._prompts
+    }
+
+    async loadAssistants() {
+      try {
+        const res = await fetch(`${API}/api/assistants`)
+        const data = await res.json()
+        const assistants = data.assistants || []
+        this.state.set('assistants', assistants)
+        this.emit('assistants:loaded', assistants)
+        return assistants
+      } catch (_e) { return [] }
+    }
+
+    async selectPrompt(slug) {
+      const res = await fetch(`${API}/api/prompt/${slug}`)
+      const data = await res.json()
+      if (data.error) return null
+      this._currentPrompt = data
+      this._currentRawContent = data.rawContent
+      this.state.set('currentSlug', slug)
+      this.emit('prompt:selected', data)
+      return data
+    }
+
+    async savePrompt(slug, content) {
+      this.emit('prompt:saving', slug)
+      await fetch(`${API}/api/prompt/${slug}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      })
+      if (this._currentPrompt?.slug === slug) {
+        this._currentRawContent = content
+        const fresh = await fetch(`${API}/api/prompt/${slug}`)
+        const freshData = await fresh.json()
+        if (!freshData.error) this._currentPrompt = freshData
+      }
+      this.emit('prompt:saved', slug)
+    }
+
+    async createPrompt(title, slug) {
+      const res = await fetch(`${API}/api/prompts/create`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, slug }),
+      })
+      const data = await res.json()
+      if (!data.error) { await this.loadPrompts(); this.emit('prompt:created', data) }
+      return data
+    }
+
+    getInputsDef(slug) {
+      const p = this._prompts.find(pr => pr.slug === slug)
+      return p?.inputs || {}
+    }
+
+    addToQueue(slug, title, inputs = {}, agent = null) {
+      const id = ++this._idCounter
+      const item = { id, slug, title, agent: agent || this.state.get('selectedAgent') || 'claude', inputs, status: 'queued', output: '', controller: null }
+      this._queue.push(item)
+      this.state.set('queueLength', this._queue.length)
+      this.emit('queue:added', item)
+      this.emit('queue:changed')
+      return item
+    }
+
+    updateQueueItem(id, updates) {
+      const item = this._queue.find(q => q.id === id)
+      if (!item) return null
+      Object.assign(item, updates)
+      this.emit('queue:updated', item)
+      this.emit('queue:changed')
+      return item
+    }
+
+    removeQueueItem(id) {
+      const item = this._queue.find(q => q.id === id)
+      if (item?.controller) item.controller.abort()
+      this._queue = this._queue.filter(q => q.id !== id)
+      this.state.set('queueLength', this._queue.length)
+      this.emit('queue:changed')
+    }
+
+    clearDone() {
+      this._queue = this._queue.filter(q => q.status === 'running' || q.status === 'queued')
+      this.state.set('queueLength', this._queue.length)
+      this.emit('queue:changed')
+    }
+
+    rerunQueueItem(id) {
+      const item = this._queue.find(q => q.id === id)
+      if (!item || item.status === 'running') return
+      item.status = 'queued'
+      item.output = ''
+      item.controller = null
+      this.emit('queue:changed')
+      this._startItem(item)
+    }
+
+    runAll() {
+      const toRun = this._queue.filter(q => q.status === 'queued')
+      if (toRun.length === 0) return
+      this.emit('queue:runAll', toRun)
+      toRun.forEach(item => this._startItem(item))
+    }
+
+    async _startItem(item) {
+      item.status = 'running'
+      item.output = ''
+      this.emit('queue:itemStarted', item)
+      this.emit('queue:changed')
+
+      const controller = new AbortController()
+      item.controller = controller
+
+      try {
+        const res = await fetch(`${API}/api/run-prompt/${item.slug}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ agent: item.agent, inputs: item.inputs }),
+          signal: controller.signal,
+        })
+
+        if (!res.ok || !res.body) {
+          item.status = 'error'
+          item.output = res.body ? `HTTP ${res.status}: ${await res.text()}` : 'No response stream'
+          this.emit('queue:itemError', item)
+          this.emit('queue:changed')
+          return
+        }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+          let evt = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) evt = line.slice(7)
+            else if (line.startsWith('data: ')) {
+              try { this._handleSSE(item, evt, JSON.parse(line.slice(6))) } catch (_e) {}
+            }
+          }
+        }
+
+        if (item.status === 'running') {
+          item.status = 'complete'
+          this.emit('queue:itemComplete', item)
+          this.emit('queue:changed')
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          item.status = 'error'
+          item.output += `\n\nError: ${err.message}`
+          this.emit('queue:itemError', item)
+          this.emit('queue:changed')
+        }
+      }
+    }
+
+    _handleSSE(item, event, data) {
+      if (event === 'chunk' || event === 'stderr') {
+        item.output += data.text
+        this.emit('queue:itemOutput', item)
+      } else if (event === 'complete') {
+        item.status = 'complete'
+        this.emit('queue:itemComplete', item)
+        this.emit('queue:changed')
+      } else if (event === 'error') {
+        item.status = 'error'
+        item.output += `\n\n--- Error: ${data.message} ---`
+        this.emit('queue:itemError', item)
+        this.emit('queue:changed')
+      }
+    }
+
+    async evalCode(code) {
+      const res = await fetch(`${API}/api/eval`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      })
+      return res.json()
+    }
+  }
+
+  // Create the feature via container (don't call afterInitialize yet — bind events first)
+  const studio = container.feature('promptStudio')
+  window.studio = studio
+  window.luca = container
+
+  // ── UI Helpers ─────────────────────────
+  let monacoEditor = null, saveTimeout = null
+  const el = id => document.getElementById(id)
+  const promptList = el('prompt-list'), promptTitle = el('prompt-title'), saveIndicator = el('save-indicator')
+  const agentSelect = el('agent-select'), queueBtn = el('queue-btn'), runQueueBtn = el('run-queue-btn')
+  const notebookScroll = el('notebook-scroll'), queueScroll = el('queue-scroll'), queueBadge = el('queue-badge')
+  const inputsBar = el('inputs-bar'), replToggle = el('repl-toggle'), replBody = el('repl-body')
+  const replInput = el('repl-input'), replHistory = el('repl-history')
+  const queueInputsModal = el('queue-inputs-modal'), queueInputsFields = el('queue-inputs-fields')
+  const queueInputsTitle = el('queue-inputs-title'), queueInputsAddBtn = el('queue-inputs-add')
+
+  function esc(str) { const d = document.createElement('div'); d.textContent = String(str || ''); return d.innerHTML }
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
+    document.querySelector(`[data-tab="${name}"]`)?.classList.add('active')
+    el(`panel-${name}`)?.classList.add('active')
+    if (name === 'editor' && monacoEditor) monacoEditor.layout()
+  }
+  document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => switchTab(tab.dataset.tab)))
+
+  // ── Monaco ─────────────────────────────
   require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs' } })
-
   require(['vs/editor/editor.main'], () => {
     monaco.editor.defineTheme('prompt-dark', {
-      base: 'vs-dark',
-      inherit: true,
+      base: 'vs-dark', inherit: true,
       rules: [
         { token: 'comment', foreground: '3a3a50', fontStyle: 'italic' },
         { token: 'keyword', foreground: 'c084fc' },
@@ -669,261 +958,223 @@
         { token: 'type', foreground: '00fff7' },
       ],
       colors: {
-        'editor.background': '#0a0a0f',
-        'editor.foreground': '#e0e0e8',
-        'editor.lineHighlightBackground': '#12121a',
-        'editor.selectionBackground': '#2a2a3e',
-        'editorCursor.foreground': '#00fff7',
-        'editorLineNumber.foreground': '#3a3a50',
-        'editorLineNumber.activeForeground': '#6a6a80',
-        'editor.inactiveSelectionBackground': '#1e1e2e',
+        'editor.background': '#0a0a0f', 'editor.foreground': '#e0e0e8',
+        'editor.lineHighlightBackground': '#12121a', 'editor.selectionBackground': '#2a2a3e',
+        'editorCursor.foreground': '#00fff7', 'editorLineNumber.foreground': '#3a3a50',
+        'editorLineNumber.activeForeground': '#6a6a80', 'editor.inactiveSelectionBackground': '#1e1e2e',
       },
     })
-
-    monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
-      value: '',
-      language: 'markdown',
-      theme: 'prompt-dark',
+    monacoEditor = monaco.editor.create(el('monaco-container'), {
+      value: '', language: 'markdown', theme: 'prompt-dark',
       fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
-      fontSize: 13,
-      lineHeight: 22,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      wordWrap: 'on',
-      tabSize: 2,
-      automaticLayout: true,
-      padding: { top: 12 },
+      fontSize: 13, lineHeight: 22, minimap: { enabled: false },
+      scrollBeyondLastLine: false, wordWrap: 'on', tabSize: 2, automaticLayout: true, padding: { top: 12 },
     })
-
     monacoEditor.onDidChangeModelContent(() => {
-      if (!currentPrompt) return
+      if (!studio.currentPrompt) return
       clearTimeout(saveTimeout)
-      saveIndicator.textContent = 'unsaved'
-      saveIndicator.className = 'save-indicator'
-
+      saveIndicator.textContent = 'unsaved'; saveIndicator.className = 'save-indicator'
       saveTimeout = setTimeout(async () => {
-        const content = monacoEditor.getValue()
-        saveIndicator.textContent = 'saving...'
-        saveIndicator.className = 'save-indicator saving'
-
+        saveIndicator.textContent = 'saving...'; saveIndicator.className = 'save-indicator saving'
         try {
-          await fetch(`${API}/api/prompt/${currentPrompt.slug}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content }),
-          })
-
-          saveIndicator.textContent = 'saved'
-          saveIndicator.className = 'save-indicator saved'
-          currentRawContent = content
-          renderNotebook(content)
-
-          // Re-fetch prompt to get updated meta (e.g. inputs changes)
-          const res = await fetch(`${API}/api/prompt/${currentPrompt.slug}`)
-          const data = await res.json()
-          if (!data.error) {
-            currentPrompt = data
-            renderInputsBar(data.inputs || {})
-          }
-
-          setTimeout(() => { saveIndicator.textContent = ''; saveIndicator.className = 'save-indicator'; }, 2000)
-        } catch (_err) {
-          saveIndicator.textContent = 'save failed'
-          saveIndicator.className = 'save-indicator'
-          saveIndicator.style.color = 'var(--error)'
-        }
+          await studio.savePrompt(studio.currentPrompt.slug, monacoEditor.getValue())
+          saveIndicator.textContent = 'saved'; saveIndicator.className = 'save-indicator saved'
+          renderNotebook(studio.currentRawContent)
+          renderInputsBar(studio.currentPrompt?.inputs || {})
+          setTimeout(() => { saveIndicator.textContent = ''; saveIndicator.className = 'save-indicator' }, 2000)
+        } catch (_) { saveIndicator.textContent = 'save failed'; saveIndicator.style.color = 'var(--error)' }
       }, 800)
     })
-
-    monacoReady = true
-    if (currentPrompt) monacoEditor.setValue(currentRawContent)
+    if (studio.currentPrompt) monacoEditor.setValue(studio.currentRawContent)
   })
 
-  // ── Tabs ───────────────────────────────
-  document.querySelectorAll('.tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
-      tab.classList.add('active')
-      document.getElementById(`panel-${tab.dataset.tab}`).classList.add('active')
-      if (tab.dataset.tab === 'editor' && monacoEditor) monacoEditor.layout()
-    })
+  // ── Feature Event Bindings ─────────────
+  studio.on('prompts:loaded', renderPromptList)
+  studio.on('prompt:selected', (data) => {
+    promptTitle.textContent = data.title; queueBtn.disabled = false; window.location.hash = data.slug
+    document.querySelectorAll('.prompt-item').forEach(li => li.classList.toggle('active', li.dataset.slug === data.slug))
+    if (monacoEditor) monacoEditor.setValue(data.rawContent)
+    renderNotebook(data.rawContent)
+    renderInputsBar(data.inputs || {})
   })
-
-  // ── Load prompts ───────────────────────
-  async function loadPrompts(selectSlug) {
-    try {
-      const res = await fetch(`${API}/api/prompts`)
-      const data = await res.json()
-      prompts = data.prompts || []
-      renderPromptList()
-
-      if (selectSlug) {
-        selectPrompt(selectSlug)
-      } else {
-        const hash = window.location.hash.slice(1)
-        const target = prompts.find(p => p.slug === hash) || prompts[0]
-        if (target) selectPrompt(target.slug)
-      }
-    } catch (err) {
-      console.error('Failed to load prompts:', err)
-      promptList.innerHTML = '<li style="padding:16px;color:var(--error);font-size:12px;">Failed to load</li>'
+  studio.on('assistants:loaded', (assistants) => {
+    agentSelect.innerHTML = '<option value="claude">claude</option>'
+    for (const a of assistants) {
+      if (a.name === 'claude') continue
+      const opt = document.createElement('option'); opt.value = a.name; opt.textContent = a.name; agentSelect.appendChild(opt)
     }
-  }
+  })
+  agentSelect.addEventListener('change', () => studio.state.set('selectedAgent', agentSelect.value))
+  studio.on('ready', () => {
+    const hash = window.location.hash.slice(1)
+    const target = studio.prompts.find(p => p.slug === hash) || studio.prompts[0]
+    if (target) studio.selectPrompt(target.slug)
+  })
 
+  // ── Prompt List ────────────────────────
   function renderPromptList() {
     promptList.innerHTML = ''
-    if (prompts.length === 0) {
-      promptList.innerHTML = '<li style="padding:16px;color:var(--text-dim);font-size:12px;text-align:center;">No prompts yet</li>'
-      return
-    }
-
-    for (const p of prompts) {
+    if (studio.prompts.length === 0) { promptList.innerHTML = '<li style="padding:16px;color:var(--text-dim);font-size:12px;text-align:center;">No prompts yet</li>'; return }
+    for (const p of studio.prompts) {
       const li = document.createElement('li')
-      li.className = `prompt-item${currentPrompt?.slug === p.slug ? ' active' : ''}`
-      li.dataset.slug = p.slug
+      li.className = `prompt-item${studio.currentPrompt?.slug === p.slug ? ' active' : ''}`; li.dataset.slug = p.slug
       const tags = (p.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(' ')
-      const inputs = p.inputs ? Object.keys(p.inputs) : []
-      const inputBadge = inputs.length > 0 ? `<span style="color:var(--orange)">${inputs.length} input${inputs.length > 1 ? 's' : ''}</span>` : ''
-      li.innerHTML = `<div class="prompt-item-title">${esc(p.title)}</div><div class="prompt-item-meta">${tags} ${inputBadge}</div>`
-      li.addEventListener('click', () => selectPrompt(p.slug))
+      const ik = p.inputs ? Object.keys(p.inputs) : []
+      const ib = ik.length > 0 ? `<span style="color:var(--orange)">${ik.length} input${ik.length > 1 ? 's' : ''}</span>` : ''
+      li.innerHTML = `<div class="prompt-item-row"><span class="prompt-item-title">${esc(p.title)}</span><button class="prompt-item-queue-btn" data-queue-slug="${esc(p.slug)}" title="Add to queue">+Q</button></div><div class="prompt-item-meta">${tags} ${ib}</div>`
+      li.addEventListener('click', (e) => { if (!e.target.classList.contains('prompt-item-queue-btn')) studio.selectPrompt(p.slug) })
       promptList.appendChild(li)
     }
-  }
-
-  // ── Select prompt ──────────────────────
-  async function selectPrompt(slug) {
-    try {
-      const res = await fetch(`${API}/api/prompt/${slug}`)
-      const data = await res.json()
-      if (data.error) { console.error(data.error); return }
-
-      currentPrompt = data
-      currentRawContent = data.rawContent
-      window.location.hash = slug
-      promptTitle.textContent = data.title
-      queueBtn.disabled = false
-
-      document.querySelectorAll('.prompt-item').forEach(el => el.classList.toggle('active', el.dataset.slug === slug))
-
-      if (monacoEditor) monacoEditor.setValue(data.rawContent)
-      renderNotebook(data.rawContent)
-      renderInputsBar(data.inputs || {})
-    } catch (err) { console.error('Failed to load prompt:', err) }
+    promptList.querySelectorAll('.prompt-item-queue-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => { e.stopPropagation(); showInputsModal(btn.dataset.queueSlug) })
+    })
   }
 
   // ── Inputs Bar ─────────────────────────
   function renderInputsBar(inputs) {
-    const keys = Object.keys(inputs || {})
-    inputsBar.innerHTML = '<span class="inputs-bar-label">Inputs</span>'
-
-    if (keys.length === 0) {
-      inputsBar.classList.remove('has-inputs')
-      return
-    }
-
+    const keys = Object.keys(inputs || {}); inputsBar.innerHTML = '<span class="inputs-bar-label">Inputs</span>'
+    if (keys.length === 0) { inputsBar.classList.remove('has-inputs'); return }
     inputsBar.classList.add('has-inputs')
-
     for (const key of keys) {
-      const spec = inputs[key]
-      const field = document.createElement('div')
-      field.className = 'input-field'
-      field.innerHTML = `
-        <label>${esc(key)}</label>
-        <input type="text" data-input-key="${esc(key)}" placeholder="${esc(spec.question || spec.description || key)}" />
-      `
+      const spec = inputs[key], field = document.createElement('div'); field.className = 'input-field'
+      field.innerHTML = `<label>${esc(key)}</label><input type="text" data-input-key="${esc(key)}" placeholder="${esc(spec.question || spec.description || key)}" />`
       inputsBar.appendChild(field)
     }
   }
 
-  function getInputValues() {
-    const values = {}
-    inputsBar.querySelectorAll('input[data-input-key]').forEach(el => {
-      const key = el.dataset.inputKey
-      if (el.value.trim()) values[key] = el.value.trim()
-    })
-    return values
+  // ── Inputs Modal (add + edit queue items) ──
+  let modalMode = 'add', modalSlug = null, modalTitle = null, modalEditId = null
+
+  function showInputsModal(slug, existingInputs = null, editId = null) {
+    const p = studio.prompts.find(pr => pr.slug === slug)
+    if (!p) return
+    const inputsDef = p.inputs || {}; modalSlug = slug; modalTitle = p.title
+    if (editId !== null) {
+      modalMode = 'edit'; modalEditId = editId
+      queueInputsTitle.textContent = `Edit: ${p.title}`; queueInputsAddBtn.textContent = 'Save'
+    } else {
+      modalMode = 'add'; modalEditId = null
+      queueInputsTitle.textContent = `Queue: ${p.title}`; queueInputsAddBtn.textContent = 'Add to Queue'
+    }
+    queueInputsFields.innerHTML = ''
+    const keys = Object.keys(inputsDef)
+    if (keys.length === 0 && modalMode === 'add') { studio.addToQueue(slug, p.title, {}, agentSelect.value); return }
+    for (const key of keys) {
+      const spec = inputsDef[key], val = existingInputs?.[key] || '', field = document.createElement('div'); field.className = 'modal-field'
+      field.innerHTML = `<label>${esc(key)}</label><input type="text" data-qi-key="${esc(key)}" placeholder="${esc(spec.description || spec.question || key)}" value="${esc(val)}" />`
+      queueInputsFields.appendChild(field)
+    }
+    queueInputsModal.classList.add('open')
+    const first = queueInputsFields.querySelector('input'); if (first) first.focus()
   }
 
-  // ── Parse markdown into blocks ─────────
+  el('queue-inputs-cancel').addEventListener('click', () => queueInputsModal.classList.remove('open'))
+  queueInputsModal.addEventListener('click', (e) => { if (e.target === queueInputsModal) queueInputsModal.classList.remove('open') })
+  queueInputsFields.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); queueInputsAddBtn.click() } })
+
+  queueInputsAddBtn.addEventListener('click', () => {
+    const inputs = {}
+    queueInputsFields.querySelectorAll('input[data-qi-key]').forEach(i => { if (i.value.trim()) inputs[i.dataset.qiKey] = i.value.trim() })
+    if (modalMode === 'edit' && modalEditId !== null) studio.updateQueueItem(modalEditId, { inputs })
+    else studio.addToQueue(modalSlug, modalTitle, inputs, agentSelect.value)
+    queueInputsModal.classList.remove('open')
+  })
+
+  // ── Header Buttons ─────────────────────
+  queueBtn.addEventListener('click', () => { if (studio.currentPrompt) showInputsModal(studio.currentPrompt.slug) })
+  runQueueBtn.addEventListener('click', () => { switchTab('queue'); studio.runAll() })
+  el('clear-queue-btn').addEventListener('click', () => studio.clearDone())
+
+  // ── Queue UI (fully event-driven) ──────
+  function renderQueueUI() {
+    const queue = studio.queue
+    const qc = queue.filter(q => q.status === 'queued').length, rc = queue.filter(q => q.status === 'running').length
+    queueBadge.style.display = (qc + rc) > 0 ? '' : 'none'; queueBadge.textContent = qc + rc
+    runQueueBtn.disabled = qc === 0
+    if (queue.length === 0) { queueScroll.innerHTML = '<div class="queue-empty">Queue is empty. Select a prompt and click "+ Queue" to add it.</div>'; return }
+    queueScroll.innerHTML = ''
+    for (const item of queue) {
+      const div = document.createElement('div'); div.className = `queue-item ${item.status}`; div.dataset.queueId = item.id
+      const isum = Object.entries(item.inputs || {}).map(([k,v]) => `${k}=${v}`).join(', ')
+      const ilbl = isum ? ` (${isum})` : ''
+      const isQueued = item.status === 'queued', isDone = item.status === 'complete' || item.status === 'error'
+      div.innerHTML = `
+        <div class="queue-item-header">
+          <span class="queue-item-dot ${item.status}"></span>
+          <span class="queue-item-title">${esc(item.title)}${esc(ilbl)}</span>
+          <span class="queue-item-agent">${esc(item.agent)}</span>
+          <span class="queue-item-status">${item.status}</span>
+          <div class="queue-item-actions">
+            ${isQueued ? `<button class="qi-action-btn edit" data-edit-id="${item.id}" data-edit-slug="${item.slug}">Edit</button>` : ''}
+            ${isDone ? `<button class="qi-action-btn rerun" data-rerun-id="${item.id}">Rerun</button>` : ''}
+            ${isDone ? `<button class="qi-action-btn edit" data-edit-id="${item.id}" data-edit-slug="${item.slug}">Edit & Rerun</button>` : ''}
+            ${item.status !== 'running' ? `<button class="queue-item-remove" data-remove-id="${item.id}">&times;</button>` : ''}
+          </div>
+        </div>
+        <div class="queue-item-body">
+          <div class="queue-item-output" id="queue-output-${item.id}">${item.output ? renderMarkdownRich(item.output) : '<span style="color:var(--text-faint);font-size:12px;">Waiting for output...</span>'}</div>
+        </div>`
+      queueScroll.appendChild(div)
+    }
+    queueScroll.querySelectorAll('.queue-item-remove').forEach(b => b.addEventListener('click', () => studio.removeQueueItem(parseInt(b.dataset.removeId))))
+    queueScroll.querySelectorAll('[data-rerun-id]').forEach(b => b.addEventListener('click', () => studio.rerunQueueItem(parseInt(b.dataset.rerunId))))
+    queueScroll.querySelectorAll('[data-edit-id]').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = parseInt(b.dataset.editId), item = studio.queue.find(q => q.id === id)
+        if (!item) return
+        const isRerun = b.textContent.includes('Rerun')
+        showInputsModal(item.slug, item.inputs, id)
+        if (isRerun) {
+          // After modal closes via submit, also trigger rerun
+          const orig = queueInputsAddBtn.onclick
+          const handler = () => { setTimeout(() => studio.rerunQueueItem(id), 50); queueInputsAddBtn.removeEventListener('click', handler) }
+          queueInputsAddBtn.addEventListener('click', handler)
+        }
+      })
+    })
+  }
+
+  studio.on('queue:changed', renderQueueUI)
+  studio.on('queue:itemOutput', (item) => {
+    const out = el(`queue-output-${item.id}`)
+    if (out) { out.innerHTML = renderMarkdownRich(item.output); const body = out.closest('.queue-item-body'); if (body) body.scrollTop = body.scrollHeight }
+    const dot = document.querySelector(`[data-queue-id="${item.id}"] .queue-item-dot`)
+    if (dot) dot.className = `queue-item-dot ${item.status}`
+  })
+
+  // ── Notebook ───────────────────────────
   function parseMarkdownBlocks(text) {
     let content = text
-    if (content.startsWith('---')) {
-      const end = content.indexOf('---', 3)
-      if (end !== -1) content = content.slice(end + 3).trim()
-    }
-
-    const blocks = []
-    const lines = content.split('\n')
-    let i = 0
-
+    if (content.startsWith('---')) { const end = content.indexOf('---', 3); if (end !== -1) content = content.slice(end + 3).trim() }
+    const blocks = [], lines = content.split('\n'); let i = 0
     while (i < lines.length) {
-      const fenceMatch = lines[i].match(/^```(\w*)(.*)$/)
-      if (fenceMatch) {
-        const lang = fenceMatch[1] || '', meta = fenceMatch[2]?.trim() || ''
-        const codeLines = []
-        i++
-        while (i < lines.length && !lines[i].match(/^```\s*$/)) { codeLines.push(lines[i]); i++ }
-        i++
-        blocks.push({ type: 'code', lang, meta, code: codeLines.join('\n') })
-      } else {
-        const proseLines = [lines[i]]
-        i++
-        while (i < lines.length && !lines[i].match(/^```/)) { proseLines.push(lines[i]); i++ }
-        const prose = proseLines.join('\n').trim()
-        if (prose) blocks.push({ type: 'prose', text: prose })
-      }
-    }
-    return blocks
+      const m = lines[i].match(/^```(\w*)(.*)$/); if (m) {
+        const lang = m[1] || '', meta = m[2]?.trim() || '', cl = []; i++
+        while (i < lines.length && !lines[i].match(/^```\s*$/)) { cl.push(lines[i]); i++ }; i++
+        blocks.push({ type: 'code', lang, meta, code: cl.join('\n') })
+      } else { const pl = [lines[i]]; i++; while (i < lines.length && !lines[i].match(/^```/)) { pl.push(lines[i]); i++ }
+        const prose = pl.join('\n').trim(); if (prose) blocks.push({ type: 'prose', text: prose }) }
+    }; return blocks
   }
 
-  // ── Render notebook ────────────────────
-  function renderNotebook(rawContent) {
-    const blocks = parseMarkdownBlocks(rawContent)
-    notebookScroll.innerHTML = ''
-
-    if (blocks.length === 0) {
-      notebookScroll.innerHTML = '<div class="empty-state"><p>Empty prompt. Switch to Source to start writing.</p></div>'
-      return
-    }
-
+  function renderNotebook(raw) {
+    const blocks = parseMarkdownBlocks(raw); notebookScroll.innerHTML = ''
+    if (blocks.length === 0) { notebookScroll.innerHTML = '<div class="empty-state"><p>Empty prompt. Switch to Source to start writing.</p></div>'; return }
     blocks.forEach((block, idx) => {
-      const el = document.createElement('div')
-      el.className = 'nb-block'
-
-      if (block.type === 'prose') {
-        el.innerHTML = `<div class="nb-prose">${renderMarkdown(block.text)}</div>`
-      } else {
-        const isRunnable = ['ts', 'typescript', 'js', 'javascript'].includes(block.lang)
-        el.innerHTML = `
-          <div class="nb-code-block">
-            <div class="nb-code-header">
-              <span class="nb-code-lang">${esc(block.lang || 'text')}</span>
-              ${block.meta ? `<span style="font-size:10px;color:var(--text-faint)">${esc(block.meta)}</span>` : ''}
-              <div class="nb-code-spacer"></div>
-              ${isRunnable ? `<button class="nb-run-btn" data-idx="${idx}">Run</button>` : ''}
-            </div>
-            <div class="nb-code-body">${highlightCode(block.code)}</div>
-            <div class="nb-output" id="nb-output-${idx}"></div>
-          </div>
-        `
-      }
-      notebookScroll.appendChild(el)
+      const d = document.createElement('div'); d.className = 'nb-block'
+      if (block.type === 'prose') { d.innerHTML = `<div class="nb-prose">${renderMarkdown(block.text)}</div>` }
+      else {
+        const run = ['ts','typescript','js','javascript'].includes(block.lang)
+        d.innerHTML = `<div class="nb-code-block"><div class="nb-code-header"><span class="nb-code-lang">${esc(block.lang||'text')}</span>${block.meta?`<span style="font-size:10px;color:var(--text-faint)">${esc(block.meta)}</span>`:''}<div class="nb-code-spacer"></div>${run?`<button class="nb-run-btn" data-idx="${idx}">Run</button>`:''}</div><div class="nb-code-body">${highlightCode(block.code)}</div><div class="nb-output" id="nb-output-${idx}"></div></div>`
+      }; notebookScroll.appendChild(d)
     })
-
-    // Bind run buttons
     notebookScroll.querySelectorAll('.nb-run-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        const idx = parseInt(btn.dataset.idx)
-        const block = blocks[idx]
-        if (!block) return
+        const block = blocks[parseInt(btn.dataset.idx)]; if (!block) return
         btn.classList.add('running'); btn.textContent = '...'
-        const out = document.getElementById(`nb-output-${idx}`)
-        out.innerHTML = '<div class="nb-output-label">Running...</div>'
+        const out = el(`nb-output-${btn.dataset.idx}`); out.innerHTML = '<div class="nb-output-label">Running...</div>'
         try {
-          const res = await fetch(`${API}/api/eval`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: block.code }) })
-          const data = await res.json()
-          let h = ''
+          const data = await studio.evalCode(block.code); let h = ''
           if (data.output) h += `<div class="nb-output-label">Output</div><div class="nb-output-text">${esc(data.output)}</div>`
           if (data.error) h += `<div class="nb-output-label">Error</div><div class="nb-output-error">${esc(data.error)}</div>`
           if (data.result !== undefined && data.result !== 'undefined') h += `<div class="nb-output-result">${esc(data.result)}</div>`
@@ -932,27 +1183,18 @@
         btn.classList.remove('running'); btn.textContent = 'Run'
       })
     })
-
-    // Re-attach REPL
-    document.getElementById('panel-notebook').appendChild(document.querySelector('.repl-container'))
+    el('panel-notebook').appendChild(document.querySelector('.repl-container'))
   }
 
   // ── REPL ───────────────────────────────
   let replOpen = false
   replToggle.addEventListener('click', () => { replOpen = !replOpen; replToggle.classList.toggle('open', replOpen); replBody.classList.toggle('open', replOpen); if (replOpen) replInput.focus() })
-
   async function evalRepl() {
-    const code = replInput.value.trim()
-    if (!code) return
-    replInput.value = ''
-    const entry = document.createElement('div')
-    entry.className = 'repl-entry'
-    entry.innerHTML = `<div class="repl-entry-input">${esc(code)}</div>`
-    replHistory.appendChild(entry)
+    const code = replInput.value.trim(); if (!code) return; replInput.value = ''
+    const entry = document.createElement('div'); entry.className = 'repl-entry'
+    entry.innerHTML = `<div class="repl-entry-input">${esc(code)}</div>`; replHistory.appendChild(entry)
     try {
-      const res = await fetch(`${API}/api/eval`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code }) })
-      const data = await res.json()
-      let h = ''
+      const data = await studio.evalCode(code); let h = ''
       if (data.output) h += `<div class="repl-entry-output">${esc(data.output)}</div>`
       if (data.error) h += `<div class="repl-entry-error">${esc(data.error)}</div>`
       if (data.result !== undefined && data.result !== 'undefined') h += `<div class="repl-entry-output" style="color:var(--accent)">${esc(data.result)}</div>`
@@ -960,360 +1202,48 @@
     } catch (e) { entry.innerHTML += `<div class="repl-entry-error">${esc(e.message)}</div>` }
     replHistory.scrollTop = replHistory.scrollHeight
   }
-
-  replSend.addEventListener('click', evalRepl)
+  el('repl-send').addEventListener('click', evalRepl)
   replInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); evalRepl() } })
 
-  // ── Queue System ───────────────────────
-  let queueIdCounter = 0
-
-  queueBtn.addEventListener('click', () => {
-    if (!currentPrompt) return
-    const id = ++queueIdCounter
-    const inputs = getInputValues()
-
-    queue.push({
-      id,
-      slug: currentPrompt.slug,
-      title: currentPrompt.title,
-      agent: agentSelect.value,
-      inputs,
-      status: 'queued',
-      output: '',
-      controller: null,
-    })
-
-    updateQueueUI()
-    runQueueBtn.disabled = false
-  })
-
-  runQueueBtn.addEventListener('click', () => {
-    // Start all queued items in parallel
-    const toRun = queue.filter(q => q.status === 'queued')
-    if (toRun.length === 0) return
-
-    // Switch to queue tab
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
-    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'))
-    document.querySelector('[data-tab="queue"]').classList.add('active')
-    document.getElementById('panel-queue').classList.add('active')
-
-    toRun.forEach(item => startQueueItem(item))
-    updateQueueUI()
-  })
-
-  document.getElementById('clear-queue-btn').addEventListener('click', () => {
-    queue = queue.filter(q => q.status === 'running' || q.status === 'queued')
-    updateQueueUI()
-  })
-
-  async function startQueueItem(item) {
-    item.status = 'running'
-    item.output = ''
-    updateQueueUI()
-
-    const controller = new AbortController()
-    item.controller = controller
-
-    console.log(`[queue] starting item #${item.id}: slug=${item.slug} agent=${item.agent} inputs=`, item.inputs)
-
-    try {
-      const url = `${API}/api/run-prompt/${item.slug}`
-      const body = JSON.stringify({ agent: item.agent, inputs: item.inputs })
-      console.log(`[queue] POST ${url}`, body)
-
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body,
-        signal: controller.signal,
-      })
-
-      console.log(`[queue] response status=${res.status} ok=${res.ok} type=${res.headers.get('content-type')}`)
-
-      if (!res.ok) {
-        const text = await res.text()
-        console.error(`[queue] HTTP error ${res.status}:`, text)
-        item.status = 'error'
-        item.output = `HTTP ${res.status}: ${text}`
-        updateQueueUI()
-        return
-      }
-
-      if (!res.body) {
-        console.error(`[queue] no response body (ReadableStream not available)`)
-        item.status = 'error'
-        item.output = 'Error: No response body stream'
-        updateQueueUI()
-        return
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          console.log(`[queue] stream done for item #${item.id}`)
-          break
-        }
-
-        const chunk = decoder.decode(value, { stream: true })
-        buffer += chunk
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        let currentEvent = ''
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7)
-          } else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-              console.log(`[queue] SSE event=${currentEvent}`, currentEvent === 'chunk' ? `(${data.text?.length} chars)` : data)
-              handleQueueEvent(item, currentEvent, data)
-            } catch (parseErr) {
-              console.error(`[queue] JSON parse error on line:`, line, parseErr)
-            }
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.trim()) {
-        console.log(`[queue] processing remaining buffer (${buffer.length} chars)`)
-        const lines = buffer.split('\n')
-        let currentEvent = ''
-        for (const line of lines) {
-          if (line.startsWith('event: ')) currentEvent = line.slice(7)
-          else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-              handleQueueEvent(item, currentEvent, data)
-            } catch (parseErr) {
-              console.error(`[queue] JSON parse error on remaining:`, line, parseErr)
-            }
-          }
-        }
-      }
-
-      if (item.status === 'running') {
-        item.status = 'complete'
-        console.log(`[queue] item #${item.id} completed (stream ended)`)
-        updateQueueUI()
-      }
-    } catch (err) {
-      console.error(`[queue] fetch/stream error for item #${item.id}:`, err)
-      if (err.name !== 'AbortError') {
-        item.status = 'error'
-        item.output += `\n\nError: ${err.message}`
-        updateQueueUI()
-      }
-    }
-  }
-
-  function handleQueueEvent(item, event, data) {
-    switch (event) {
-      case 'chunk':
-        item.output += data.text
-        updateQueueItemOutput(item)
-        break
-      case 'stderr':
-        item.output += data.text
-        updateQueueItemOutput(item)
-        break
-      case 'complete':
-        item.status = 'complete'
-        updateQueueUI()
-        break
-      case 'error':
-        item.status = 'error'
-        item.output += `\n\n--- Error: ${data.message} ---`
-        updateQueueUI()
-        break
-      case 'status':
-        // Just UI feedback — no change needed
-        break
-    }
-  }
-
-  function updateQueueItemOutput(item) {
-    const outputEl = document.getElementById(`queue-output-${item.id}`)
-    if (outputEl) {
-      outputEl.innerHTML = renderMarkdownRich(item.output)
-      // Auto-scroll if expanded
-      const body = outputEl.closest('.queue-item-body')
-      if (body) body.scrollTop = body.scrollHeight
-    }
-
-    // Update status dot
-    const dot = document.querySelector(`[data-queue-id="${item.id}"] .queue-item-dot`)
-    if (dot) dot.className = `queue-item-dot ${item.status}`
-  }
-
-  function updateQueueUI() {
-    const queuedCount = queue.filter(q => q.status === 'queued').length
-    const runningCount = queue.filter(q => q.status === 'running').length
-    const total = queue.length
-
-    // Badge
-    const activeCount = queuedCount + runningCount
-    if (activeCount > 0) {
-      queueBadge.style.display = ''
-      queueBadge.textContent = activeCount
-    } else {
-      queueBadge.style.display = 'none'
-    }
-
-    runQueueBtn.disabled = queuedCount === 0
-
-    // Render list
-    if (total === 0) {
-      queueScroll.innerHTML = '<div class="queue-empty">Queue is empty. Select a prompt and click "+ Queue" to add it.</div>'
-      return
-    }
-
-    queueScroll.innerHTML = ''
-    for (const item of queue) {
-      const el = document.createElement('div')
-      el.className = `queue-item ${item.status}`
-      el.dataset.queueId = item.id
-
-      // Auto-expand running items
-      if (item.status === 'running') el.classList.add('expanded')
-
-      const inputSummary = Object.entries(item.inputs || {}).map(([k,v]) => `${k}=${v}`).join(', ')
-      const inputLabel = inputSummary ? ` (${inputSummary})` : ''
-
-      el.innerHTML = `
-        <div class="queue-item-header">
-          <span class="queue-item-dot ${item.status}"></span>
-          <span class="queue-item-title">${esc(item.title)}${esc(inputLabel)}</span>
-          <span class="queue-item-agent">${esc(item.agent)}</span>
-          <span class="queue-item-status">${item.status}</span>
-          <span class="queue-item-chevron">&#9654;</span>
-          ${item.status !== 'running' ? `<button class="queue-item-remove" data-remove-id="${item.id}">&times;</button>` : ''}
-        </div>
-        <div class="queue-item-body">
-          <div class="queue-item-output" id="queue-output-${item.id}">${item.output ? renderMarkdownRich(item.output) : '<span style="color:var(--text-faint);font-size:12px;">Waiting for output...</span>'}</div>
-        </div>
-      `
-
-      queueScroll.appendChild(el)
-    }
-
-    // Bind toggle
-    queueScroll.querySelectorAll('.queue-item-header').forEach(header => {
-      header.addEventListener('click', (e) => {
-        if (e.target.classList.contains('queue-item-remove')) return
-        header.closest('.queue-item').classList.toggle('expanded')
-      })
-    })
-
-    // Bind remove
-    queueScroll.querySelectorAll('.queue-item-remove').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const id = parseInt(btn.dataset.removeId)
-        const item = queue.find(q => q.id === id)
-        if (item?.controller) item.controller.abort()
-        queue = queue.filter(q => q.id !== id)
-        updateQueueUI()
-      })
-    })
-  }
-
-  // ── New Prompt Modal ──────────────────
-  const newModal = document.getElementById('new-modal')
-  const newTitle = document.getElementById('new-title')
-  const newSlug = document.getElementById('new-slug')
-
-  document.getElementById('new-prompt-btn').addEventListener('click', () => { newTitle.value = ''; newSlug.value = ''; newModal.classList.add('open'); newTitle.focus() })
-  newTitle.addEventListener('input', () => { newSlug.value = newTitle.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') })
-  document.getElementById('new-cancel').addEventListener('click', () => newModal.classList.remove('open'))
+  // ── New Prompt Modal ───────────────────
+  const newModal = el('new-modal'), newTitleEl = el('new-title'), newSlugEl = el('new-slug')
+  el('new-prompt-btn').addEventListener('click', () => { newTitleEl.value = ''; newSlugEl.value = ''; newModal.classList.add('open'); newTitleEl.focus() })
+  newTitleEl.addEventListener('input', () => { newSlugEl.value = newTitleEl.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') })
+  el('new-cancel').addEventListener('click', () => newModal.classList.remove('open'))
   newModal.addEventListener('click', (e) => { if (e.target === newModal) newModal.classList.remove('open') })
-
-  document.getElementById('new-create').addEventListener('click', async () => {
-    const title = newTitle.value.trim()
-    const slug = newSlug.value.trim()
-    if (!title || !slug) return
-
-    try {
-      const res = await fetch(`${API}/api/prompts/create`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, slug }),
-      })
-      const data = await res.json()
-      if (data.error) { alert(data.error); return }
-
-      newModal.classList.remove('open')
-      await loadPrompts(data.slug)
-    } catch (err) { alert('Failed to create prompt: ' + err.message) }
+  el('new-create').addEventListener('click', async () => {
+    const t = newTitleEl.value.trim(), s = newSlugEl.value.trim(); if (!t || !s) return
+    const data = await studio.createPrompt(t, s)
+    if (data.error) { alert(data.error); return }
+    newModal.classList.remove('open'); studio.selectPrompt(data.slug)
   })
 
-  // ── Load assistants ───────────────────
-  async function loadAssistants() {
-    try {
-      const res = await fetch(`${API}/api/assistants`)
-      const data = await res.json()
-      agentSelect.innerHTML = '<option value="claude">claude</option>'
-      for (const a of (data.assistants || [])) {
-        if (a.name === 'claude') continue
-        const opt = document.createElement('option')
-        opt.value = a.name; opt.textContent = a.name
-        agentSelect.appendChild(opt)
-      }
-    } catch (_e) {}
-  }
-
-  // ── Markdown rendering ────────────────
+  // ── Markdown & Highlighting ────────────
   function renderMarkdown(text) {
-    if (!text) return ''
-    let h = esc(text)
-    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    h = h.replace(/\*(.+?)\*/g, '<em>$1</em>')
-    h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    h = h.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-    h = h.replace(/^- (.+)$/gm, '<li>$1</li>')
-    h = h.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
-    h = h.replace(/\n\n/g, '</p><p>')
-    h = '<p>' + h + '</p>'
-    h = h.replace(/<p><\/p>/g, '')
-    h = h.replace(/<p>(<(?:h[123]|[uo]l|blockquote)>)/g, '$1')
-    h = h.replace(/(<\/(?:h[123]|[uo]l|blockquote)>)<\/p>/g, '$1')
+    if (!text) return ''; let h = esc(text)
+    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>')
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    h = h.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>').replace(/^- (.+)$/gm, '<li>$1</li>')
+    h = h.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>').replace(/\n\n/g, '</p><p>')
+    h = '<p>' + h + '</p>'; h = h.replace(/<p><\/p>/g, '')
+    h = h.replace(/<p>(<(?:h[123]|[uo]l|blockquote)>)/g, '$1').replace(/(<\/(?:h[123]|[uo]l|blockquote)>)<\/p>/g, '$1')
     return h
   }
-
   function renderMarkdownRich(text) {
-    if (!text) return ''
-    let h = esc(text)
+    if (!text) return ''; let h = esc(text)
     h = h.replace(/```(\w*)\n([\s\S]*?)```/g, (_, l, c) => `<pre><code>${c.trim()}</code></pre>`)
-    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    h = h.replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    h = h.replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    h = h.replace(/\*(.+?)\*/g, '<em>$1</em>')
-    h = h.replace(/`([^`]+)`/g, '<code>$1</code>')
-    h = h.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
-    h = h.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
-    h = h.replace(/^- (.+)$/gm, '<li>$1</li>')
+    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>')
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    h = h.replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>').replace(/^- (.+)$/gm, '<li>$1</li>')
     h = h.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
     h = h.replace(/^\d+\.\s+(.+)$/gm, '<oli>$1</oli>')
     h = h.replace(/((?:<oli>.*<\/oli>\n?)+)/g, m => '<ol>' + m.replace(/<\/?oli>/g, t => t.replace('oli', 'li')) + '</ol>')
-    h = h.replace(/\n\n/g, '</p><p>')
-    h = '<p>' + h + '</p>'
-    h = h.replace(/<p><\/p>/g, '')
-    h = h.replace(/<p>(<(?:h[123]|pre|[uo]l|blockquote)>)/g, '$1')
-    h = h.replace(/(<\/(?:h[123]|pre|[uo]l|blockquote)>)<\/p>/g, '$1')
+    h = h.replace(/\n\n/g, '</p><p>'); h = '<p>' + h + '</p>'; h = h.replace(/<p><\/p>/g, '')
+    h = h.replace(/<p>(<(?:h[123]|pre|[uo]l|blockquote)>)/g, '$1').replace(/(<\/(?:h[123]|pre|[uo]l|blockquote)>)<\/p>/g, '$1')
     return h
   }
-
   function highlightCode(code) {
     let h = esc(code)
     h = h.replace(/\b(const|let|var|function|async|await|return|import|export|from|if|else|for|while|new|class|this|try|catch|throw|typeof|instanceof|in|of)\b/g, '<span class="kw">$1</span>')
@@ -1323,11 +1253,8 @@
     return h
   }
 
-  function esc(str) { const d = document.createElement('div'); d.textContent = String(str || ''); return d.innerHTML }
-
-  // ── Boot ───────────────────────────────
-  loadPrompts()
-  loadAssistants()
+  // ── Boot (after all event bindings) ────
+  await studio.afterInitialize()
 </script>
 </body>
 </html>

@@ -75,8 +75,27 @@ The `luca` binary is available in the path. Key commands:
 - `commands/` — custom CLI commands, run via `luca <commandName>` (auto-discovered)
 - `endpoints/` — file-based HTTP routes, served via `luca serve` (auto-discovered)
 - `features/` — custom container features, discovered via `container.helpers.discoverAll()` (auto-discovered)
+- `workflows/` — self-contained workflow apps, each with `luca.serve.ts`, `endpoints/`, `public/`, and `ABOUT.md`
 - `docs/` — content documents managed by the `contentDb` feature (`container.docs`). See [contentbase](https://github.com/soederpop/contentbase) for the document model system.
 - `luca.cli.ts` — optional project-level CLI customization (runs before any command)
+
+### Developing Workflow Services
+
+Workflows live in `workflows/<name>/` and can be launched for development with `luca serve` directly:
+
+```shell
+luca serve \
+  --setup workflows/<name>/luca.serve.ts \
+  --endpoints-dir workflows/<name>/endpoints \
+  --staticDir workflows/<name>/public \
+  --port 7700 \
+  --no-open \
+  --force
+```
+
+This gives you a dev server you can iterate on without the window manager lifecycle that `luca workflow <name>` adds. The `--force` flag claims the port even if occupied, `--no-open` prevents auto-launching a browser.
+
+To run a workflow with full window management and auto-cleanup, use `luca workflow <name>` instead.
 
 ### Markdown is Runnable with Luca
 
