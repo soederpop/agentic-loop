@@ -348,7 +348,7 @@
 <div class="card" id="card">
   <div class="card-header">
     <h1>CAPTURE</h1>
-    <p>Record a new idea. It'll be filed as a spark.</p>
+    <p>Record a new idea. It'll start in exploring status.</p>
   </div>
   <div class="card-body" id="form-view">
     <!-- Existing ideas for context -->
@@ -393,7 +393,7 @@
   <div class="card-body success-state" id="success-view" style="display:none;">
     <div class="check">&#10003;</div>
     <h2 id="success-title">Idea filed</h2>
-    <p id="success-detail">Saved as a spark.</p>
+    <p id="success-detail">Saved and ready to explore.</p>
     <button class="btn btn-submit" id="another-btn">Capture Another</button>
   </div>
 </div>
@@ -694,8 +694,8 @@
     document.getElementById('success-title').textContent = `"${data.title}" filed`
     const goalName = store.getGoal(lastCaptured?.goal)?.title
     document.getElementById('success-detail').textContent = goalName
-      ? `Saved as a spark under ${goalName}`
-      : 'Saved as a spark'
+      ? `Saved under ${goalName}`
+      : 'Saved and ready to explore'
     formView.style.display = 'none'
     successView.style.display = ''
   })

@@ -261,6 +261,99 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   animation: pulse 1s ease-in-out infinite;
 }
 @keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* ── Prompt Runner Drawer ───────── */
+.drawer-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200;
+}
+.drawer-overlay.open { display: block; }
+
+.drawer {
+  position: fixed; top: 0; right: -60vw; width: 60vw; height: 100vh;
+  background: var(--bg); border-left: 1px solid var(--border);
+  z-index: 201; display: flex; flex-direction: column;
+  transition: right 0.25s ease;
+}
+.drawer.open { right: 0; }
+
+.drawer-header {
+  padding: 8px 12px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 10px; background: var(--surface);
+  flex-shrink: 0;
+}
+.drawer-header-title {
+  font-size: 10px; font-weight: 700; color: var(--purple);
+  letter-spacing: 2px; text-transform: uppercase;
+}
+.drawer-header .spacer { flex: 1; }
+.drawer-close {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-size: 14px; cursor: pointer; padding: 1px 8px;
+  font-family: var(--mono);
+}
+.drawer-close:hover { color: var(--text); border-color: var(--border-light); }
+
+.drawer-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+.drawer-editor-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.drawer-editor-toolbar {
+  padding: 6px 10px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; background: var(--surface);
+  flex-shrink: 0;
+}
+.drawer-filename-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 3px 8px;
+  outline: none; width: 200px;
+}
+.drawer-filename-input:focus { border-color: var(--purple); }
+
+#monacoContainer { flex: 1; min-height: 0; }
+
+.drawer-actions {
+  padding: 8px 10px; border-top: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; background: var(--surface);
+  flex-shrink: 0;
+}
+.btn-run {
+  background: var(--purple-dim); border-color: var(--purple); color: var(--purple); font-weight: 600;
+}
+.btn-run:hover { background: #a78bfa30; }
+.btn-run.running { opacity: 0.5; pointer-events: none; }
+
+.drawer-output-area {
+  height: 35%; min-height: 100px; max-height: 50%;
+  border-top: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+  flex-shrink: 0;
+}
+.drawer-output-header {
+  padding: 4px 10px; font-size: 9px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.drawer-output-header .spacer { flex: 1; }
+.drawer-output {
+  flex: 1; overflow-y: auto; padding: 8px 10px; font-family: var(--mono);
+  font-size: 11px; line-height: 1.6; color: var(--text-dim);
+  white-space: pre-wrap; word-break: break-word; background: var(--bg);
+}
+
+.btn-prompt-runner {
+  background: var(--purple-dim); border-color: var(--purple); color: var(--purple);
+  font-weight: 600; font-size: 10px;
+}
+.btn-prompt-runner:hover { background: #a78bfa30; }
+
+.saved-prompts-dropdown { position: relative; display: inline-block; }
+.saved-prompts-menu {
+  display: none; position: absolute; bottom: 100%; left: 0; z-index: 100;
+  background: var(--surface-2); border: 1px solid var(--border-light); border-radius: var(--radius);
+  min-width: 200px; max-height: 200px; overflow-y: auto; margin-bottom: 2px;
+}
+.saved-prompts-menu.open { display: block; }
 </style>
 </head>
 <body>
@@ -298,6 +391,47 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   </span>
 
   <button class="btn btn-deploy" id="deployBtn">Deploy</button>
+  <span class="sep"></span>
+  <button class="btn btn-prompt-runner" id="promptRunnerBtn">Prompt Runner</button>
+</div>
+
+<!-- ── Prompt Runner Drawer ────────── -->
+<div class="drawer-overlay" id="drawerOverlay"></div>
+<div class="drawer" id="promptDrawer">
+  <div class="drawer-header">
+    <span class="drawer-header-title">prompt runner</span>
+    <span class="spacer"></span>
+    <button class="drawer-close" id="drawerCloseBtn">&times;</button>
+  </div>
+  <div class="drawer-body">
+    <div class="drawer-editor-area">
+      <div class="drawer-editor-toolbar">
+        <input class="drawer-filename-input" id="promptFilename" value="build-assistant" placeholder="filename (no extension)">
+        <span style="color:var(--text-faint);font-size:10px;">.md</span>
+        <span class="spacer" style="flex:1"></span>
+        <div class="saved-prompts-dropdown">
+          <button class="btn btn-sm" id="loadPromptBtn">Saved</button>
+          <div class="saved-prompts-menu" id="savedPromptsMenu"></div>
+        </div>
+      </div>
+      <div id="monacoContainer"></div>
+    </div>
+    <div class="drawer-actions">
+      <button class="btn btn-run" id="runPromptBtn">Run</button>
+      <button class="btn btn-sm" id="stopPromptBtn" style="display:none;color:var(--error);border-color:var(--error);">Stop</button>
+      <span id="promptStatus" style="font-size:10px;color:var(--text-faint);"></span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="btn btn-sm" id="clearOutputBtn">Clear Output</button>
+    </div>
+    <div class="drawer-output-area">
+      <div class="drawer-output-header">
+        <span>output</span>
+        <span class="spacer"></span>
+        <span id="promptExitCode" style="font-size:9px;"></span>
+      </div>
+      <div class="drawer-output" id="promptOutput"></div>
+    </div>
+  </div>
 </div>
 
 <!-- ── Main ──────────────────────── -->
@@ -1288,6 +1422,264 @@ window.app = app
 window.luca = container
 
 await app.start()
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Prompt Runner Drawer — Monaco editor + luca prompt execution
+// ═══════════════════════════════════════════════════════════════════════════
+const $drawer = document.getElementById('promptDrawer')
+const $drawerOverlay = document.getElementById('drawerOverlay')
+const $promptRunnerBtn = document.getElementById('promptRunnerBtn')
+const $drawerCloseBtn = document.getElementById('drawerCloseBtn')
+const $promptFilename = document.getElementById('promptFilename')
+const $runPromptBtn = document.getElementById('runPromptBtn')
+const $stopPromptBtn = document.getElementById('stopPromptBtn')
+const $promptOutput = document.getElementById('promptOutput')
+const $promptStatus = document.getElementById('promptStatus')
+const $promptExitCode = document.getElementById('promptExitCode')
+const $clearOutputBtn = document.getElementById('clearOutputBtn')
+const $loadPromptBtn = document.getElementById('loadPromptBtn')
+const $savedPromptsMenu = document.getElementById('savedPromptsMenu')
+
+let monacoEditor = null
+let monacoReady = false
+let currentAbortController = null
+
+const DEFAULT_PROMPT = `---
+title: Build Assistant
+description: Use the luca-framework skill to scaffold an assistant
+---
+
+# Build an Assistant
+
+Use the luca-framework skill to build a new assistant.
+
+## Requirements
+
+- Name: \${assistantName}
+- Description: A helpful assistant that can...
+
+## Instructions
+
+1. Use \`luca scaffold\` to generate the assistant boilerplate
+2. Customize the CORE.md system prompt
+3. Add any tools the assistant needs
+4. Test it works with \`luca describe\`
+`
+
+function openDrawer() {
+  $drawerOverlay.classList.add('open')
+  $drawer.classList.add('open')
+  if (!monacoReady) loadMonaco()
+}
+
+function closeDrawer() {
+  $drawerOverlay.classList.remove('open')
+  $drawer.classList.remove('open')
+}
+
+$promptRunnerBtn.addEventListener('click', openDrawer)
+$drawerCloseBtn.addEventListener('click', closeDrawer)
+$drawerOverlay.addEventListener('click', closeDrawer)
+
+// Escape key closes drawer
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && $drawer.classList.contains('open')) closeDrawer()
+})
+
+// ── Monaco Editor Setup ──
+function loadMonaco() {
+  const loaderScript = document.createElement('script')
+  loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
+  loaderScript.onload = () => {
+    window.require.config({
+      paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' }
+    })
+    window.require(['vs/editor/editor.main'], (monaco) => {
+      // Define a dark theme matching our palette
+      monaco.editor.defineTheme('assistant-designer', {
+        base: 'vs-dark',
+        inherit: true,
+        rules: [
+          { token: 'comment', foreground: '505068' },
+          { token: 'keyword', foreground: 'a78bfa' },
+          { token: 'string', foreground: '4ade80' },
+          { token: 'number', foreground: 'fb923c' },
+          { token: 'type', foreground: '60a5fa' },
+        ],
+        colors: {
+          'editor.background': '#131320',
+          'editor.foreground': '#c8c8d8',
+          'editor.lineHighlightBackground': '#1a1a26',
+          'editor.selectionBackground': '#2c2c40',
+          'editorCursor.foreground': '#a78bfa',
+          'editorLineNumber.foreground': '#505068',
+          'editorLineNumber.activeForeground': '#7e7e98',
+          'editor.inactiveSelectionBackground': '#212130',
+        }
+      })
+
+      monacoEditor = monaco.editor.create(document.getElementById('monacoContainer'), {
+        value: DEFAULT_PROMPT,
+        language: 'markdown',
+        theme: 'assistant-designer',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 12,
+        lineHeight: 1.7 * 12,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        wordWrap: 'on',
+        padding: { top: 10, bottom: 10 },
+        renderLineHighlight: 'line',
+        lineNumbers: 'on',
+        glyphMargin: false,
+        folding: true,
+        automaticLayout: true,
+        tabSize: 2,
+      })
+
+      monacoReady = true
+
+      // Cmd/Ctrl+Enter to run
+      monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+        runPrompt()
+      })
+    })
+  }
+  document.head.appendChild(loaderScript)
+}
+
+// ── Run Prompt ──
+async function runPrompt() {
+  if (!monacoEditor) return
+  const content = monacoEditor.getValue()
+  if (!content.trim()) return
+
+  const filename = $promptFilename.value.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'prompt'
+
+  $runPromptBtn.classList.add('running')
+  $runPromptBtn.textContent = 'Running...'
+  $stopPromptBtn.style.display = ''
+  $promptStatus.textContent = 'Starting...'
+  $promptExitCode.textContent = ''
+  $promptOutput.textContent = ''
+
+  currentAbortController = new AbortController()
+
+  try {
+    const res = await fetch(`${API}/api/prompt-runner`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, filename }),
+      signal: currentAbortController.signal,
+    })
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    let eventType = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) { eventType = line.slice(7).trim(); continue }
+        if (!line.startsWith('data: ')) continue
+
+        let data
+        try { data = JSON.parse(line.slice(6)) } catch { continue }
+
+        if (eventType === 'status') {
+          $promptStatus.textContent = data.message
+        } else if (eventType === 'output') {
+          $promptOutput.textContent += data.text
+          $promptOutput.scrollTop = $promptOutput.scrollHeight
+          $promptStatus.textContent = 'Running...'
+        } else if (eventType === 'done') {
+          const code = data.exitCode
+          $promptExitCode.textContent = code === 0 ? 'exit: 0' : `exit: ${code}`
+          $promptExitCode.style.color = code === 0 ? 'var(--accent)' : 'var(--error)'
+          $promptStatus.textContent = code === 0 ? 'Completed' : 'Failed'
+        } else if (eventType === 'error') {
+          $promptOutput.textContent += `\nERROR: ${data.message}\n`
+          $promptStatus.textContent = 'Error'
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') {
+      $promptOutput.textContent += `\nError: ${err.message}\n`
+      $promptStatus.textContent = 'Error'
+    } else {
+      $promptStatus.textContent = 'Stopped'
+    }
+  } finally {
+    $runPromptBtn.classList.remove('running')
+    $runPromptBtn.textContent = 'Run'
+    $stopPromptBtn.style.display = 'none'
+    currentAbortController = null
+  }
+}
+
+$runPromptBtn.addEventListener('click', runPrompt)
+
+$stopPromptBtn.addEventListener('click', () => {
+  if (currentAbortController) {
+    currentAbortController.abort()
+  }
+})
+
+$clearOutputBtn.addEventListener('click', () => {
+  $promptOutput.textContent = ''
+  $promptExitCode.textContent = ''
+  $promptStatus.textContent = ''
+})
+
+// ── Load Saved Prompts ──
+$loadPromptBtn.addEventListener('click', async () => {
+  $savedPromptsMenu.classList.toggle('open')
+  if ($savedPromptsMenu.classList.contains('open')) {
+    try {
+      const res = await fetch(`${API}/api/prompt-runner`)
+      const data = await res.json()
+      const prompts = data.prompts || []
+      if (prompts.length === 0) {
+        $savedPromptsMenu.innerHTML = '<div style="padding:8px 10px;color:var(--text-faint);font-size:11px;">No saved prompts</div>'
+      } else {
+        $savedPromptsMenu.innerHTML = prompts.map(p =>
+          `<button class="loader-item" data-path="${esc(p.path)}" data-name="${esc(p.name)}">${esc(p.name)}</button>`
+        ).join('')
+        $savedPromptsMenu.querySelectorAll('.loader-item').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            $savedPromptsMenu.classList.remove('open')
+            $promptFilename.value = btn.dataset.name
+            // Fetch file content via eval endpoint
+            const evalRes = await fetch(`${API}/api/eval`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ code: `await container.feature('fs').readFile('${btn.dataset.path}', 'utf8')` }),
+            })
+            const evalData = await evalRes.json()
+            if (evalData.ok && monacoEditor) {
+              // The eval returns JSON-stringified content, parse it
+              try {
+                const content = JSON.parse(evalData.output)
+                monacoEditor.setValue(content)
+              } catch {
+                monacoEditor.setValue(evalData.output || '')
+              }
+            }
+          })
+        })
+      }
+    } catch {}
+    setTimeout(() => document.addEventListener('click', () => $savedPromptsMenu.classList.remove('open'), { once: true }), 0)
+  }
+})
 </script>
 </body>
 </html>

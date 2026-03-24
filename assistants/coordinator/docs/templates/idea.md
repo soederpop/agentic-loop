@@ -1,7 +1,7 @@
 ---
 goal:
 tags: []
-status: spark
+status: exploring
 ---
 
 # {{title}}

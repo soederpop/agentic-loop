@@ -98,6 +98,11 @@ export const schemas = {
 
 	ls: z.object({}).describe('List the available documents in the contentbase collection'),
 
+	commitFile: z.object({
+		filePath: z.string().min(1).describe('The path of the file to commit, relative to the repo root (e.g. docs/memories/SELF.md)'),
+		message: z.string().min(1).describe('The commit message'),
+	}).describe('Stage and commit exactly one file. Use this right after updateDocument to commit the change. Only the specified file will be staged — other working tree changes are left untouched.'),
+
 }
 
 export async function ls() : Promise<string> {
@@ -208,6 +213,21 @@ export async function updateDocument(options: z.infer<typeof schemas.updateDocum
 
 	return { success: true }
 }
+
+export async function commitFile(options: z.infer<typeof schemas.commitFile>): Promise<{ success: boolean, error?: string }> {
+	const { filePath, message } = options
+	const proc = assistant.container.feature('proc')
+	const cwd = assistant.container.cwd
+
+	try {
+		await proc.exec(`git -C "${cwd}" add -- "${filePath}"`)
+		await proc.exec(`git -C "${cwd}" commit -m "${message.replace(/"/g, '\\"')}" -- "${filePath}"`)
+		return { success: true }
+	} catch (err: any) {
+		return { success: false, error: err?.message || String(err) }
+	}
+}
+
 export async function getOverallStatusSummary(
 	options?: z.infer<typeof schemas.getOverallStatusSummary>
 ): Promise<{ json: OverallStatusSummary; markdown?: string }> {

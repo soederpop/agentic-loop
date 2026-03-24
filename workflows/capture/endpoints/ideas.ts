@@ -37,7 +37,7 @@ export async function post(_params: any, ctx: any) {
     '---',
     goal ? `goal: ${goal}` : 'goal:',
     `tags: [${tagList.map((t: string) => `"${t}"`).join(', ')}]`,
-    'status: spark',
+    'status: exploring',
     '---',
   ].join('\n')
 
