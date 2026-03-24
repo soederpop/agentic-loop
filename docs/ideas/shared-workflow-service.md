@@ -7,7 +7,7 @@ tags:
   - chat
   - streaming
   - architecture
-status: ready
+status: promoted
 ---
 
 # Shared Workflow Service
