@@ -10,7 +10,7 @@ export const argsSchema = z.object({
   target: z.string()
     .optional()
     .describe('Which assistant to route to'),
-  text: z.boolean().default(false).describe('Force text mode — pretty-printed markdown output'),
+  mode: z.enum(['voice','text']).default('voice').describe('How you want the assistant to respond'),
   dry: z.boolean().default(false).describe('Dry run — show routing info without executing'),
 })
 
@@ -77,7 +77,7 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
   const entry = assistantsManager.get(matchedAssistant)
   const hasVoiceConfig = !!entry?.hasVoice
 
-  const useVoice = hasVoiceConfig && !options.text
+  const useVoice = hasVoiceConfig && options.mode == 'voice'
 
   // Dry run mode — show what we know
   if (options.dry) {

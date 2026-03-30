@@ -1,17 +1,13 @@
-voiceId: TTmUgRoiAUdn043OgRax 
-conversationModePrefix: "[fast paced english narrator]"
+voiceId: F3hPNAbHQ6mTZdjfgZdb
+conversationModePrefix: '[strong, motivational]'
 voiceSettings:
-  stability: 0.35
-  similarityBoost: 0.8
-  style: 0.6
+  stability: 0.71
+  similarityBoost: 1
+  style: 0.8
   speed: 1.05
   useSpeakerBoost: true
 aliases:
-  - chief
+  - iceman
 phrases:
-  greeting:
-    - "Hello"
-    - "Top of the morning"
-  thinking:
-    - "Let me think about that"
-    - "Thinking..."
+  greeting: []
+modelId: eleven_v3

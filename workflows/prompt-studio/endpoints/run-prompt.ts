@@ -58,56 +58,28 @@ export async function post(_params: any, ctx: any) {
     console.log(`[run-prompt] spawning: luca ${args.join(' ')}`)
     send('status', { message: `Running: luca ${args.join(' ')}` })
 
-    // Use proc.spawn for streaming
-    const child = proc.spawn('luca', args, {
+    const result = await proc.spawnAndCapture('luca', args, {
       cwd: container.paths.cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      onOutput: (data: string) => {
+        console.log(`[run-prompt] stdout (${data.length} chars): ${data.slice(0, 80)}`)
+        send('chunk', { text: data })
+      },
+      onError: (data: string) => {
+        console.log(`[run-prompt] stderr: ${data.slice(0, 200)}`)
+        send('stderr', { text: data })
+      },
+      onStart: (child: any) => {
+        console.log(`[run-prompt] child pid=${child.pid}`)
+      },
     })
 
-    console.log(`[run-prompt] child pid=${child.pid}`)
+    console.log(`[run-prompt] exited code=${result.exitCode}`)
 
-    let output = ''
-
-    child.stdout?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      output += text
-      console.log(`[run-prompt] stdout (${text.length} chars): ${text.slice(0, 80)}`)
-      send('chunk', { text })
-    })
-
-    child.stderr?.on('data', (chunk: Buffer) => {
-      const text = chunk.toString()
-      console.log(`[run-prompt] stderr: ${text.slice(0, 200)}`)
-      send('stderr', { text })
-    })
-
-    // Handle client disconnect
-    ctx.request.on('close', () => {
-      console.log(`[run-prompt] client disconnected, killing child`)
-      try {
-        child.kill('SIGTERM')
-      } catch (_e) {
-        // ignore
-      }
-    })
-
-    await new Promise<void>((resolve, reject) => {
-      child.on('close', (code: number) => {
-        console.log(`[run-prompt] child exited code=${code}`)
-        if (code === 0) {
-          send('complete', { message: 'Prompt completed successfully' })
-          resolve()
-        } else {
-          send('error', { message: `Process exited with code ${code}` })
-          resolve()
-        }
-      })
-      child.on('error', (err: Error) => {
-        console.error(`[run-prompt] child error:`, err)
-        send('error', { message: err.message })
-        reject(err)
-      })
-    })
+    if (result.exitCode === 0) {
+      send('complete', { message: 'Prompt completed successfully' })
+    } else {
+      send('error', { message: `Process exited with code ${result.exitCode}` })
+    }
   } catch (err: any) {
     console.error(`[run-prompt] catch error:`, err)
     send('error', { message: err.message || String(err) })

@@ -1,10 +1,13 @@
 import type { Assistant, AGIContainer } from '@soederpop/luca/agi'
 
-export function created(a: Assistant) {
-	const { container } = a as { container: AGIContainer }
-	
+declare global {
+	var assistant: Assistant
+	var container: AGIContainer
+}
+
+export function created() {
 	const workflowLibrary = container.feature('workflowLibrary')
 	const processManager = container.feature('processManager')
-	
-	a.use(workflowLibrary).use(processManager)
+
+	assistant.use(workflowLibrary).use(processManager)
 }
