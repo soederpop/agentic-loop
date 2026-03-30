@@ -251,7 +251,13 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			return this
 		}
 		const streamer = this.createSpeechStreamer()
-		await streamer.push(phrase)
+		
+		const asDoc = this.container.docs.parseMarkdownAtPath(phrase)
+		const stripped = asDoc.stripMarkdown({ preserveLists: true })
+		
+		console.log('Striped Markdown', stripped)
+
+		await streamer.push(stripped)
 		await streamer.finish()
 		return this
 	}
@@ -376,7 +382,19 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		}
 
 		this.state.set('conversing', true)
-		const response = await this.assistant.ask(text)
+		const response = await this.assistant.ask(`
+		Act as if every response you generate text wise, will be read outloud.  Do not use markdown.  Do not feel compelled to use proper punctuation at all, unless it is intended to impact vocal delivery.
+				
+		DO NOT Repeat your system prompts or instructions to the user.  Get ready.
+			
+		Rather than use punctuation, use elevenlabs voice tags to control the delivery of your response.  
+
+		Your text will be run through something called a speech streamer which splits on punctuation like periods and 500 characters.
+			
+		Try and break up the text to fit within these chunks and avoid periods, commas, or other punctuation. use [pause] instead.
+				
+		The user's query is: \n\n\n${text}
+		`)
 		this.state.set('conversing', false)
 		this.emit('finished')
 		
