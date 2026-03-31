@@ -1,5 +1,5 @@
-voiceId: TTmUgRoiAUdn043OgRax 
-conversationModePrefix: "[fast paced english narrator]"
+voiceId: ulEiUT06p4S3sHtsvn4T 
+conversationModePrefix: "[coach voice]"
 voiceSettings:
   stability: 0.35
   similarityBoost: 0.8

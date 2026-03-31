@@ -2,14 +2,32 @@ import { z } from 'zod'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 
+const VOICE_INSTRUCTIONS_PRE = `
+RESPOND WITH TWO SENTENCES MAX.
+
+**VERY IMPORTANT**: DO NOT RESPOND IN MARKDOWN. EVERYTHING YOU SAY WILL BE PIPED THROUGH TO ELEVENLABS ELEVEN_V3 Model.
+BE BRIEF.  ONE to THREE SENTENCES MAX.  DON'T OVERLY ENCOURAGE FOLLOW UP QUESTIONS, I WILL ALWAYS FOLLOW UP IF I WANT TO.
+DO NOT USE MARKDOWN, EMOJIS, OR ANYTHING THAT CAN'T'T BE TURNED INTO SPEECH. 
+
+YOU CAN USE [emotion] TAGS to [direct] THE DELIVERY OF YOUR RESPONSE.
+
+AVOID LONG STREAMS OF TOOL CALLS WITHOUT A BREAK TO EXPLAIN WHAT YOU ARE DOING AND WHY. TO THE USER'S PERSPECTIVE THIS SEEMS LIKE AWKWARD SILENCE AND LEADS TO CONFUSION.
+`
+
+export const positionals = ['assistant']
+
 export const argsSchema = CommandOptionsSchema.extend({
 	assistant: z.string().default('chiefOfStaff').describe('Which assistant to chat with'),
-	silenceTimeout: z.number().default(4).describe('Seconds to wait for speech before giving up'),
+	silenceTimeout: z.number().default(3).describe('Seconds to wait for speech before giving up'),
 })
 
 async function demo(options: z.infer<typeof argsSchema>, context: ContainerContext) {
 	const { container } = context
 	await container.helpers.discover('features')
+
+	const assistantsManager = container.feature('assistantsManager')
+
+	await assistantsManager.discover()
 
 	const ink = container.feature('ink', { enable: true })
 	await ink.loadModules()
@@ -24,9 +42,10 @@ async function demo(options: z.infer<typeof argsSchema>, context: ContainerConte
 	await router.loadHandlers()
 
 	const listener = container.feature('voiceListener')
-	const voiceChat = container.feature('voiceChat', {
-		assistant: options.assistant,
-		playPhrases: true,
+	const voiceChat = container.feature('voiceChat', { 
+		assistant: options.assistant, 
+		playPhrases: false,
+		appendPrompt: `DO NOT RESPOND WITH MARKDOWN OR EMOJIS. YOU ARE IN VOICE MODE, KEEP RESPONSES TO 3 SENTENCES MAX.`
 	}) as any
 
 	await voiceChat.start()

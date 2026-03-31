@@ -4,6 +4,8 @@ import { FeatureOptionsSchema, FeatureStateSchema } from '@soederpop/luca/schema
 import type { AGIContainer, NodeContainer, Assistant, AssistantsManager } from '@soederpop/luca/agi'
 import { SpeechStreamer } from '../voice/speech-streamer'
 
+const MAX_TOKENS_FOR_VOICE_MODE = String(process.env.MAX_VOICE_CHAT_TOKENS) !== 'undefined' ? parseInt(process.env.MAX_VOICE_CHAT_TOKENS!, 10) : 250;
+
 type PhraseManifestEntry = {
 	id: string
 	text: string
@@ -86,11 +88,22 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			throw new Error('AssistantsManager not found')
 		}
 
-		return this.assistantsManager.create(this.options.assistant, {
-			...(this.options.prependPrompt ? { prependPrompt: this.options.prependPrompt } : {}),
+		const prependPrompt = [
+			`You are in VOICE MODE.  Please keep responses under 3 short sentences`,
+			this.options.prependPrompt || '',
+		].join('\n')
+    
+		const createOptions = {
+			prependPrompt,
 			...(this.options.appendPrompt ? { appendPrompt: this.options.appendPrompt } : {}),
 			...(this.options.historyMode ? { historyMode: this.options.historyMode } : {}),
-		})
+			maxTokens: MAX_TOKENS_FOR_VOICE_MODE, 
+			temperature: 0.3 
+		} 
+		
+		//console.log('Creating Assistant with Options', createOptions)
+
+		return this.assistantsManager.create(this.options.assistant, createOptions)
 	}
 
 	async start() {
