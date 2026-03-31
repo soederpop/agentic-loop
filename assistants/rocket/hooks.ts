@@ -8,6 +8,10 @@ declare global {
 export function created() {
 	const workflowLibrary = container.feature('workflowLibrary')
 	const processManager = container.feature('processManager')
+	const windowManager = container.feature('windowManager')
 
-	assistant.use(workflowLibrary).use(processManager)
+	assistant
+		.use(workflowLibrary)
+		.use(processManager)
+		.use(windowManager)
 }

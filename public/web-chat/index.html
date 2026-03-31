@@ -25,6 +25,8 @@
     --tool-accent: #f59e0b;
     --tool-ok: #39ff14;
     --tool-err: #ff003c;
+    --mic: #ff3cac;
+    --mic-dim: #ff3cac22;
   }
 
   html, body {
@@ -99,6 +101,39 @@
     border-color: var(--accent);
   }
 
+  /* ── Voice Toggle ───────────────────────── */
+  #voice-toggle {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 4px 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    transition: all 0.15s;
+    letter-spacing: 0.5px;
+  }
+
+  #voice-toggle:hover {
+    border-color: var(--mic);
+    color: var(--mic);
+  }
+
+  #voice-toggle.voice-active {
+    background: var(--mic-dim);
+    border-color: var(--mic);
+    color: var(--mic);
+    box-shadow: 0 0 8px var(--mic-dim);
+  }
+
+  #voice-toggle .voice-icon {
+    font-size: 13px;
+  }
+
   /* ── Messages ───────────────────────────── */
   #messages {
     flex: 1;
@@ -123,6 +158,10 @@
     background: var(--user-bg);
     border: 1px solid var(--border);
     color: var(--text);
+  }
+
+  .message.user.voice-message {
+    border-color: var(--mic);
   }
 
   .message.assistant {
@@ -170,6 +209,12 @@
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(4px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 var(--mic-dim); }
+    70% { box-shadow: 0 0 0 8px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
   }
 
   /* ── Tool Activity ───────────────────────── */
@@ -305,6 +350,7 @@
     gap: 8px;
     flex-shrink: 0;
     background: var(--surface);
+    align-items: flex-end;
   }
 
   #input-area textarea {
@@ -321,11 +367,17 @@
     min-height: 42px;
     max-height: 120px;
     line-height: 1.4;
+    transition: border-color 0.15s;
   }
 
   #input-area textarea:focus {
     border-color: var(--accent);
     box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  #input-area textarea.listening-active {
+    border-color: var(--mic);
+    box-shadow: 0 0 0 1px var(--mic-dim);
   }
 
   #input-area textarea::placeholder {
@@ -345,6 +397,7 @@
     letter-spacing: 0.5px;
     flex-shrink: 0;
     transition: opacity 0.15s;
+    height: 42px;
   }
 
   #input-area button:disabled {
@@ -355,6 +408,105 @@
   #input-area button:hover:not(:disabled) {
     opacity: 0.85;
   }
+
+  /* ── Mic Button ─────────────────────────── */
+  #mic-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-size: 18px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+
+  #mic-btn:hover:not(:disabled) {
+    border-color: var(--mic);
+    color: var(--mic);
+    background: var(--mic-dim);
+  }
+
+  #mic-btn.active {
+    border-color: var(--mic);
+    color: var(--mic);
+    background: var(--mic-dim);
+    animation: pulse-ring 1.2s ease-out infinite;
+  }
+
+  #mic-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+  }
+
+  /* ── Voice Status Bar ────────────────────── */
+  #voice-status {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  #voice-status.visible {
+    display: flex;
+  }
+
+  .voice-state-label {
+    font-size: 11px;
+    letter-spacing: 1px;
+    color: var(--mic);
+    min-width: 100px;
+    flex-shrink: 0;
+  }
+
+  .voice-preview-text {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-style: italic;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .vu-track {
+    display: flex;
+    gap: 2px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .vu-segment {
+    width: 4px;
+    height: 14px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: background 0.05s, box-shadow 0.05s;
+  }
+
+  .vu-segment.lit {
+    background: var(--tool-ok);
+    box-shadow: 0 0 4px var(--tool-ok);
+  }
+
+  .vu-segment.lit.hot {
+    background: var(--tool-accent);
+    box-shadow: 0 0 4px var(--tool-accent);
+  }
+
+  .vu-segment.lit.clip {
+    background: var(--error);
+    box-shadow: 0 0 4px var(--error);
+  }
 </style>
 </head>
 <body>
@@ -364,13 +516,24 @@
   <span id="dot" class="dot disconnected"></span>
   <span id="status" class="status">connecting…</span>
   <span class="spacer"></span>
+  <button id="voice-toggle" title="Enable voice mode">
+    <span class="voice-icon">⬤</span>
+    <span class="voice-label">VOICE</span>
+  </button>
   <select id="assistant-picker" title="Switch assistant"></select>
 </header>
 
 <div id="messages"></div>
 
+<div id="voice-status">
+  <span class="voice-state-label"></span>
+  <span class="voice-preview-text"></span>
+  <div class="vu-track"></div>
+</div>
+
 <div id="input-area">
   <textarea id="input" placeholder="Say something…" rows="1"></textarea>
+  <button id="mic-btn" title="Click to speak">🎤</button>
   <button id="send" disabled>SEND</button>
 </div>
 
@@ -383,6 +546,8 @@
   const statusEl = document.getElementById('status')
   const pickerEl = document.getElementById('assistant-picker')
   const logoEl = document.querySelector('header .logo')
+  const voiceToggleBtn = document.getElementById('voice-toggle')
+  const micBtn = document.getElementById('mic-btn')
 
   let ws = null
   let connected = false
@@ -391,9 +556,9 @@
   let streamingEl = null
 
   // ── Tool activity state ────────────────
-  let toolActivityEl = null   // current .tool-activity container
-  let toolItems = {}          // name → DOM element for the current response
-  let toolCount = 0           // tools seen in current response
+  let toolActivityEl = null
+  let toolItems = {}
+  let toolCount = 0
 
   // ── Session identity ───────────────────
   function getSessionId() {
@@ -434,7 +599,6 @@
         pickerEl.appendChild(opt)
       }
 
-      // Restore saved selection or use default
       const saved = getAssistantId()
       const valid = assistantList.some(a => a.id === saved)
       pickerEl.value = valid ? saved : defaultAssistant
@@ -447,7 +611,6 @@
     const newAssistant = pickerEl.value
     setAssistantId(newAssistant)
     updateLogo(newAssistant)
-    // Clear messages and reconnect with new assistant
     messagesEl.innerHTML = ''
     if (ws) ws.close()
   })
@@ -455,6 +618,147 @@
   function updateLogo(assistantId) {
     logoEl.textContent = assistantId.toUpperCase()
   }
+
+  // ── Voice mode ─────────────────────────
+  let voiceModeOn = localStorage.getItem('web-chat-voice-mode') === 'on'
+
+  // Voice states: idle | listening | recording | transcribing
+  let voiceState = 'idle'
+  let voiceWs = null
+  let voiceWsPort = null
+  const VU_SEGMENTS = 16
+
+  const voiceStatusEl = document.getElementById('voice-status')
+  const voiceStateLabelEl = voiceStatusEl.querySelector('.voice-state-label')
+  const voicePreviewEl = voiceStatusEl.querySelector('.voice-preview-text')
+  const vuTrackEl = voiceStatusEl.querySelector('.vu-track')
+
+  // Build VU segments
+  for (let i = 0; i < VU_SEGMENTS; i++) {
+    const seg = document.createElement('div')
+    seg.className = 'vu-segment'
+    vuTrackEl.appendChild(seg)
+  }
+
+  function setVuLevel(level) {
+    const segments = vuTrackEl.querySelectorAll('.vu-segment')
+    const lit = Math.round(level * VU_SEGMENTS)
+    segments.forEach((seg, i) => {
+      const active = i < lit
+      seg.classList.toggle('lit', active)
+      seg.classList.toggle('hot', active && i >= VU_SEGMENTS * 0.7)
+      seg.classList.toggle('clip', active && i >= VU_SEGMENTS * 0.9)
+    })
+  }
+
+  function setVoiceState(state, previewText) {
+    voiceState = state
+    const labels = { listening: 'LISTENING…', recording: 'RECORDING', transcribing: 'TRANSCRIBING…', idle: '' }
+    voiceStateLabelEl.textContent = labels[state] || ''
+    voicePreviewEl.textContent = previewText || ''
+    voiceStatusEl.classList.toggle('visible', state !== 'idle')
+    vuTrackEl.style.display = (state === 'recording') ? 'flex' : 'none'
+    if (state === 'idle') setVuLevel(0)
+    micBtn.classList.toggle('active', state !== 'idle')
+    micBtn.disabled = streaming || state !== 'idle'
+    inputEl.classList.toggle('listening-active', state === 'recording')
+  }
+
+  function connectVoiceWs() {
+    if (voiceWs || !voiceWsPort) return
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+    voiceWs = new WebSocket(`${proto}://${location.hostname}:${voiceWsPort}`)
+
+    voiceWs.onmessage = (evt) => {
+      let msg
+      try { msg = JSON.parse(evt.data) } catch { return }
+
+      switch (msg.type) {
+        case 'voice_listening':
+          setVoiceState('listening')
+          break
+        case 'voice_recording':
+          setVoiceState('recording')
+          break
+        case 'voice_transcribing':
+          setVoiceState('transcribing')
+          setVuLevel(0)
+          break
+        case 'voice_vu':
+          setVuLevel(msg.level)
+          break
+        case 'voice_preview':
+          voicePreviewEl.textContent = msg.text
+          inputEl.value = msg.text
+          autoResize()
+          break
+        case 'voice_complete':
+          setVoiceState('idle')
+          if (msg.text && msg.text.trim()) {
+            inputEl.value = msg.text.trim()
+            autoResize()
+            if (voiceModeOn && connected && initialized && !streaming) {
+              sendMessage()
+            }
+          }
+          break
+        case 'voice_error':
+          setVoiceState('idle')
+          appendMessage('error', `Voice error: ${msg.message}`)
+          break
+      }
+    }
+
+    voiceWs.onclose = () => {
+      voiceWs = null
+      if (voiceState !== 'idle') setVoiceState('idle')
+    }
+
+    voiceWs.onerror = () => { voiceWs?.close() }
+  }
+
+  function disconnectVoiceWs() {
+    if (voiceWs) {
+      voiceWs.close()
+      voiceWs = null
+    }
+    setVoiceState('idle')
+  }
+
+  function toggleVoiceMode() {
+    voiceModeOn = !voiceModeOn
+    localStorage.setItem('web-chat-voice-mode', voiceModeOn ? 'on' : 'off')
+    updateVoiceModeUI()
+
+    if (connected && initialized) {
+      ws.send(JSON.stringify({ type: 'set_voice_mode', mode: voiceModeOn ? 'always' : 'off' }))
+    }
+
+    if (voiceModeOn) {
+      if (voiceWsPort) connectVoiceWs()
+      else loadConfig().then(connectVoiceWs)
+    } else {
+      disconnectVoiceWs()
+    }
+  }
+
+  function updateVoiceModeUI() {
+    voiceToggleBtn.classList.toggle('voice-active', voiceModeOn)
+    voiceToggleBtn.title = voiceModeOn ? 'Voice ON — click to disable' : 'Enable voice mode'
+    micBtn.style.display = voiceModeOn ? 'flex' : 'none'
+    inputEl.placeholder = voiceModeOn ? 'Type or tap mic to speak…' : 'Say something…'
+  }
+
+  // Default silence timeout matches voice-chat CLI default (3s)
+  const SILENCE_TIMEOUT_S = 3
+
+  function triggerVoiceListen() {
+    if (!voiceWs || voiceWs.readyState !== WebSocket.OPEN || voiceState !== 'idle' || streaming) return
+    voiceWs.send(JSON.stringify({ type: 'start_voice', silenceTimeout: SILENCE_TIMEOUT_S }))
+  }
+
+  voiceToggleBtn.addEventListener('click', toggleVoiceMode)
+  micBtn.addEventListener('click', triggerVoiceListen)
 
   // ── WebSocket ──────────────────────────
   function connect() {
@@ -467,13 +771,8 @@
       dotEl.classList.remove('disconnected')
       statusEl.textContent = 'connected'
 
-      // Send init with session and assistant
       const assistantId = pickerEl.value || getAssistantId() || defaultAssistant
-      ws.send(JSON.stringify({
-        type: 'init',
-        sessionId,
-        assistantId,
-      }))
+      ws.send(JSON.stringify({ type: 'init', sessionId, assistantId }))
     }
 
     ws.onclose = () => {
@@ -508,6 +807,10 @@
         if (msg.historyLength > 1) {
           appendMessage('system', `Session resumed (${msg.historyLength - 1} messages in history)`)
         }
+        // Sync voice mode with server
+        if (voiceModeOn) {
+          ws.send(JSON.stringify({ type: 'set_voice_mode', mode: 'always' }))
+        }
         break
 
       case 'init_error':
@@ -516,7 +819,6 @@
 
       case 'assistant_message_start':
         streaming = true
-        // Reset tool activity for new response
         toolActivityEl = null
         toolItems = {}
         toolCount = 0
@@ -524,6 +826,8 @@
         streamingEl.classList.add('streaming')
         addCursor(streamingEl)
         sendBtn.disabled = true
+        micBtn.disabled = true
+        micBtn.classList.remove('active')
         break
 
       case 'chunk':
@@ -552,7 +856,12 @@
         streaming = false
         streamingEl = null
         sendBtn.disabled = false
+        micBtn.disabled = voiceState !== 'idle'
         inputEl.focus()
+        break
+
+      case 'voice_mode_changed':
+        // Server acknowledged voice mode change
         break
 
       case 'error':
@@ -560,6 +869,7 @@
         streaming = false
         streamingEl = null
         sendBtn.disabled = false
+        micBtn.disabled = voiceState !== 'idle'
         break
     }
   }
@@ -584,7 +894,6 @@
     wrapper.appendChild(toggle)
     wrapper.appendChild(list)
 
-    // Insert before the streaming assistant message (or at the end)
     if (streamingEl) {
       messagesEl.insertBefore(wrapper, streamingEl)
     } else {
@@ -600,11 +909,7 @@
     const countEl = toolActivityEl.querySelector('.tool-count')
     if (countEl) {
       const running = Object.values(toolItems).filter(el => el.querySelector('.running')).length
-      if (running > 0) {
-        countEl.textContent = `${running} running`
-      } else {
-        countEl.textContent = `${toolCount} completed`
-      }
+      countEl.textContent = running > 0 ? `${running} running` : `${toolCount} completed`
     }
   }
 
@@ -649,9 +954,7 @@
       const summarySpan = document.createElement('span')
       summarySpan.className = 'tool-summary'
       summarySpan.textContent = msg.summary
-      item.addEventListener('click', () => {
-        item.classList.toggle('show-detail')
-      })
+      item.addEventListener('click', () => item.classList.toggle('show-detail'))
       item.style.cursor = 'pointer'
       item.appendChild(summarySpan)
     }
@@ -696,8 +999,10 @@
     const text = inputEl.value.trim()
     if (!text || !connected || !initialized || streaming) return
 
-    appendMessage('user', text)
-    ws.send(JSON.stringify({ type: 'user_message', text }))
+    const msgEl = appendMessage('user', text)
+    if (voiceModeOn) msgEl.classList.add('voice-message')
+
+    ws.send(JSON.stringify({ type: 'user_message', text, voice: voiceModeOn }))
     inputEl.value = ''
     autoResize()
   }
@@ -711,7 +1016,6 @@
     }
   })
 
-  // Auto-resize textarea
   function autoResize() {
     inputEl.style.height = 'auto'
     inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px'
@@ -719,6 +1023,22 @@
   inputEl.addEventListener('input', autoResize)
 
   // ── Start ──────────────────────────────
+  updateVoiceModeUI()
+
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/config')
+      const data = await res.json()
+      voiceWsPort = data.voiceWsPort
+    } catch (e) {
+      console.error('Failed to load config', e)
+    }
+  }
+
+  loadConfig().then(() => {
+    if (voiceModeOn) connectVoiceWs()
+  })
+
   loadAssistants().then(connect)
 })()
 </script>

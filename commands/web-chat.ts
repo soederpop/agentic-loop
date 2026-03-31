@@ -4,12 +4,13 @@ import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 import type { AssistantsManager } from '@soederpop/luca/agi'
 import type { ChatService } from '../features/chat-service'
+import type { VoiceListener } from '../features/voice-listener'
 
 export const argsSchema = CommandOptionsSchema.extend({
-	port: z.number().default(3100).describe('Port to listen on'),
+	port: z.number().optional().describe('Port to listen on (default: any available port)'),
 	host: z.string().default('0.0.0.0').describe('Host to bind to (0.0.0.0 for LAN)'),
 	assistant: z.string().default('chiefOfStaff').describe('Default assistant to use'),
-	open: z.boolean().default(false).describe('Open browser on start'),
+	'open-browser': z.boolean().default(false).describe('Open in browser instead of window manager'),
 })
 
 function getLanAddress(): string | null {
@@ -26,16 +27,10 @@ function getLanAddress(): string | null {
 
 async function handler(options: z.infer<typeof argsSchema>, context: ContainerContext) {
 	const { container } = context
-	const { port, host } = options
+	const { host } = options
 
-	const isPortTaken = await container.networking.isPortOpen(port).then(r => !r)
-
-	if (isPortTaken) {
-		const pids = container.proc.findPidsByPort(port)
-		if (pids.length) {
-			container.proc.kill(pids[0])
-		}
-	}
+	// Find an available port
+	const port = options.port ?? (await container.networking.findOpenPort(3100))
 
 	await container.helpers.discover('features')
 
@@ -59,6 +54,13 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 
 	const app = expressServer.app
 
+	// Find voice WS port (separate server to avoid upgrade handler conflict with ChatService)
+	const voicePort = await container.networking.findOpenPort(port + 1)
+
+	app.get('/api/config', (_req: any, res: any) => {
+		res.json({ voiceWsPort: voicePort })
+	})
+
 	app.get('/api/health', (_req: any, res: any) => {
 		res.json({ ok: true, assistant: options.assistant })
 	})
@@ -74,6 +76,41 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	const httpServer = (expressServer as any)._listener
 	chatService.attach(httpServer)
 
+	// Voice WebSocket — separate port to avoid upgrade handler conflict with ChatService
+	const voiceWss = container.server('websocket', { json: true })
+	await voiceWss.start({ port: voicePort })
+
+	voiceWss.on('message', async (msg: any, voiceWs: any) => {
+		if (msg?.type !== 'start_voice') return
+
+		const listener = container.feature('voiceListener') as VoiceListener
+		const send = (data: object) => voiceWss.send(voiceWs, data)
+
+		const onVu = (level: number) => send({ type: 'voice_vu', level })
+		const onStart = () => send({ type: 'voice_recording' })
+		const onStop = () => send({ type: 'voice_transcribing' })
+		const onPreview = (text: string) => send({ type: 'voice_preview', text })
+
+		listener.on('vu', onVu)
+		listener.on('recording:start', onStart)
+		listener.on('recording:stop', onStop)
+		listener.on('preview', onPreview)
+
+		send({ type: 'voice_listening' })
+
+		try {
+			const transcript = await listener.listen({ silenceTimeout: msg.silenceTimeout ?? 3 })
+			send({ type: 'voice_complete', text: transcript })
+		} catch (err: any) {
+			send({ type: 'voice_error', message: String(err?.message ?? err) })
+		} finally {
+			listener.off('vu', onVu)
+			listener.off('recording:start', onStart)
+			listener.off('recording:stop', onStop)
+			listener.off('preview', onPreview)
+		}
+	})
+
 	// Print URLs
 	const lanIp = getLanAddress()
 	console.log('')
@@ -85,11 +122,39 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	console.log(`    Default assistant: ${options.assistant}`)
 	console.log('')
 
-	if (options.open) {
+	const pageUrl = `http://localhost:${port}`
+	const openInBrowser = () => container.feature('opener').open(pageUrl)
+
+	if (options['open-browser']) {
+		await openInBrowser()
+	} else {
+		const wm = container.feature('windowManager')
 		try {
-			await container.feature('opener').open(`http://localhost:${port}`)
-		} catch {}
+			const launchedWindow = await Promise.race([
+				wm.spawn({ url: pageUrl }),
+				new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6500)),
+			])
+
+			const launchedWindowId = String(launchedWindow?.result?.windowId || launchedWindow?.windowId || '').toLowerCase()
+
+			if (launchedWindowId) {
+				console.log(`[web-chat] tracking window ${launchedWindowId} for auto-cleanup`)
+				wm.on('windowClosed', (msg: any) => {
+					const closedId = String(msg?.windowId || '').toLowerCase()
+					if (closedId === launchedWindowId) {
+						console.log(`[web-chat] window closed, shutting down server`)
+						process.exit(0)
+					}
+				})
+			}
+		} catch {
+			console.log('[web-chat] window manager failed or timed out, falling back to browser')
+			await openInBrowser()
+		}
 	}
+
+	process.on('SIGINT', () => process.exit(0))
+	process.on('SIGTERM', () => process.exit(0))
 
 	// Keep the process alive
 	await new Promise(() => {})
