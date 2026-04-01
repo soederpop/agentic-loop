@@ -43,6 +43,12 @@ The demoable outcome: project-reviewer's custom `start_review` WS message works 
 - Project-reviewer's current endpoint logic
 - Phase 2 deliverables: shared API, ChatService
 
+## Handoff Notes from Phase 1
+
+- `WorkflowService.start()` is the right place to load `hooks.ts` — call `container.paths.resolve(workflow.folderPath, 'hooks.ts')`, check if the file exists with `container.fs.existsSync`, and if so import it and call `hooks.onSetup({ app, chatService, docs, container })`.
+- The express app is available as `this._expressServer.app` inside the feature. Custom hook routes should be namespaced to `/api/workflows/:name/` to avoid conflicts with shared endpoints.
+- `workflows/shared/` is not a real workflow — filter it before iterating over library.workflows for hook loading.
+
 ## Test plan
 
 - Start the service and confirm hooks from project-reviewer and project-builder are loaded

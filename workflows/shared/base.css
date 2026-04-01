@@ -1,0 +1,95 @@
+/**
+ * Shared design tokens for all agentic-loop workflow UIs.
+ *
+ * Import once from each workflow's <head>:
+ *   <link rel="stylesheet" href="/shared/base.css">
+ *
+ * This file consolidates the CSS custom properties and base reset
+ * that were previously duplicated in every workflow's index.html.
+ */
+
+/* ── Reset ───────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Design tokens ───────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg:        #151520;
+  --surface:   #1c1c28;
+  --surface-2: #23232f;
+  --surface-3: #2a2a38;
+
+  /* Borders */
+  --border:       #2e2e42;
+  --border-light: #3a3a52;
+
+  /* Text */
+  --text:       #e0e0e8;
+  --text-dim:   #8a8aa2;
+  --text-faint: #56566e;
+
+  /* Accent (cyan) */
+  --accent:     #00fff7;
+  --accent-dim: #00fff720;
+  --accent-glow: #00fff740;
+
+  /* Assistant (purple) */
+  --assistant:     #c084fc;
+  --assistant-dim: #c084fc18;
+
+  /* Status colours */
+  --success:     #39ff14;
+  --success-dim: #39ff1420;
+  --warning:     #f59e0b;
+  --warning-dim: #f59e0b20;
+  --error:       #ff003c;
+  --error-dim:   #ff003c20;
+
+  /* Secondary palette */
+  --purple: #c084fc;
+  --blue:   #60a5fa;
+
+  /* Inputs */
+  --input-bg: #191924;
+}
+
+/* ── Base typography ─────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ── Scrollbars ──────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+/* ── Common animations ───────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}

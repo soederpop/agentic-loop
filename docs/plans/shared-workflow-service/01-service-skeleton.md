@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed
 project: shared-workflow-service
 ---
 
@@ -49,3 +49,21 @@ The demoable outcome: run `luca workflow-service` (or `luca serve` with a setup 
 - Confirm `/api/workflows` returns JSON with all discovered workflow metadata
 - Confirm `/` shows the landing page with links to all workflows
 - Confirm only one process is running (not 11 separate servers)
+
+## Retrospective
+
+### What was built
+
+All five deliverables shipped. `features/workflow-service.ts` uses the framework's `container.server('express', {...})` abstraction to create the HTTP server and `container.feature('workflowLibrary')` for discovery — no external deps needed. `workflows/shared/base.css` consolidates all CSS custom properties, base reset, font stack, and shared keyframes extracted from the inline styles in every workflow HTML. `commands/workflow-service.ts` wires the feature to the CLI with `--port` and `--no-open` flags. All routes passed smoke tests: static serving, `/shared/base.css`, `/api/workflows`, and the landing page.
+
+### Key discoveries
+
+**The `*/` gotcha in JSDoc.** The initial build failed with 7 parse errors because the JSDoc comment contained `workflows/*/public/` — the `*/` sequence closed the multi-line comment block early. Watch for this any time glob patterns appear in JSDoc inside `/** ... */` blocks.
+
+**Use `container.server('express')` not raw Express.** The framework's `ExpressServer` exposes `server.express` (the express module itself), `server.app` (the Express app), and `server.useEndpoints(dir)`. There is no need to import `express` directly. The `static {}` registration block on the Feature class and a `features.register()` call at the bottom are mutually exclusive — pick one (the bottom `features.register()` is the cleaner pattern).
+
+**WorkflowLibrary picks up `workflows/shared/`.** The new `workflows/shared/` directory is discovered as a workflow entry (with `hasPublicDir: false`). This is harmless — it's filtered from static mounts and the landing page — but it will appear in `/api/workflows` until the library gains a way to mark directories as non-workflow. Phase 2 should either filter it out via a naming convention (e.g., lowercase non-directory names) or add an `ignore` list to WorkflowLibrary options.
+
+**Per-workflow endpoints not mounted in Phase 1.** Multiple workflow `endpoints/` directories export conflicting paths (e.g., both `capture/endpoints/ideas.ts` and `review/endpoints/ideas.ts` export `path = '/api/ideas'`). Mounting them naively would be first-match-wins and silently break workflows. Deferring this to Phase 2, which will move all shared endpoints to a single canonical set at the service level.
+
+**`--no-open` flag parsing edge case.** The luca CLI may treat `--no-<flag>` as a negation of `<flag>` rather than setting `no-<flag>` to true. In practice this meant the browser opened even when `--no-open` was passed. Phase 2 should use `--open` (defaulting to false) rather than `--no-open` to avoid the ambiguity.

@@ -43,6 +43,13 @@ The demoable outcome: `luca workflow-service` starts one process, and every work
 - `luca workflow` command implementation
 - Phases 1-3 deliverables
 
+## Handoff Notes from Phase 1
+
+- All 12 workflow `public/` dirs are already statically served at `/workflows/:name/` on port 7700. Phase 4 just needs to remove the per-workflow server infrastructure and update frontend fetch paths.
+- `workflows/shared/base.css` is live at `/shared/base.css`. The shared CSS adoption task in this phase means adding `<link rel="stylesheet" href="/shared/base.css">` and removing each workflow's `<style>` `:root { ... }` block.
+- When updating `luca workflow <name>`, the command should check if the service is already listening (feature state `workflowService.isListening`) and either open the URL or start the service first. The feature's `start()` method is idempotent if guarded.
+- The `workflows/shared/` directory appears in WorkflowLibrary's discovery — it is NOT a real workflow. The final count of real workflow dirs is 12, not 13.
+
 ## Test plan
 
 - Start `luca workflow-service --no-open` — confirm all 11 workflows are discovered and mounted

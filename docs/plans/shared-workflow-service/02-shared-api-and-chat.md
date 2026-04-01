@@ -41,6 +41,15 @@ The demoable outcome: the capture and review workflows work fully — browsing c
 - ChatService / WebSocket patterns in existing `luca.serve.ts` files
 - Phase 1 deliverables: `features/workflow-service.ts`, `commands/workflow-service.ts`
 
+## Handoff Notes from Phase 1
+
+- `features/workflow-service.ts` is live. It creates the Express server via `container.server('express', {...})` and accesses the app via `server.app`. Add shared API endpoints there using `server.app.get('/api/goals', ...)` or by calling `server.useEndpoints(dir)` on a shared endpoints directory.
+- `commands/workflow-service.ts` is the CLI entry point. It calls `service.start({ port })`. Add AssistantsManager discovery and ChatService wiring in `WorkflowService.start()` before `server.start()`.
+- **Endpoint conflict problem is real**: `capture/endpoints/ideas.ts` and `review/endpoints/ideas.ts` both export `path = '/api/ideas'`. The solution is to define canonical shared endpoints at the service level and stop mounting per-workflow endpoint dirs entirely.
+- **`workflows/shared/` shows up in WorkflowLibrary** as a non-serveable entry. Filter it from `/api/workflows` by adding `.filter((w) => w.hasPublicDir)` or by adding an ignore list in WorkflowLibrary options.
+- **Use `--open` (default false) instead of `--no-open`** in the CLI argsSchema — the luca CLI appears to interpret `--no-<x>` as negating flag `x`, not setting `no-x` to true.
+- ContentDB is already loaded once in `WorkflowService.start()` and attached to `app.locals.docs`. The `service.expressServer.app.locals.docs` reference gives you the loaded docs instance for use in shared endpoints.
+
 ## Test plan
 
 - Start the service and confirm all shared API endpoints return correct data
