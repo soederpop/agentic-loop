@@ -1,27 +1,21 @@
 /**
- * Setup / System Onboarding Workflow — setup hook for luca serve
+ * Setup / System Onboarding — WorkflowService hooks
  *
- * Diagnostic dashboard that checks system capabilities:
- * - Required: bun, OPENAI_API_KEY, content model
- * - Optional (Voice): rustpotter, wake word models, sox, mlx_whisper, ELEVENLABS_API_KEY, voice assistants
- * - Optional (Native App): LucaVoiceLauncher.app, Xcode CLI tools
- * - Authority: luca main process on port 4410
- *
- * Usage:
- *   luca serve --setup workflows/setup/luca.serve.ts --staticDir workflows/setup/public --endpoints-dir workflows/setup/endpoints --any-port --no-open
+ * Registers system capability checks and environment configuration endpoints.
  */
-export default async function setup(server: any) {
-  const container = server.container
-  const app = server.app
+import type { WorkflowHooksSetupContext } from '../../features/workflow-service'
+
+export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
   const fs = container.feature('fs')
   const proc = container.feature('proc')
+  const networking = container.feature('networking')
 
-  // ── Helpers ──
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   async function execQuiet(cmd: string): Promise<{ ok: boolean; stdout: string }> {
     try {
-      const result = await proc.exec(cmd)
-      const stdout = typeof result === 'string' ? result.trim() : (result?.stdout || '').trim()
+      const result: any = await proc.exec(cmd)
+      const stdout = typeof result === 'string' ? result.trim() : ((result?.stdout || '') as string).trim()
       return { ok: true, stdout }
     } catch (err: any) {
       const msg = err?.stdout || err?.message || ''
@@ -34,14 +28,11 @@ export default async function setup(server: any) {
     return { found: result.ok && result.stdout.length > 0, path: result.stdout }
   }
 
-  const networking = container.feature('networking')
-
-
   function envKeyPresent(key: string): boolean {
     return !!process.env[key]
   }
 
-  // ── Capability Checks ──
+  // ── Capability checks ──────────────────────────────────────────────────────
 
   async function checkBun() {
     const result = await execQuiet('bun --version')
@@ -167,8 +158,7 @@ export default async function setup(server: any) {
     const entries = fs.readdirSync(assistantsDir).filter((d: string) => !d.startsWith('.'))
     const withVoice: string[] = []
     for (const d of entries) {
-      const voicePath = container.paths.resolve('assistants', d, 'voice.yaml')
-      if (fs.existsSync(voicePath)) {
+      if (fs.existsSync(container.paths.resolve('assistants', d, 'voice.yaml'))) {
         withVoice.push(d)
       }
     }
@@ -183,7 +173,9 @@ export default async function setup(server: any) {
   }
 
   async function checkNativeApp() {
-    const appPath = container.paths.resolve('apps', 'presenter-windows', 'dist', 'LucaVoiceLauncher.app')
+    const appPath = container.paths.resolve(
+      'apps', 'presenter-windows', 'dist', 'LucaVoiceLauncher.app',
+    )
     const exists = fs.existsSync(appPath)
     return {
       capability: 'native_app', group: 'native', title: 'LucaVoiceLauncher.app',
@@ -206,16 +198,24 @@ export default async function setup(server: any) {
   }
 
   async function checkAuthority() {
-    const registry = server.container.feature('instanceRegistry')
-    const instance = registry.getSelf()
-    const port = instance?.ports.authority
-    const running = port ? !(await networking.isPortOpen(port)) : false
-    return {
-      capability: 'authority', group: 'authority', title: 'Authority Process',
-      description: `luca main process${port ? ` (port ${port})` : ''}`,
-      status: running ? 'ok' : 'warning',
-      details: running ? `Running on port ${port}` : 'Not running',
-      action: running ? undefined : 'Start with: luca main',
+    try {
+      const registry = container.feature('instanceRegistry') as any
+      const instance = registry.getSelf()
+      const port = instance?.ports?.authority
+      const running = port ? !(await networking.isPortOpen(port)) : false
+      return {
+        capability: 'authority', group: 'authority', title: 'Authority Process',
+        description: `luca main process${port ? ` (port ${port})` : ''}`,
+        status: running ? 'ok' : 'warning',
+        details: running ? `Running on port ${port}` : 'Not running',
+        action: running ? undefined : 'Start with: luca main',
+      }
+    } catch {
+      return {
+        capability: 'authority', group: 'authority', title: 'Authority Process',
+        description: 'luca main process',
+        status: 'warning', details: 'Could not check authority status',
+      }
     }
   }
 
@@ -228,9 +228,95 @@ export default async function setup(server: any) {
     ])
   }
 
-  app.locals.fs = fs
-  app.locals.whichBin = whichBin
-  app.locals.getAllCapabilities = getAllCapabilities
+  // ── API routes ─────────────────────────────────────────────────────────────
 
-  console.log('[setup] system onboarding workflow ready')
+  app.get('/api/system-status', async (_req: any, res: any) => {
+    try {
+      const capabilities = await getAllCapabilities()
+      const ready = capabilities.filter((c: any) => c.status === 'ok').length
+      res.json({ ready, total: capabilities.length, capabilities })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  const ENV_ALLOWLIST = ['OPENAI_API_KEY', 'ELEVENLABS_API_KEY']
+
+  app.post('/api/env', async (req: any, res: any) => {
+    try {
+      const { key, value } = req.body || {}
+      if (!key || !value) return res.status(400).json({ error: 'key and value are required' })
+      if (!ENV_ALLOWLIST.includes(key)) {
+        return res.status(403).json({ error: `Key "${key}" is not in the allowlist` })
+      }
+      const envPath = container.paths.resolve('.env')
+      let envContent = ''
+      if (fs.existsSync(envPath)) envContent = (fs.readFileSync(envPath, 'utf-8') as any).toString('utf-8')
+      const regex = new RegExp(`^${key}=.*$`, 'm')
+      if (regex.test(envContent)) {
+        envContent = envContent.replace(regex, `${key}=${value}`)
+      } else {
+        envContent = envContent.trimEnd() + `\n${key}=${value}\n`
+      }
+      fs.writeFile(envPath, envContent)
+      process.env[key] = value
+      res.json({ ok: true, key })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/voice-assistants', async (_req: any, res: any) => {
+    try {
+      const assistantsDir = container.paths.resolve('assistants')
+      const assistants: any[] = []
+      if (fs.existsSync(assistantsDir)) {
+        const yaml = container.feature('yaml')
+        const dirs = fs
+          .readdirSync(assistantsDir)
+          .filter(
+            (d: string) =>
+              !d.startsWith('.') &&
+              fs.existsSync(container.paths.resolve('assistants', d, 'CORE.md')),
+          )
+        for (const d of dirs) {
+          const voicePath = container.paths.resolve('assistants', d, 'voice.yaml')
+          const hasVoice = fs.existsSync(voicePath)
+          let voiceId: string | undefined
+          let aliases: string[] | undefined
+          if (hasVoice) {
+            try {
+              const raw = (fs.readFileSync(voicePath, 'utf-8') as any).toString('utf-8') as string
+              const parsed = yaml.parse(raw)
+              voiceId = parsed?.voiceId || parsed?.voice_id
+              aliases = parsed?.aliases || parsed?.wakeWords
+            } catch {}
+          }
+          assistants.push({ name: d, hasVoice, voiceId, aliases })
+        }
+      }
+      res.json({ assistants })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/wake-words', async (_req: any, res: any) => {
+    try {
+      const rustpotter = await whichBin('rustpotter')
+      const modelsDir = container.paths.resolve('voice', 'wakeword', 'models')
+      let models: { file: string; name: string }[] = []
+      if (fs.existsSync(modelsDir)) {
+        models = fs
+          .readdirSync(modelsDir)
+          .filter((f: string) => f.endsWith('.rpw'))
+          .map((f: string) => ({ file: f, name: f.replace('.rpw', '').replace(/_/g, ' ') }))
+      }
+      res.json({ models, rustpotterAvailable: rustpotter.found })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  console.log('[setup] hooks loaded — system status endpoints ready')
 }

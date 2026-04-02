@@ -938,7 +938,7 @@
     }
 
     async evalCode(code) {
-      const res = await fetch(`${API}/api/eval`, {
+      const res = await fetch(`${API}/api/workflows/prompt-studio/eval`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code }),
       })

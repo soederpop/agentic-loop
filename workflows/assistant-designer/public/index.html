@@ -596,7 +596,7 @@ class ApiClient extends Feature {
 
   /** Send a chat message — returns the raw Response for SSE streaming */
   async chat(message) {
-    return fetch(`${this.base}/api/chat`, {
+    return fetch(`${this.base}/api/workflows/assistant-designer/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message }),
@@ -605,7 +605,7 @@ class ApiClient extends Feature {
 
   /** Evaluate a REPL expression */
   async eval(code) {
-    const res = await fetch(`${this.base}/api/eval`, {
+    const res = await fetch(`${this.base}/api/workflows/assistant-designer/eval`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code }),
@@ -1658,7 +1658,7 @@ $loadPromptBtn.addEventListener('click', async () => {
             $savedPromptsMenu.classList.remove('open')
             $promptFilename.value = btn.dataset.name
             // Fetch file content via eval endpoint
-            const evalRes = await fetch(`${API}/api/eval`, {
+            const evalRes = await fetch(`${API}/api/workflows/assistant-designer/eval`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ code: `await container.feature('fs').readFile('${btn.dataset.path}', 'utf8')` }),

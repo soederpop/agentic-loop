@@ -915,7 +915,7 @@
 
     /** Send a chat message and return an SSE reader */
     async sendMessage(message, assistantName) {
-      const res = await fetch(`${API}/api/chat`, {
+      const res = await fetch(`${API}/api/workflows/ideas/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, assistant: assistantName }),
@@ -925,7 +925,7 @@
 
     /** Clear chat for an assistant */
     async clearChat(assistantName) {
-      const res = await fetch(`${API}/api/chat`, {
+      const res = await fetch(`${API}/api/workflows/ideas/chat`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ assistant: assistantName }),

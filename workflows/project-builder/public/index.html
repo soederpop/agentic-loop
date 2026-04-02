@@ -2503,6 +2503,9 @@
     editorToggleBtn.textContent = 'Preview'
     monacoContainer.style.display = ''
     editorPreview.style.display = 'none'
+    // Monaco was created while the overlay was hidden (display:none), so it
+    // rendered at 0×0. Now that the overlay is visible, force a layout pass.
+    requestAnimationFrame(() => { if (editor._editor) editor._editor.layout() })
   })
 
   editor.on('editor:closed', () => {
