@@ -52,59 +52,50 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
         return
       }
 
-      if (!info.hasServeHook) {
-        ui.print.red(`Workflow "${target}" has no luca.serve.ts — cannot run it as a server`)
-        return
-      }
-
-      const setupPath = container.paths.resolve(info.folderPath, 'luca.serve.ts')
-      const endpointsDir = container.paths.resolve(info.folderPath, 'endpoints')
-      const serveArgs = ['serve', '--setup', setupPath, '--no-open', '--endpoints-dir', endpointsDir, '--any-port']
-
-      if (info.hasPublicDir) {
-        serveArgs.push('--staticDir', container.paths.resolve(info.folderPath, 'public'))
-      }
-
       ui.print.cyan(`Starting workflow: ${info.title}`)
       if (info.description) ui.print.dim(info.description)
 
-      // Parse the actual port from the server's "listening on" message
-      const onOutputListeners: Array<(output: string) => void> = []
-      const portReady = new Promise<number>((resolve) => {
-        const timeout = setTimeout(() => resolve(0), 15000)
-        onOutputListeners.push((output: string) => {
-          const match = String(output).match(/listening on http:\/\/localhost:(\d+)/)
-          if (match) {
-            clearTimeout(timeout)
-            resolve(Number(match[1]))
-          }
+      // Ensure the shared workflow service is running
+      const servicePort = 7700
+      let serviceRunning = false
+      try {
+        const check = await fetch(`http://localhost:${servicePort}/api/workflows`)
+        serviceRunning = check.ok
+      } catch {}
+
+      if (!serviceRunning) {
+        const onOutputListeners: Array<(output: string) => void> = []
+        const serviceReady = new Promise<boolean>((resolve) => {
+          const timeout = setTimeout(() => resolve(false), 20000)
+          onOutputListeners.push((output: string) => {
+            if (String(output).includes('listening on')) {
+              clearTimeout(timeout)
+              resolve(true)
+            }
+          })
         })
-      })
 
-      // Start the server in the background
-      console.log(`[workflow] spawning luca ${serveArgs.join(' ')}`)
-      const serverProcess = container.proc.spawnAndCapture('luca', serveArgs, {
-	      onOutput(output: string) {
-          const line = String(output).trim()
-          console.log(`[workflow:stdout] ${line}`)
-          for (const listener of onOutputListeners) listener(line)
-        },
-	      onError(output: string) {
-          console.log(`[workflow:stderr] ${String(output).trim()}`)
-        },
-      })
+        console.log('[workflow] starting shared workflow service...')
+        container.proc.spawnAndCapture('luca', ['workflow-service', '--no-open', `--port=${servicePort}`], {
+          onOutput(output: string) {
+            const line = String(output).trim()
+            console.log(`[workflow-service:stdout] ${line}`)
+            for (const listener of onOutputListeners) listener(line)
+          },
+          onError(output: string) {
+            console.log(`[workflow-service:stderr] ${String(output).trim()}`)
+          },
+        })
 
-      // Wait for the server to report its actual port
-      actualPort = await portReady
-      if (!actualPort) {
-        ui.print.red('Server failed to start within 15 seconds')
-        return
+        const started = await serviceReady
+        if (!started) {
+          ui.print.red('Workflow service failed to start within 20 seconds')
+          return
+        }
       }
 
-      console.log(`[workflow] server ready on port ${actualPort}`)
-      ui.print.dim(`http://localhost:${actualPort}`)
-
-      const pageUrl = `http://localhost:${actualPort}`
+      actualPort = servicePort
+      const pageUrl = `http://localhost:${actualPort}/workflows/${target}/`
       const openInBrowser = () => container.feature('opener').open(pageUrl)
 
       if (options['open-browser']) {
@@ -113,7 +104,7 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
         try {
           const launchedWindow = await Promise.race([
             wm.spawn({ url: pageUrl }),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6500)),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 12000)),
           ])
 
           const launchedWindowId = String(launchedWindow?.result?.windowId || launchedWindow?.windowId || '').toLowerCase()
@@ -137,7 +128,7 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
       process.on('SIGINT', () => process.exit(0))
       process.on('SIGTERM', () => process.exit(0))
 
-      await serverProcess
+      await new Promise(() => {})
 
       break
     }

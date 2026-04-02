@@ -15,7 +15,7 @@ export interface WorkflowInfo {
   description: string
   tags: string[]
   folderPath: string
-  hasServeHook: boolean
+  hasHooks: boolean
   hasPublicDir: boolean
   raw: Record<string, any>
 }
@@ -29,6 +29,7 @@ export type WorkflowLibraryState = z.infer<typeof WorkflowLibraryStateSchema>
 
 export const WorkflowLibraryOptionsSchema = FeatureOptionsSchema.extend({
   workflowsDir: z.string().optional().describe('Override the workflows directory path'),
+  additionalWorkflowsDirs: z.array(z.string()).optional().describe('Additional directories to discover workflows from. Primary workflowsDir takes precedence on name conflicts.'),
 })
 export type WorkflowLibraryOptions = z.infer<typeof WorkflowLibraryOptionsSchema>
 
@@ -72,13 +73,13 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
 	  return this.workflows.map(w => w.name)
   }
 
-  /** Scan the workflows directory and parse each ABOUT.md */
-  async discover(): Promise<WorkflowInfo[]> {
+  /** Scan one directory and return WorkflowInfo for each subdirectory found */
+  private async _discoverDir(dir: string): Promise<WorkflowInfo[]> {
     const fs = this.container.fs
-    const dir = this.workflowsDir
+
+    if (!fs.existsSync(dir)) return []
 
     const entries = fs.readdirSync(dir).filter((name: string) => {
-      // Skip files (only directories — files have extensions)
       if (name.match(/\.\w+$/)) return false
       const s = fs.stat(this.container.paths.resolve(dir, name))
       return s.isDirectory()
@@ -90,13 +91,13 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
       const folderPath = this.container.paths.resolve(dir, name)
       const aboutPath = this.container.paths.resolve(folderPath, 'ABOUT.md')
 
-      let info: WorkflowInfo = {
+      const info: WorkflowInfo = {
         name,
         title: name,
         description: '',
         tags: [],
         folderPath,
-        hasServeHook: fs.existsSync(this.container.paths.resolve(folderPath, 'luca.serve.ts')),
+        hasHooks: fs.existsSync(this.container.paths.resolve(folderPath, 'hooks.ts')),
         hasPublicDir: fs.existsSync(this.container.paths.resolve(folderPath, 'public')),
         raw: {},
       }
@@ -121,10 +122,43 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
       workflows.push(info)
     }
 
+    return workflows
+  }
+
+  /** Scan all workflow directories and parse each ABOUT.md. Primary dir wins on name conflicts. */
+  async discover(): Promise<WorkflowInfo[]> {
+    const primaryWorkflows = await this._discoverDir(this.workflowsDir)
+    const primaryNames = new Set(primaryWorkflows.map((w) => w.name))
+
+    const additionalDirs = this.options.additionalWorkflowsDirs ?? []
+    const additionalWorkflows: WorkflowInfo[] = []
+
+    for (const dir of additionalDirs) {
+      const found = await this._discoverDir(dir)
+      for (const w of found) {
+        if (!primaryNames.has(w.name)) {
+          additionalWorkflows.push(w)
+        }
+      }
+    }
+
+    const workflows = [...primaryWorkflows, ...additionalWorkflows]
+
     this.state.set('workflows', workflows)
     this.state.set('loaded', true)
     this.emit('discovered', workflows)
     return workflows
+  }
+
+  /**
+   * Add a directory to discover workflows from.
+   * If discovery has already run, re-runs it immediately to include the new dir.
+   */
+  async addWorkflowsDir(dir: string): Promise<void> {
+    const current = this.options.additionalWorkflowsDirs ?? []
+    if (current.includes(dir)) return
+    this.options.additionalWorkflowsDirs = [...current, dir]
+    if (this.isLoaded) await this.discover()
   }
 
   /** Get a specific workflow by name */
@@ -167,9 +201,7 @@ export class WorkflowLibrary extends Feature<WorkflowLibraryState, WorkflowLibra
       throw new Error(`Workflow not found: ${options.name}. Available: ${this.workflows.map((w) => w.name).join(', ')}`)
     }
 
-    if (!workflow.hasServeHook) {
-      throw new Error(`Workflow "${options.name}" has no luca.serve.ts — cannot run it as a server`)
-    }
+    // All workflows run via the shared workflow service
 
     const networking = this.container.feature('networking')
     const actualPort = await networking.findOpenPort(3001)
