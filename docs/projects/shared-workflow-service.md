@@ -1,6 +1,6 @@
 ---
 title: Shared Workflow Service
-status: approved
+status: draft
 goal: user-experience-improvements
 ---
 
