@@ -66,7 +66,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
 
     func focus() {
         guard let window else { return }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.foregroundForManagedWindow()
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(webView)
     }
@@ -174,6 +174,24 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
 
     func snapshot() -> (url: String, title: String) {
         (lastKnownURL, lastKnownTitle)
+    }
+
+    func managedWindowState() -> ManagedWindowState? {
+        guard let window else { return nil }
+        let frame = window.frame
+        return ManagedWindowState(
+            windowId: windowId,
+            kind: BrowserWindowManager.WindowLifecycleEvent.WindowKind.browser.rawValue,
+            title: lastKnownTitle,
+            frame: WindowFrame(
+                x: frame.origin.x,
+                y: frame.origin.y,
+                width: frame.width,
+                height: frame.height
+            ),
+            focused: window.isKeyWindow,
+            url: lastKnownURL
+        )
     }
 
     func windowWillClose(_ notification: Notification) {

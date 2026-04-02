@@ -83,7 +83,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
 
     func focus() {
         guard let window else { return }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.foregroundForManagedWindow()
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(terminalView)
     }
@@ -146,6 +146,25 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
 
     func snapshot() -> (title: String, command: String, pid: Int?) {
         (lastKnownTitle, lastKnownCommand, process.map { Int($0.processIdentifier) })
+    }
+
+    func managedWindowState() -> ManagedWindowState? {
+        guard let window else { return nil }
+        let frame = window.frame
+        return ManagedWindowState(
+            windowId: windowId,
+            kind: BrowserWindowManager.WindowLifecycleEvent.WindowKind.terminal.rawValue,
+            title: lastKnownTitle,
+            frame: WindowFrame(
+                x: frame.origin.x,
+                y: frame.origin.y,
+                width: frame.width,
+                height: frame.height
+            ),
+            focused: window.isKeyWindow,
+            command: lastKnownCommand,
+            pid: process.map { Int($0.processIdentifier) }
+        )
     }
 
     func windowWillClose(_ notification: Notification) {

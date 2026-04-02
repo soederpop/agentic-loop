@@ -95,6 +95,7 @@ extension AppController: IPCClientDelegate {
         isConnected = true
         latestError = nil
         AppLogger.info("ipc window delegate: connected")
+        client.sendWindowStateSync(WindowStateSyncMessage(windows: windowManager.currentWindowStates()))
     }
 
     public func ipcClientDidDisconnect(_ client: IPCClient) {
@@ -133,6 +134,9 @@ extension AppController: IPCClientDelegate {
                     )
                 }
             }
+        } else if message.windowStateRefresh == true {
+            client.sendWindowStateSync(WindowStateSyncMessage(windows: windowManager.currentWindowStates()))
+            lastEventDescription = "Sent window state sync (\(message.id.uuidString))"
         } else {
             lastEventDescription = "Ignored non-window message \(message.id.uuidString)"
         }

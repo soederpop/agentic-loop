@@ -27,7 +27,7 @@ public final class SettingsWindowController: NSWindowController {
 
     public func openWindow() {
         guard let window else { return }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.foregroundForManagedWindow()
         window.makeKeyAndOrderFront(nil)
     }
 }

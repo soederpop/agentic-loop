@@ -57,6 +57,16 @@ public final class BrowserWindowManager {
         }
     }
 
+    public func currentWindowStates() -> [ManagedWindowState] {
+        windows
+            .sorted { lhs, rhs in
+                if lhs.key == mostRecentWindowId { return true }
+                if rhs.key == mostRecentWindowId { return false }
+                return lhs.key.uuidString < rhs.key.uuidString
+            }
+            .compactMap { $0.value.managedWindowState() }
+    }
+
     public func handle(_ command: WindowCommand, completion: @escaping (Result<[String: JSONValue], Error>) -> Void) {
         let action = command.action.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         switch action {
@@ -474,6 +484,7 @@ private protocol WindowControlling: AnyObject {
     func setFrame(x: CGFloat?, y: CGFloat?, width: CGFloat?, height: CGFloat?, animate: Bool)
     func capturePNG(to path: String) throws -> WindowCaptureResult
     func windowNumberForCapture() -> Int?
+    func managedWindowState() -> ManagedWindowState?
 }
 
 extension BrowserWindowController: WindowControlling {}

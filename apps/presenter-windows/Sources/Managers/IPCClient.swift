@@ -109,6 +109,17 @@ public final class IPCClient {
         }
     }
 
+    public func sendWindowStateSync(_ event: WindowStateSyncMessage) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            guard self.isConnected, self.socketFD >= 0 else {
+                self.scheduleReconnectLocked()
+                return
+            }
+            self.sendEncodedLocked(event, logContext: "windowStateSync")
+        }
+    }
+
     private func connectLocked() {
         guard !isConnected else { return }
 

@@ -28,7 +28,7 @@ public final class LauncherPanelController: NSWindowController, NSWindowDelegate
 
     public func openMainWindow() {
         guard let window else { return }
-        NSApp.activate(ignoringOtherApps: true)
+        NSApp.foregroundForManagedWindow()
         window.makeKeyAndOrderFront(nil)
     }
 

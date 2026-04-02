@@ -8,7 +8,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         let pid = ProcessInfo.processInfo.processIdentifier
         AppLogger.info("applicationDidFinishLaunching pid=\(pid)")
-        NSApp.setActivationPolicy(.accessory)
+        NSApp.setActivationPolicy(.regular)
 
         let settings = SettingsManager.shared
         let windowManager = BrowserWindowManager()

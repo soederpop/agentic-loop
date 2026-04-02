@@ -258,6 +258,84 @@ Example:
 }
 ```
 
+## 8. App -> Bun window state sync (implemented)
+
+Because the macOS app is long-lived and Bun worker processes may reconnect often, the app now emits a full window snapshot whenever the IPC connection is established.
+
+This lets a newly started Bun process immediately learn what browser and terminal windows the Swift app is already managing before it receives incremental lifecycle events.
+
+Message shape:
+
+```json
+{
+  "type": "windowStateSync",
+  "timestamp": "2026-04-02T16:22:31Z",
+  "windows": [
+    {
+      "windowId": "74D5A3C6-26D0-4E60-84AA-17E0AC46D219",
+      "kind": "browser",
+      "title": "Example Domain",
+      "frame": {
+        "x": 180,
+        "y": 140,
+        "width": 1024,
+        "height": 768
+      },
+      "focused": true,
+      "url": "https://example.com",
+      "command": null,
+      "pid": null
+    },
+    {
+      "windowId": "E05D4490-C1B8-4AB1-A07B-93A471F0E433",
+      "kind": "terminal",
+      "title": "Build Logs",
+      "frame": {
+        "x": 220,
+        "y": 220,
+        "width": 920,
+        "height": 640
+      },
+      "focused": false,
+      "url": null,
+      "command": "swift test --parallel",
+      "pid": 4242
+    }
+  ]
+}
+```
+
+Notes:
+
+- `windows` may be empty if the app currently manages no windows.
+- Browser entries populate `url`.
+- Terminal entries populate `command` and usually `pid`.
+- Existing incremental messages like `windowClosed`, `windowFocus`, and `terminalExited` still continue after the initial sync.
+
+## 9. Bun -> App window state refresh request (implemented)
+
+Bun can force the macOS app to emit a fresh `windowStateSync` snapshot at any time.
+
+Top-level field:
+
+- `windowStateRefresh` (boolean, optional)
+
+Example:
+
+```json
+{
+  "id": "0f93ea18-2d5b-418f-93dd-04a42fcb95fc",
+  "status": "processing",
+  "windowStateRefresh": true,
+  "timestamp": "2026-04-02T16:24:00Z"
+}
+```
+
+Behavior:
+
+- The app does not send a `windowAck` for this message.
+- Instead, it responds by emitting a fresh `windowStateSync`.
+
 `screengrab` writes a PNG image of the target window.
 
 - Required: `path` (string, output file path)

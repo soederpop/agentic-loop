@@ -93,6 +93,7 @@ public struct ServerMessage: Codable, Equatable {
     public let speak: String?
     public let audioFile: String?
     public let window: WindowCommand?
+    public let windowStateRefresh: Bool?
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -118,11 +119,12 @@ public struct ServerMessage: Codable, Equatable {
         speak = try container.decodeIfPresent(String.self, forKey: .speak)
         audioFile = try container.decodeIfPresent(String.self, forKey: .audioFile)
         window = try container.decodeIfPresent(WindowCommand.self, forKey: .window)
+        windowStateRefresh = try container.decodeIfPresent(Bool.self, forKey: .windowStateRefresh)
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, status, worker, pid, timestamp, success, error, result
-        case progress, message, speech, speak, audioFile, window
+        case progress, message, speech, speak, audioFile, window, windowStateRefresh
     }
 }
 
@@ -291,7 +293,50 @@ public struct WindowFocusMessage: Encodable {
     }
 }
 
-public struct WindowFrame: Encodable {
+public struct WindowStateSyncMessage: Encodable {
+    public let type: String
+    public let windows: [ManagedWindowState]
+    public let timestamp: String
+
+    public init(windows: [ManagedWindowState]) {
+        self.type = "windowStateSync"
+        self.windows = windows
+        self.timestamp = ISO8601DateFormatter().string(from: Date())
+    }
+}
+
+public struct ManagedWindowState: Encodable, Equatable {
+    public let windowId: String
+    public let kind: String
+    public let title: String
+    public let frame: WindowFrame
+    public let focused: Bool
+    public let url: String?
+    public let command: String?
+    public let pid: Int?
+
+    public init(
+        windowId: UUID,
+        kind: String,
+        title: String,
+        frame: WindowFrame,
+        focused: Bool,
+        url: String? = nil,
+        command: String? = nil,
+        pid: Int? = nil
+    ) {
+        self.windowId = windowId.uuidString
+        self.kind = kind
+        self.title = title
+        self.frame = frame
+        self.focused = focused
+        self.url = url
+        self.command = command
+        self.pid = pid
+    }
+}
+
+public struct WindowFrame: Encodable, Equatable {
     public let x: Double
     public let y: Double
     public let width: Double

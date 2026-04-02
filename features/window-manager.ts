@@ -61,6 +61,18 @@ export const WindowTrackedEntrySchema = z.object({
   openedAt: z.number().optional().describe('Epoch ms when this process first recorded the window'),
   lastAck: z.any().optional().describe('JSON-serializable snapshot of the last relevant ack payload'),
   kind: z.enum(['browser', 'terminal', 'unknown']).optional().describe('How the window was opened, if known'),
+  title: z.string().optional().describe('Current native window title'),
+  frame: z.object({
+    x: z.number(),
+    y: z.number(),
+    width: z.number(),
+    height: z.number(),
+  }).optional().describe('Current native window frame'),
+  focused: z.boolean().optional().describe('Whether the native window is currently focused'),
+  url: z.string().optional().describe('Current browser URL when known'),
+  command: z.string().optional().describe('Current terminal command when known'),
+  pid: z.number().optional().describe('Current terminal pid when known'),
+  lastSyncedAt: z.number().optional().describe('Epoch ms when this entry was last refreshed from native state'),
 })
 export type WindowTrackedEntry = z.infer<typeof WindowTrackedEntrySchema>
 
@@ -98,11 +110,12 @@ export const WindowManagerEventsSchema = FeatureEventsSchema.extend({
   listening: z.tuple([]).describe('Emitted when the IPC server starts listening'),
   clientConnected: z.tuple([z.any().describe('The client socket')]).describe('Emitted when the native app connects'),
   clientDisconnected: z.tuple([]).describe('Emitted when the native app disconnects'),
-  message: z.tuple([z.any().describe('The parsed message object')]).describe('Emitted for any incoming message that is not a windowAck'),
+  message: z.tuple([z.any().describe('The parsed message object')]).describe('Emitted for any incoming message that is not a windowAck or windowStateSync'),
   windowAck: z.tuple([z.any().describe('The window ack payload')]).describe('Emitted when a window ack is received from the app'),
   windowClosed: z.tuple([z.any().describe('Lifecycle payload; includes canonical lowercase `windowId` when the closed window can be inferred (from `windowId`, `id`, nested fields, etc.)')]).describe('Emitted when the native app reports a window closed event'),
   terminalExited: z.tuple([z.any().describe('Terminal lifecycle payload emitted when a terminal process exits')]).describe('Emitted when the native app reports a terminal process exit event'),
   windowFocus: z.tuple([z.any().describe('Focus payload with windowId, kind, focused (boolean), and frame {x, y, width, height}')]).describe('Emitted when a window gains or loses focus'),
+  windowStateSync: z.tuple([z.any().describe('Authoritative native window roster snapshot')]).describe('Emitted when the broker or native app pushes a full window state snapshot'),
   error: z.tuple([z.any().describe('The error')]).describe('Emitted on error'),
 })
 
@@ -118,11 +131,18 @@ export type DimensionValue = number | `${number}%`
  */
 export interface SpawnOptions {
   url?: string
+  html?: string
+  title?: string
   width?: DimensionValue
   height?: DimensionValue
   x?: DimensionValue
   y?: DimensionValue
   alwaysOnTop?: boolean
+  decorations?: 'normal' | 'hiddenTitleBar' | 'none'
+  transparent?: boolean
+  shadow?: boolean
+  opacity?: number
+  clickThrough?: boolean
   window?: {
     decorations?: 'normal' | 'hiddenTitleBar' | 'none'
     transparent?: boolean
@@ -335,6 +355,12 @@ interface ClientConnection {
   buffer: string
 }
 
+type RefreshWaiter = {
+  resolve: (value: any) => void
+  reject: (reason: any) => void
+  timer: ReturnType<typeof setTimeout>
+}
+
 // --- Feature ---
 
 /**
@@ -535,10 +561,17 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       description: 'Get the window manager connection status: whether the IPC server is listening, whether the native app is connected, and the current mode (broker/producer)',
       schema: z.object({}),
     },
+    wmRefreshState: {
+      description: 'Force a fresh authoritative window-state sync from the native window manager app',
+      schema: z.object({
+        timeoutMs: z.number().optional().describe('Override timeout for the refresh request'),
+      }),
+    },
   }
 
   // --- Shared state ---
   private _pending = new Map<string, PendingRequest>()
+  private _refreshWaiters = new Map<string, RefreshWaiter>()
   private _handles = new Map<string, WindowHandle>()
   private _mode: 'broker' | 'producer' | null = null
   private _activeRecordings = new Map<string, { windowId?: string; path: string; startedAt: number; durationMs: number; timer: ReturnType<typeof setTimeout>; promise: Promise<WindowAckResult> }>()
@@ -1105,13 +1138,21 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
   // --- Tool handlers (matched by name to static tools) ---
 
   async wmListWindows() {
-    const windows = this.state.get('windows') ?? {}
+    const refreshed = await this.refreshState(Math.min(this.options.requestTimeoutMs || 10000, 5000))
+    const windows = refreshed?.windows ?? this.state.get('windows') ?? {}
     return {
       count: Object.keys(windows).length,
       windows: Object.values(windows).map((w: any) => ({
         windowId: w.windowId,
         kind: w.kind || 'unknown',
         openedAt: w.openedAt,
+        title: w.title,
+        frame: w.frame,
+        focused: w.focused,
+        url: w.url,
+        command: w.command,
+        pid: w.pid,
+        lastSyncedAt: w.lastSyncedAt,
       })),
     }
   }
@@ -1338,6 +1379,10 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     }
   }
 
+  async wmRefreshState(opts: { timeoutMs?: number } = {}) {
+    return this.refreshState(opts.timeoutMs)
+  }
+
   // =====================================================================
   // Private — Broker / Producer lifecycle
   // =====================================================================
@@ -1469,10 +1514,10 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         this._handles.clear()
         this.setState({
           clientConnected: false,
-          windowCount: 0,
-          windows: {},
           pendingOperations: [],
         })
+        // Do NOT clear windows — they're still on screen even if IPC broke.
+        // The next windowStateSync from the app on reconnect will refresh the roster.
         this.broadcastWindowStateSync()
 
         // Resolve all pending requests — the app is gone
@@ -1481,6 +1526,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
           pending.resolve({ ok: false, error: 'Client disconnected' })
         }
         this._pending.clear()
+        this.rejectRefreshWaiters({ ok: false, error: 'Client disconnected', code: 'Disconnected' })
 
         // Notify producers that app disconnected — resolve their in-flight requests
         for (const [reqId, producerSocket] of this._requestOrigins) {
@@ -1514,6 +1560,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     this._producers.set(id, client)
     this.syncProducerCount()
     this.sendWindowStateSyncToSocket(socket)
+    this.requestAppWindowStateRefresh().catch(() => {})
 
     socket.on('data', (chunk) => {
       client.buffer += chunk.toString()
@@ -1546,6 +1593,25 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
   private processProducerMessage(line: string, producerSocket: Socket): void {
     let msg: any
     try { msg = JSON.parse(line) } catch { return }
+
+    if (msg?.type === 'windowStateRefreshRequest') {
+      if (!this._client) {
+        try {
+          producerSocket.write(JSON.stringify({
+            type: 'windowStateRefreshFailed',
+            error: 'No native launcher client connected',
+          }) + '\n')
+        } catch { /* producer gone */ }
+        return
+      }
+      this._client.socket.write(JSON.stringify({
+        id: msg.id || randomUUID(),
+        status: 'processing',
+        windowStateRefresh: true,
+        timestamp: new Date().toISOString(),
+      }) + '\n')
+      return
+    }
 
     const requestId = this.normalizeRequestId(msg.id)
     if (requestId) {
@@ -1642,12 +1708,21 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
 
     if (msg.type === 'windowFocus') {
       messageOut = this.enrichLifecycleWithCanonicalWindowId(msg)
+      this.trackWindowFocusState(messageOut.windowId, messageOut)
       const key = this.handleMapKey(messageOut.windowId)
       const handle = key ? this._handles.get(key) : undefined
       if (handle) handle.emit(messageOut.focused ? 'focus' : 'blur', messageOut)
       this.emit('windowFocus', messageOut)
       // Broadcast to all producers
       this.broadcastToProducers(JSON.stringify(messageOut))
+    }
+
+    if (msg.type === 'windowStateSync') {
+      this.applyAppWindowStateSync(msg)
+      this.emit('windowStateSync', msg)
+      this.broadcastWindowStateSync()
+      this.resolveRefreshWaiters(this.getWindowStateSnapshot())
+      return
     }
 
     this.emit('message', messageOut)
@@ -1669,6 +1744,8 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       windows: this.state.get('windows') ?? {},
       windowCount: this.state.get('windowCount') ?? 0,
       clientConnected: this.state.get('clientConnected') ?? false,
+      mode: this._mode ?? undefined,
+      refreshedAt: Date.now(),
     }
   }
 
@@ -1685,6 +1762,17 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     if (this._mode !== 'broker' || this._producers.size === 0) return
     const line = JSON.stringify(this.buildWindowStateSyncPayload())
     this.broadcastToProducers(line)
+  }
+
+  private async requestAppWindowStateRefresh(): Promise<boolean> {
+    if (this._mode !== 'broker') return false
+    if (!this._client) return false
+    return this.send({
+      id: this.normalizeRequestId(randomUUID()) || randomUUID(),
+      status: 'processing',
+      windowStateRefresh: true,
+      timestamp: new Date().toISOString(),
+    })
   }
 
   // =====================================================================
@@ -1708,7 +1796,9 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         this._controlClient = client
         this.setState({ listening: true, socketPath, mode: 'producer' })
         this.emit('listening')
-        resolve(this)
+        this.bestEffortInitialProducerSync()
+          .catch(() => {})
+          .finally(() => resolve(this))
       })
 
       socket.on('data', (chunk) => {
@@ -1738,6 +1828,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
           windows: {},
           windowCount: 0,
         })
+        this.rejectRefreshWaiters({ ok: false, error: 'Broker disconnected', code: 'Disconnected' })
 
         // Resolve all pending requests — broker is gone
         for (const [, pending] of this._pending) {
@@ -1754,6 +1845,15 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     })
   }
 
+  private async bestEffortInitialProducerSync(): Promise<void> {
+    if (this._mode !== 'producer') return
+    try {
+      await this.refreshState(3000)
+    } catch {
+      // Keep producer startup resilient even if the broker/app is temporarily cold.
+    }
+  }
+
   /**
    * Process a message received from the broker (producer mode).
    * Handles windowAck (resolves pending requests) and lifecycle events.
@@ -1764,6 +1864,13 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
 
     if (msg.type === 'windowStateSync') {
       this.applyProducerWindowStateSync(msg)
+      this.emit('windowStateSync', msg)
+      this.resolveRefreshWaiters(this.getWindowStateSnapshot())
+      return
+    }
+
+    if (msg.type === 'windowStateRefreshFailed') {
+      this.rejectRefreshWaiters({ ok: false, error: msg.error || 'Window state refresh failed', code: 'NoClient' })
       return
     }
 
@@ -1809,6 +1916,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
 
     if (msg.type === 'windowFocus') {
       messageOut = this.enrichLifecycleWithCanonicalWindowId(msg)
+      this.trackWindowFocusState(messageOut.windowId, messageOut)
       const key = this.handleMapKey(messageOut.windowId)
       const handle = key ? this._handles.get(key) : undefined
       if (handle) handle.emit(messageOut.focused ? 'focus' : 'blur', messageOut)
@@ -1950,6 +2058,47 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     })
   }
 
+  /**
+   * Force an authoritative window-state refresh from the native app.
+   * In producer mode this routes through the broker; in broker mode it goes
+   * directly to the app client. Resolves when a new `windowStateSync` arrives.
+   */
+  async refreshState(timeoutMs = this.options.requestTimeoutMs || 10000): Promise<{
+    windows: Record<string, WindowTrackedEntry>
+    windowCount: number
+    clientConnected: boolean
+    mode?: 'broker' | 'producer'
+  }> {
+    if (!this._mode) {
+      await this.listen()
+    }
+
+    if (this._mode === 'producer') {
+      if (!this._controlClient) {
+        return { ok: false, error: 'Not connected to broker', code: 'Disconnected' } as any
+      }
+
+      const requestId = this.normalizeRequestId(randomUUID()) || randomUUID()
+      const promise = this.createRefreshWaiter(requestId, timeoutMs)
+      this._controlClient.socket.write(JSON.stringify({
+        type: 'windowStateRefreshRequest',
+        id: requestId,
+        timestamp: new Date().toISOString(),
+      }) + '\n')
+      return promise
+    }
+
+    const connected = await this.waitForAppClient(timeoutMs)
+    if (!connected) {
+      return { ok: false, error: 'No native launcher client connected', code: 'NoClient' } as any
+    }
+
+    const requestId = this.normalizeRequestId(randomUUID()) || randomUUID()
+    const promise = this.createRefreshWaiter(requestId, timeoutMs)
+    await this.requestAppWindowStateRefresh()
+    return promise
+  }
+
   /** Wait for the native app to connect (broker mode only). */
   private waitForAppClient(timeoutMs: number): Promise<boolean> {
     if (this._client) return Promise.resolve(true)
@@ -1982,6 +2131,10 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       this.trackWindowOpened(resultWindowId, {
         kind: action === 'terminal' ? 'terminal' : 'browser',
         lastAck: msg,
+        title: typeof msg?.result?.title === 'string' ? msg.result.title : undefined,
+        url: typeof msg?.result?.url === 'string' ? msg.result.url : undefined,
+        command: typeof msg?.result?.command === 'string' ? msg.result.command : undefined,
+        pid: typeof msg?.result?.pid === 'number' ? msg.result.pid : undefined,
       })
       return Object.keys(this.state.get('windows') ?? {}).length !== before
     }
@@ -1995,15 +2148,18 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     return false
   }
 
+  /** Broker: apply authoritative window list sent by the native app on connect. */
+  private applyAppWindowStateSync(msg: any): void {
+    const windows = this.normalizeWindowStateSync(msg?.windows)
+    const windowCount = Object.keys(windows).length
+    this.setState({ windows, windowCount })
+    this.pruneHandlesMissingFromRoster(windows)
+  }
+
   /** Producer: apply broker snapshot; drop local handles for windows no longer in the roster. */
   private applyProducerWindowStateSync(msg: any): void {
-    const raw = msg?.windows
-    const windows =
-      raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? (raw as Record<string, WindowTrackedEntry>)
-        : {}
-    const windowCount =
-      typeof msg?.windowCount === 'number' ? msg.windowCount : Object.keys(windows).length
+    const windows = this.normalizeWindowStateSync(msg?.windows)
+    const windowCount = Object.keys(windows).length
     const patch: Partial<WindowManagerState> = { windows, windowCount }
     if (typeof msg?.clientConnected === 'boolean') {
       patch.clientConnected = msg.clientConnected
@@ -2028,7 +2184,14 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
 
   private trackWindowOpened(
     windowId: unknown,
-    extra?: { kind?: 'browser' | 'terminal' | 'unknown'; lastAck?: unknown },
+    extra?: {
+      kind?: 'browser' | 'terminal' | 'unknown'
+      lastAck?: unknown
+      title?: string
+      url?: string
+      command?: string
+      pid?: number
+    },
   ): void {
     const normalized = this.normalizeRequestId(windowId)
     if (!normalized) return
@@ -2043,6 +2206,13 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         lastAck:
           extra?.lastAck !== undefined ? this.snapshotForState(extra.lastAck) : prev?.lastAck,
         kind: extra?.kind ?? prev?.kind ?? 'unknown',
+        lastSyncedAt: prev?.lastSyncedAt,
+        title: extra?.title ?? prev?.title,
+        frame: prev?.frame,
+        focused: prev?.focused,
+        url: extra?.url ?? prev?.url,
+        command: extra?.command ?? prev?.command,
+        pid: extra?.pid ?? prev?.pid,
       }
       return { windows, windowCount: Object.keys(windows).length }
     })
@@ -2056,6 +2226,136 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       delete windows[normalized]
       return { windows, windowCount: Object.keys(windows).length }
     })
+  }
+
+  private trackWindowFocusState(windowId: unknown, payload: any): void {
+    const normalized = this.normalizeRequestId(windowId)
+    if (!normalized) return
+    const frame = this.normalizeFrame(payload?.frame)
+    this.setState((cur) => {
+      const windows = { ...(cur.windows ?? {}) }
+      const prev = windows[normalized]
+      if (!prev) return {}
+      windows[normalized] = {
+        ...prev,
+        focused: typeof payload?.focused === 'boolean' ? payload.focused : prev.focused,
+        frame: frame ?? prev.frame,
+      }
+      return { windows }
+    })
+  }
+
+  private normalizeWindowStateSync(raw: any): Record<string, WindowTrackedEntry> {
+    const now = Date.now()
+    const currentWindows = (this.state.get('windows') ?? {}) as Record<string, WindowTrackedEntry>
+
+    if (Array.isArray(raw)) {
+      const windows: Record<string, WindowTrackedEntry> = {}
+      for (const entry of raw) {
+        const normalized = this.normalizeRequestId(entry?.windowId)
+        if (!normalized) continue
+        const prev = currentWindows[normalized]
+        windows[normalized] = {
+          windowId: normalized,
+          nativeWindowId: typeof entry?.windowId === 'string' ? entry.windowId : normalized,
+          openedAt: typeof prev?.openedAt === 'number' ? prev.openedAt : now,
+          kind: entry?.kind === 'browser' || entry?.kind === 'terminal' ? entry.kind : 'unknown',
+          title: typeof entry?.title === 'string' ? entry.title : undefined,
+          frame: this.normalizeFrame(entry?.frame),
+          focused: typeof entry?.focused === 'boolean' ? entry.focused : undefined,
+          url: typeof entry?.url === 'string' ? entry.url : undefined,
+          command: typeof entry?.command === 'string' ? entry.command : undefined,
+          pid: typeof entry?.pid === 'number' ? entry.pid : undefined,
+          lastSyncedAt: now,
+        }
+      }
+      return windows
+    }
+
+    if (raw && typeof raw === 'object') {
+      const windows: Record<string, WindowTrackedEntry> = {}
+      for (const [key, value] of Object.entries(raw as Record<string, any>)) {
+        const normalized = this.normalizeRequestId(value?.windowId ?? key)
+        if (!normalized) continue
+        windows[normalized] = {
+          windowId: normalized,
+          nativeWindowId: typeof value?.nativeWindowId === 'string'
+            ? value.nativeWindowId
+            : (typeof value?.windowId === 'string' ? value.windowId : key),
+          openedAt: typeof value?.openedAt === 'number' ? value.openedAt : now,
+          lastAck: this.snapshotForState(value?.lastAck),
+          kind: value?.kind === 'browser' || value?.kind === 'terminal' ? value.kind : 'unknown',
+          title: typeof value?.title === 'string' ? value.title : undefined,
+          frame: this.normalizeFrame(value?.frame),
+          focused: typeof value?.focused === 'boolean' ? value.focused : undefined,
+          url: typeof value?.url === 'string' ? value.url : undefined,
+          command: typeof value?.command === 'string' ? value.command : undefined,
+          pid: typeof value?.pid === 'number' ? value.pid : undefined,
+          lastSyncedAt: typeof value?.lastSyncedAt === 'number' ? value.lastSyncedAt : now,
+        }
+      }
+      return windows
+    }
+
+    return {}
+  }
+
+  private normalizeFrame(frame: any): WindowTrackedEntry['frame'] | undefined {
+    if (!frame || typeof frame !== 'object') return undefined
+    const { x, y, width, height } = frame
+    if ([x, y, width, height].every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      return { x, y, width, height }
+    }
+    return undefined
+  }
+
+  private createRefreshWaiter(requestId: string, timeoutMs: number) {
+    return new Promise<{
+      windows: Record<string, WindowTrackedEntry>
+      windowCount: number
+      clientConnected: boolean
+      mode?: 'broker' | 'producer'
+    }>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const waiter = this._refreshWaiters.get(requestId)
+        if (!waiter) return
+        clearTimeout(waiter.timer)
+        this._refreshWaiters.delete(requestId)
+        resolve({ ok: false, error: `Window state refresh timed out after ${timeoutMs}ms`, code: 'Timeout' } as any)
+      }, timeoutMs)
+
+      this._refreshWaiters.set(requestId, { resolve, reject, timer })
+    })
+  }
+
+  private resolveRefreshWaiters(snapshot: {
+    windows: Record<string, WindowTrackedEntry>
+    windowCount: number
+    clientConnected: boolean
+    mode?: 'broker' | 'producer'
+  }) {
+    for (const [requestId, waiter] of this._refreshWaiters) {
+      clearTimeout(waiter.timer)
+      waiter.resolve(snapshot)
+      this._refreshWaiters.delete(requestId)
+    }
+  }
+
+  private rejectRefreshWaiters(error: any) {
+    for (const [requestId, waiter] of this._refreshWaiters) {
+      clearTimeout(waiter.timer)
+      waiter.resolve(error)
+      this._refreshWaiters.delete(requestId)
+    }
+  }
+
+  private getWindowStateSnapshot() {
+    return {
+      windows: this.state.get('windows') ?? {},
+      windowCount: this.state.get('windowCount') ?? 0,
+      clientConnected: this.state.get('clientConnected') ?? false,
+      mode: this._mode ?? undefined,
+    }
   }
 }
 
