@@ -92,16 +92,14 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			`You are in VOICE MODE.  Please keep responses under 3 short sentences`,
 			this.options.prependPrompt || '',
 		].join('\n')
-    
+
 		const createOptions = {
 			prependPrompt,
 			...(this.options.appendPrompt ? { appendPrompt: this.options.appendPrompt } : {}),
 			...(this.options.historyMode ? { historyMode: this.options.historyMode } : {}),
-			maxTokens: MAX_TOKENS_FOR_VOICE_MODE, 
-			temperature: 0.3 
-		} 
-		
-		//console.log('Creating Assistant with Options', createOptions)
+			maxTokens: MAX_TOKENS_FOR_VOICE_MODE,
+			temperature: 0.3
+		}
 
 		return this.assistantsManager.create(this.options.assistant, createOptions)
 	}
@@ -240,7 +238,7 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			const voiceConfigPath = this.assistant.paths.join('voice.yaml')
 			if (fs.exists(voiceConfigPath)) {
 				const yaml = this.container.feature('yaml')
-				const cfg = yaml.parse(fs.readFile(voiceConfigPath))
+				const cfg = yaml.parse(String(fs.readFile(voiceConfigPath)))
 				hasVoiceConfig = !!cfg?.voiceId
 			}
 		} catch {}
@@ -259,18 +257,15 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 	}
 
 	async speakPhrase(phrase: string) {
-		if (!this._ttsAvailable) {
+		const caps = await this.checkCapabilities()
+
+		if (!caps.available) {
 			this.emit('info', `[voice-chat] TTS unavailable, skipping speakPhrase`)
 			return this
 		}
-		const streamer = this.createSpeechStreamer()
-		
-		const asDoc = this.container.docs.parseMarkdownAtPath(phrase)
-		const stripped = asDoc.stripMarkdown({ preserveLists: true })
-		
-		console.log('Striped Markdown', stripped)
 
-		await streamer.push(stripped)
+		const streamer = this.createSpeechStreamer()
+		streamer.push(phrase)
 		await streamer.finish()
 		return this
 	}

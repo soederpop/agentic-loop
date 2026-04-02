@@ -59,14 +59,57 @@ export class SpeechStreamer {
 	}
 
 	/**
+	 * Strip markdown syntax from a text string, leaving plain speakable text.
+	 * Handles: bold/italic, headings, inline code, fenced code blocks,
+	 * links, images, blockquotes, list markers, and horizontal rules.
+	 */
+	private stripMarkdown(text: string): string {
+		return text
+			// Fenced code blocks — drop the whole block
+			.replace(/```[\s\S]*?```/g, '')
+			// Inline code
+			.replace(/`[^`]*`/g, (m) => m.slice(1, -1))
+			// Bold+italic
+			.replace(/\*{3}([^*]+)\*{3}/g, '$1')
+			.replace(/_{3}([^_]+)_{3}/g, '$1')
+			// Bold
+			.replace(/\*{2}([^*]+)\*{2}/g, '$1')
+			.replace(/_{2}([^_]+)_{2}/g, '$1')
+			// Italic
+			.replace(/\*([^*]+)\*/g, '$1')
+			.replace(/_([^_]+)_/g, '$1')
+			// Headings
+			.replace(/^#{1,6}\s+/gm, '')
+			// Links — keep text
+			.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+			// Images — drop
+			.replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+			// Blockquotes
+			.replace(/^>\s*/gm, '')
+			// Unordered list markers
+			.replace(/^[\s]*[-*+]\s+/gm, '')
+			// Ordered list markers
+			.replace(/^[\s]*\d+\.\s+/gm, '')
+			// Horizontal rules
+			.replace(/^[-*_]{3,}\s*$/gm, '')
+			// Collapse multiple blank lines
+			.replace(/\n{3,}/g, '\n\n')
+			.trim()
+	}
+
+	/**
 	 * Feed a chunk of text from the LLM stream. The streamer accumulates
 	 * text and splits on sentence-ending punctuation (.!?;:) or when the
 	 * buffer exceeds maxChunkLength.
 	 */
 	push(text: string) {
-		this.buffer += text
+		let cleaned = text
+		try {
+			cleaned = this.stripMarkdown(text)
+		} catch {}
+		this.buffer += cleaned
 		if (this.debug) {
-			console.log(`[speech:debug] push: buffer now ${this.buffer.length} chars`)
+			////console.log(`[speech:debug] push: buffer now ${this.buffer.length} chars`)
 		}
 		this.splitBuffer()
 	}
@@ -82,14 +125,14 @@ export class SpeechStreamer {
 		const remaining = this.buffer.trim()
 		if (remaining) {
 			if (this.debug) {
-				console.log(`[speech:debug] finish: flushing remaining buffer: "${remaining}"`)
+				//console.log(`[speech:debug] finish: flushing remaining buffer: "${remaining}"`)
 			}
 			this.queue.push(remaining)
 			this.buffer = ''
 		}
 
 		if (this.debug) {
-			console.log(`[speech:debug] finish: ${this.queue.length} chunks queued, ${this.chunkIndex} already synthesized`)
+			//console.log(`[speech:debug] finish: ${this.queue.length} chunks queued, ${this.chunkIndex} already synthesized`)
 		}
 
 		this.startDrain()
@@ -239,10 +282,10 @@ export class SpeechStreamer {
 			const idx = this.chunkIndex++
 
 			if (this.debug) {
-				console.log(`[speech:debug] chunk #${idx} original: "${text}"`)
-				console.log(`[speech:debug] chunk #${idx} prefix: "${this.conversationModePrefix || '(none)'}"`)
-				console.log(`[speech:debug] chunk #${idx} → elevenlabs: "${prefixed}"`)
-				console.log(`[speech:debug] chunk #${idx} voiceId=${this.voiceId} modelId=${this.modelId || 'default'}`)
+				//console.log(`[speech:debug] chunk #${idx} original: "${text}"`)
+				//console.log(`[speech:debug] chunk #${idx} prefix: "${this.conversationModePrefix || '(none)'}"`)
+				//console.log(`[speech:debug] chunk #${idx} → elevenlabs: "${prefixed}"`)
+				//console.log(`[speech:debug] chunk #${idx} voiceId=${this.voiceId} modelId=${this.modelId || 'default'}`)
 			}
 
 			const outputPath = `/tmp/voice-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.mp3`
@@ -262,7 +305,7 @@ export class SpeechStreamer {
 	/** Play an audio file and clean it up afterward. */
 	private async play(outputPath: string, text: string) {
 		try {
-			console.log(`[speech] playing: "${text.slice(0, 60)}${text.length > 60 ? '...' : ''}"`)
+			//console.log(`[speech] playing: "${text.slice(0, 60)}${text.length > 60 ? '...' : ''}"`)
 			const proc = this.container.feature('proc')
 			await proc.spawnAndCapture('afplay', [outputPath])
 

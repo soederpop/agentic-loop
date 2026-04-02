@@ -1,7 +1,8 @@
 ---
-status: completed
+status: pending
 project: shared-workflow-service
 ---
+
 
 # Phase 1: Service Skeleton + Static Serving
 
