@@ -1,7 +1,238 @@
 import { setBuildTimeData } from '@soederpop/luca/introspection';
 
 // Auto-generated introspection registry data
-// Generated at: 2026-03-21T05:32:50.808Z
+// Generated at: 2026-04-02T05:23:32.394Z
+
+setBuildTimeData('features.chatService', {
+  "id": "features.chatService",
+  "description": "Reusable real-time chat service. Manages WebSocket connections, assistant sessions, and the streaming protocol (init → user_message → chunks/tool events → complete). Usage: const chatService = container.feature('chatService', { threadPrefix: 'my-workflow' }) chatService.attach(httpServer)",
+  "shortcut": "features.chatService",
+  "className": "ChatService",
+  "methods": {
+    "setVoiceChat": {
+      "description": "Attach a VoiceChat instance for voice responses. When set, the service can route messages through voice based on voiceMode.",
+      "parameters": {
+        "voiceChat": {
+          "type": "VoiceChat",
+          "description": "Parameter voiceChat"
+        }
+      },
+      "required": [
+        "voiceChat"
+      ],
+      "returns": "void"
+    },
+    "setVoiceMode": {
+      "description": "",
+      "parameters": {
+        "mode": {
+          "type": "VoiceMode",
+          "description": "Parameter mode"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "returns": "void"
+    },
+    "onMessage": {
+      "description": "Register a handler for custom message types (e.g. 'start_review'). Called for any message that isn't 'init' or 'user_message'.",
+      "parameters": {
+        "handler": {
+          "type": "CustomMessageHandler",
+          "description": "Parameter handler"
+        }
+      },
+      "required": [
+        "handler"
+      ],
+      "returns": "void"
+    },
+    "attach": {
+      "description": "Attach a WebSocket server to an existing HTTP server. Call this after your express/HTTP server is listening.",
+      "parameters": {
+        "httpServer": {
+          "type": "HttpServer",
+          "description": "Parameter httpServer"
+        }
+      },
+      "required": [
+        "httpServer"
+      ],
+      "returns": "WebSocketServer"
+    },
+    "listen": {
+      "description": "Create a standalone WebSocket server on a given port.",
+      "parameters": {
+        "port": {
+          "type": "number",
+          "description": "Parameter port"
+        },
+        "host": {
+          "type": "any",
+          "description": "Parameter host"
+        }
+      },
+      "required": [
+        "port"
+      ],
+      "returns": "WebSocketServer"
+    },
+    "resolveAssistantName": {
+      "description": "Resolve a short assistant name to its full registered name.",
+      "parameters": {
+        "shortName": {
+          "type": "string",
+          "description": "Parameter shortName"
+        }
+      },
+      "required": [
+        "shortName"
+      ],
+      "returns": "string | null"
+    },
+    "listAssistants": {
+      "description": "List available assistants as { id, name } pairs.",
+      "parameters": {},
+      "required": [],
+      "returns": "Array<{ id: string; name: string }>"
+    },
+    "getOrCreateSession": {
+      "description": "Get or create a session for the given sessionId + assistantId combo. When a voiceChat is attached, its assistant is used as the session assistant.",
+      "parameters": {
+        "sessionId": {
+          "type": "string",
+          "description": "Parameter sessionId"
+        },
+        "assistantId": {
+          "type": "string",
+          "description": "Parameter assistantId"
+        }
+      },
+      "required": [
+        "sessionId",
+        "assistantId"
+      ],
+      "returns": "Promise<ChatSession | null>"
+    },
+    "streamResponse": {
+      "description": "Send a message to an assistant and stream the response over a WebSocket. Can be used directly without WebSocket by passing event callbacks instead.",
+      "parameters": {
+        "session": {
+          "type": "ChatSession",
+          "description": "Parameter session",
+          "properties": {
+            "assistant": {
+              "type": "Assistant",
+              "description": ""
+            },
+            "assistantId": {
+              "type": "string",
+              "description": ""
+            },
+            "sessionKey": {
+              "type": "string",
+              "description": ""
+            }
+          }
+        },
+        "text": {
+          "type": "string",
+          "description": "Parameter text"
+        },
+        "callbacks": {
+          "type": "{\n\t\t\tonStart: (messageId: string) => void\n\t\t\tonChunk: (messageId: string, textDelta: string) => void\n\t\t\tonToolStart: (id: string, name: string, startedAt: number) => void\n\t\t\tonToolEnd: (id: string, name: string, ok: boolean, endedAt: number, durationMs: number, detail?: string) => void\n\t\t\tonComplete: (messageId: string, text: string) => void\n\t\t\tonError: (message: string) => void\n\t\t}",
+          "description": "Parameter callbacks"
+        }
+      },
+      "required": [
+        "session",
+        "text",
+        "callbacks"
+      ],
+      "returns": "Promise<string>"
+    },
+    "shutdown": {
+      "description": "Close all sessions and the WebSocket server.",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    }
+  },
+  "getters": {
+    "voiceChat": {
+      "description": "",
+      "returns": "VoiceChat | null"
+    },
+    "voiceMode": {
+      "description": "",
+      "returns": "VoiceMode"
+    },
+    "assistantsManager": {
+      "description": "",
+      "returns": "AssistantsManager"
+    }
+  },
+  "events": {
+    "voiceModeChanged": {
+      "name": "voiceModeChanged",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    },
+    "attached": {
+      "name": "attached",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    },
+    "listening": {
+      "name": "listening",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    },
+    "sessionCreated": {
+      "name": "sessionCreated",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    },
+    "shutdown": {
+      "name": "shutdown",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    },
+    "connection": {
+      "name": "connection",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    },
+    "disconnection": {
+      "name": "disconnection",
+      "description": "Event emitted by ChatService",
+      "arguments": {}
+    }
+  },
+  "state": {},
+  "options": {},
+  "envVars": [],
+  "types": {
+    "ChatSession": {
+      "description": "── Session ──",
+      "properties": {
+        "assistant": {
+          "type": "Assistant",
+          "description": ""
+        },
+        "assistantId": {
+          "type": "string",
+          "description": ""
+        },
+        "sessionKey": {
+          "type": "string",
+          "description": ""
+        }
+      }
+    }
+  }
+});
 
 setBuildTimeData('features.gws', {
   "id": "features.gws",
@@ -9,6 +240,17 @@ setBuildTimeData('features.gws', {
   "shortcut": "features.gws",
   "className": "Gws",
   "methods": {
+    "configDirForProfile": {
+      "description": "Returns the config directory for a given profile. No profile uses ~/.config/gws, named profiles use ~/.config/gws-<name>.",
+      "parameters": {
+        "profile": {
+          "type": "string | null",
+          "description": "Parameter profile"
+        }
+      },
+      "required": [],
+      "returns": "string"
+    },
     "isAvailable": {
       "description": "Checks whether the GWS CLI binary can be resolved on this system.",
       "parameters": {},
@@ -79,7 +321,7 @@ setBuildTimeData('features.gws', {
       "returns": "Promise<any>"
     },
     "useProfile": {
-      "description": "Activates a named credential profile. Throws if the profile directory does not exist.",
+      "description": "Activates a named credential profile. Throws if ~/.config/gws-<name> does not exist.",
       "parameters": {
         "name": {
           "type": "string",
@@ -111,13 +353,205 @@ setBuildTimeData('features.gws', {
       "returns": "void"
     },
     "profiles": {
-      "description": "Lists all available credential profile names found in the profiles directory.",
+      "description": "Lists all available credential profile names by scanning for ~/.config/gws-* directories.",
       "parameters": {},
       "required": [],
       "returns": "string[]"
+    },
+    "gwsListProfiles": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "gwsSendEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ to: string; subject: string; body: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsSearchEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ query: string; maxResults?: number; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsReadEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ id: string; markAsRead?: boolean; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsTriageEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ max?: number; query?: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsTrashEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ id: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsArchiveEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ id: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsValidateEmail": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ id: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsGetCalendarAgenda": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ days?: number; calendar?: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsCreateCalendarEvent": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{\n    summary: string; start: string; end?: string; duration?: number;\n    calendar?: string; location?: string; description?: string;\n    attendees?: string[]; profile?: string\n  }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsReadSpreadsheet": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ spreadsheet: string; range: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsAppendToSpreadsheet": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ spreadsheet: string; values?: string; jsonValues?: string[][]; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsSearchDrive": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ query: string; pageSize?: number; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsSendChatMessage": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ space: string; text: string; profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "gwsCheckAuth": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ profile?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
     }
   },
   "getters": {
+    "configDir": {
+      "description": "",
+      "returns": "string"
+    },
     "currentProfile": {
       "description": "Returns the name of the currently active credential profile, or null if none is set.",
       "returns": "string | null"
@@ -126,7 +560,909 @@ setBuildTimeData('features.gws', {
   "events": {},
   "state": {},
   "options": {},
-  "envVars": []
+  "envVars": [],
+  "types": {
+    "GwsExecOptions": {
+      "description": "Interfaces",
+      "properties": {
+        "params": {
+          "type": "Record<string, string | number | boolean>",
+          "description": "",
+          "optional": true
+        },
+        "flags": {
+          "type": "string[]",
+          "description": "",
+          "optional": true
+        },
+        "json": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        },
+        "ndjson": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        },
+        "profile": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        }
+      }
+    }
+  }
+});
+
+setBuildTimeData('features.windowManager', {
+  "id": "features.windowManager",
+  "description": "WindowManager Feature — Native window control via LucaVoiceLauncher Uses a broker/producer architecture so multiple luca processes can trigger window operations without competing for the same Unix socket. **Architecture:** - The first process to call `listen()` becomes the **broker**. It owns the app-facing socket (`ipc-window.sock`) and a control socket (`ipc-window-control.sock`). - Subsequent processes detect the broker and become **producers**. They connect to the control socket and route commands through the broker. - The broker forwards producer commands to the native app and routes acks and lifecycle events back to the originating producer. **Protocol:** - Bun listens on a Unix domain socket; the native app connects as a client - Window dispatch commands are sent as NDJSON with a `window` field - The app executes window commands and sends back `windowAck` messages - Any non-windowAck message from the app is emitted as a `message` event - Other features can use `send()` to write arbitrary NDJSON to the app **Capabilities:** - Spawn native browser windows with configurable chrome - Navigate, focus, close, and eval JavaScript in windows - Multiple luca processes can trigger window operations simultaneously - Automatic broker detection and producer fallback Observable state includes `windows` (open window metadata), `pendingOperations` (in-flight command ids), and `producerCount` (broker). Sockets, promises, and `WindowHandle` instances stay internal. **Producer state:** The broker pushes `windowStateSync` on the control socket when a producer connects and whenever the window roster changes, so every process sees the same `windows` / `windowCount` / `clientConnected` as the broker (not only its own acks).",
+  "shortcut": "features.windowManager",
+  "className": "WindowManager",
+  "methods": {
+    "enable": {
+      "description": "",
+      "parameters": {
+        "options": {
+          "type": "any",
+          "description": "Parameter options"
+        }
+      },
+      "required": [],
+      "returns": "Promise<this>"
+    },
+    "listen": {
+      "description": "Start the window manager. Automatically detects whether a broker already exists and either becomes the broker or connects as a producer. - If no broker is running: becomes the broker, binds the app socket and a control socket for producers. - If a broker is already running: connects as a producer through the control socket.",
+      "parameters": {
+        "socketPath": {
+          "type": "string",
+          "description": "Override the configured app socket path"
+        }
+      },
+      "required": [],
+      "returns": "Promise<this>"
+    },
+    "cleanupSocket": {
+      "description": "Remove stale socket files without starting or stopping the server. Useful when a previous process crashed and left dead sockets behind. Will not remove sockets that have live listeners.",
+      "parameters": {
+        "socketPath": {
+          "type": "string",
+          "description": "Override the configured socket path"
+        }
+      },
+      "required": [],
+      "returns": "Promise<boolean>"
+    },
+    "stop": {
+      "description": "Stop the window manager and clean up all connections. Rejects any pending window operation requests.",
+      "parameters": {},
+      "required": [],
+      "returns": "Promise<this>"
+    },
+    "spawn": {
+      "description": "Spawn a new native browser window. Sends a window dispatch to the app and waits for the ack.",
+      "parameters": {
+        "opts": {
+          "type": "SpawnOptions",
+          "description": "Window configuration (url, dimensions, chrome options)",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": ""
+            },
+            "width": {
+              "type": "DimensionValue",
+              "description": ""
+            },
+            "height": {
+              "type": "DimensionValue",
+              "description": ""
+            },
+            "x": {
+              "type": "DimensionValue",
+              "description": ""
+            },
+            "y": {
+              "type": "DimensionValue",
+              "description": ""
+            },
+            "alwaysOnTop": {
+              "type": "boolean",
+              "description": ""
+            },
+            "window": {
+              "type": "{\n    decorations?: 'normal' | 'hiddenTitleBar' | 'none'\n    transparent?: boolean\n    shadow?: boolean\n    alwaysOnTop?: boolean\n    opacity?: number\n    clickThrough?: boolean\n  }",
+              "description": ""
+            }
+          }
+        }
+      },
+      "required": [],
+      "returns": "Promise<WindowHandle>"
+    },
+    "spawnTTY": {
+      "description": "Spawn a native terminal window running a command. The terminal is read-only — stdout/stderr are rendered with ANSI support. Closing the window terminates the process.",
+      "parameters": {
+        "opts": {
+          "type": "SpawnTTYOptions",
+          "description": "Terminal configuration (command, args, cwd, dimensions, etc.)",
+          "properties": {
+            "command": {
+              "type": "string",
+              "description": "Executable name or path (required)."
+            },
+            "args": {
+              "type": "string[]",
+              "description": "Arguments passed after the command."
+            },
+            "cwd": {
+              "type": "string",
+              "description": "Working directory for the process."
+            },
+            "env": {
+              "type": "Record<string, string>",
+              "description": "Environment variable overrides."
+            },
+            "cols": {
+              "type": "number",
+              "description": "Initial terminal columns."
+            },
+            "rows": {
+              "type": "number",
+              "description": "Initial terminal rows."
+            },
+            "title": {
+              "type": "string",
+              "description": "Window title."
+            },
+            "width": {
+              "type": "DimensionValue",
+              "description": "Window width in points."
+            },
+            "height": {
+              "type": "DimensionValue",
+              "description": "Window height in points."
+            },
+            "x": {
+              "type": "DimensionValue",
+              "description": "Window x position."
+            },
+            "y": {
+              "type": "DimensionValue",
+              "description": "Window y position."
+            },
+            "window": {
+              "type": "SpawnOptions['window']",
+              "description": "Chrome options (decorations, alwaysOnTop, etc.)"
+            }
+          }
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "Promise<WindowHandle>"
+    },
+    "focus": {
+      "description": "Bring a window to the front.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID. If omitted, the app uses the most recent window."
+        }
+      },
+      "required": [],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "close": {
+      "description": "Close a window.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID. If omitted, the app closes the most recent window."
+        }
+      },
+      "required": [],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "navigate": {
+      "description": "Navigate a window to a new URL.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID"
+        },
+        "url": {
+          "type": "string",
+          "description": "The URL to navigate to"
+        }
+      },
+      "required": [
+        "windowId",
+        "url"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "eval": {
+      "description": "Evaluate JavaScript in a window's web view.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID"
+        },
+        "code": {
+          "type": "string",
+          "description": "JavaScript code to evaluate"
+        },
+        "opts": {
+          "type": "{ timeoutMs?: number; returnJson?: boolean }",
+          "description": "timeoutMs (default 5000), returnJson (default true)"
+        }
+      },
+      "required": [
+        "windowId",
+        "code"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "screengrab": {
+      "description": "Capture a PNG screenshot from a window.",
+      "parameters": {
+        "opts": {
+          "type": "WindowScreenGrabOptions",
+          "description": "Window target and output path",
+          "properties": {
+            "windowId": {
+              "type": "string",
+              "description": "Window ID. If omitted, the launcher uses the most recent window."
+            },
+            "path": {
+              "type": "string",
+              "description": "Output file path for the PNG image."
+            }
+          }
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "video": {
+      "description": "Record a video from a window to disk.",
+      "parameters": {
+        "opts": {
+          "type": "WindowVideoOptions",
+          "description": "Window target, output path, and optional duration",
+          "properties": {
+            "windowId": {
+              "type": "string",
+              "description": "Window ID. If omitted, the launcher uses the most recent window."
+            },
+            "path": {
+              "type": "string",
+              "description": "Output file path for the video file."
+            },
+            "durationMs": {
+              "type": "number",
+              "description": "Recording duration in milliseconds."
+            }
+          }
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "move": {
+      "description": "Move a window to a new position.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID"
+        },
+        "x": {
+          "type": "DimensionValue",
+          "description": "New x position (absolute points or percentage string like \"25%\")"
+        },
+        "y": {
+          "type": "DimensionValue",
+          "description": "New y position (absolute points or percentage string like \"10%\")"
+        }
+      },
+      "required": [
+        "windowId",
+        "x",
+        "y"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "resize": {
+      "description": "Resize a window.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID"
+        },
+        "width": {
+          "type": "DimensionValue",
+          "description": "New width (absolute points or percentage string like \"50%\")"
+        },
+        "height": {
+          "type": "DimensionValue",
+          "description": "New height (absolute points or percentage string like \"70%\")"
+        }
+      },
+      "required": [
+        "windowId",
+        "width",
+        "height"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "setFrame": {
+      "description": "Set a window's full frame (position and/or size).",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID"
+        },
+        "frame": {
+          "type": "{ x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }",
+          "description": "Object with x, y, width, height (all optional, supports percentage strings)"
+        }
+      },
+      "required": [
+        "windowId",
+        "frame"
+      ],
+      "returns": "Promise<WindowAckResult>"
+    },
+    "window": {
+      "description": "Get a WindowHandle for chainable operations on a specific window. Returns the tracked handle if one exists, otherwise creates a new one.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "description": "The window ID"
+        }
+      },
+      "required": [
+        "windowId"
+      ],
+      "returns": "WindowHandle"
+    },
+    "spawnLayout": {
+      "description": "Spawn multiple windows in parallel from a layout configuration. Returns handles in the same order as the config entries.",
+      "parameters": {
+        "config": {
+          "type": "LayoutEntry[]",
+          "description": "Array of layout entries (window or tty)"
+        }
+      },
+      "required": [
+        "config"
+      ],
+      "returns": "Promise<WindowHandle[]>",
+      "examples": [
+        {
+          "language": "ts",
+          "code": "const handles = await wm.spawnLayout([\n { type: 'window', url: 'https://google.com', width: 800, height: 600 },\n { type: 'tty', command: 'htop' },\n { url: 'https://github.com' }, // defaults to window\n])"
+        }
+      ]
+    },
+    "spawnLayouts": {
+      "description": "Spawn multiple layouts sequentially. Each layout's windows spawn in parallel, but the next layout waits for the previous one to fully complete.",
+      "parameters": {
+        "configs": {
+          "type": "LayoutEntry[][]",
+          "description": "Array of layout configurations"
+        }
+      },
+      "required": [
+        "configs"
+      ],
+      "returns": "Promise<WindowHandle[][]>",
+      "examples": [
+        {
+          "language": "ts",
+          "code": "const [firstBatch, secondBatch] = await wm.spawnLayouts([\n [{ url: 'https://google.com' }, { url: 'https://github.com' }],\n [{ type: 'tty', command: 'htop' }],\n])"
+        }
+      ]
+    },
+    "send": {
+      "description": "Write an NDJSON message to the connected app client. In producer mode, routes through the broker. Public so other features can send arbitrary protocol messages over the same socket.",
+      "parameters": {
+        "msg": {
+          "type": "Record<string, any>",
+          "description": "The message object to send (will be JSON-serialized + newline)"
+        }
+      },
+      "required": [
+        "msg"
+      ],
+      "returns": "boolean"
+    },
+    "wmListWindows": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "wmSpawnBrowser": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ url?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmSpawnTerminal": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ command: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmCloseWindow": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmCloseAllWindows": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "wmFocusWindow": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId?: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmNavigate": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId: string; url: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmMoveWindow": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId: string; x: DimensionValue; y: DimensionValue }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmResizeWindow": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId: string; width: DimensionValue; height: DimensionValue }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmSetFrame": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId: string; x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmArrangeWindows": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ pattern: 'grid' | 'stack' | 'row' | 'column'; gap?: number }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmScreenshot": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId?: string; path: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmStartRecording": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId?: string; path: string; durationMs?: number }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmStopRecording": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ recordingId: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmListRecordings": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "wmEval": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windowId: string; code: string }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmSpawnLayout": {
+      "description": "",
+      "parameters": {
+        "opts": {
+          "type": "{ windows: Array<{ type?: 'window' | 'tty'; url?: string; command?: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }> }",
+          "description": "Parameter opts"
+        }
+      },
+      "required": [
+        "opts"
+      ],
+      "returns": "void"
+    },
+    "wmGetStatus": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    }
+  },
+  "getters": {
+    "isBroker": {
+      "description": "Whether this instance is acting as the broker.",
+      "returns": "boolean"
+    },
+    "isProducer": {
+      "description": "Whether this instance is acting as a producer.",
+      "returns": "boolean"
+    },
+    "isListening": {
+      "description": "Whether the IPC server is currently listening (broker) or connected to broker (producer).",
+      "returns": "boolean"
+    },
+    "isClientConnected": {
+      "description": "Whether the native app client is currently connected (only meaningful for broker).",
+      "returns": "boolean"
+    }
+  },
+  "events": {
+    "listening": {
+      "name": "listening",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "clientConnected": {
+      "name": "clientConnected",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "clientDisconnected": {
+      "name": "clientDisconnected",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "windowAck": {
+      "name": "windowAck",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "windowClosed": {
+      "name": "windowClosed",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "terminalExited": {
+      "name": "terminalExited",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "windowFocus": {
+      "name": "windowFocus",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    },
+    "message": {
+      "name": "message",
+      "description": "Event emitted by WindowManager",
+      "arguments": {}
+    }
+  },
+  "state": {},
+  "options": {},
+  "envVars": [],
+  "examples": [
+    {
+      "language": "ts",
+      "code": "const wm = container.feature('windowManager', { enable: true, autoListen: true })\n\nconst handle = await wm.spawn({ url: 'https://google.com', width: 800, height: 600 })\nhandle.on('close', (msg) => console.log('window closed'))\nawait handle.navigate('https://news.ycombinator.com')\nconst title = await handle.eval('document.title')\nawait handle.close()\n\n// Other features can listen for non-window messages\nwm.on('message', (msg) => console.log('App says:', msg))\n\n// Other features can write raw NDJSON to the app\nwm.send({ id: 'abc', status: 'processing', speech: 'Working on it' })"
+    }
+  ],
+  "types": {
+    "SpawnOptions": {
+      "description": "Options for spawning a new native browser window. Dimensions and positions accept absolute points or percentage strings (e.g. `\"50%\"`) resolved against the primary display.",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "width": {
+          "type": "DimensionValue",
+          "description": "",
+          "optional": true
+        },
+        "height": {
+          "type": "DimensionValue",
+          "description": "",
+          "optional": true
+        },
+        "x": {
+          "type": "DimensionValue",
+          "description": "",
+          "optional": true
+        },
+        "y": {
+          "type": "DimensionValue",
+          "description": "",
+          "optional": true
+        },
+        "alwaysOnTop": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        },
+        "window": {
+          "type": "{\n    decorations?: 'normal' | 'hiddenTitleBar' | 'none'\n    transparent?: boolean\n    shadow?: boolean\n    alwaysOnTop?: boolean\n    opacity?: number\n    clickThrough?: boolean\n  }",
+          "description": "",
+          "optional": true
+        }
+      }
+    },
+    "SpawnTTYOptions": {
+      "description": "Options for spawning a native terminal window. Dimensions and positions accept absolute points or percentage strings (e.g. `\"50%\"`) resolved against the primary display.",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Executable name or path (required)."
+        },
+        "args": {
+          "type": "string[]",
+          "description": "Arguments passed after the command.",
+          "optional": true
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the process.",
+          "optional": true
+        },
+        "env": {
+          "type": "Record<string, string>",
+          "description": "Environment variable overrides.",
+          "optional": true
+        },
+        "cols": {
+          "type": "number",
+          "description": "Initial terminal columns.",
+          "optional": true
+        },
+        "rows": {
+          "type": "number",
+          "description": "Initial terminal rows.",
+          "optional": true
+        },
+        "title": {
+          "type": "string",
+          "description": "Window title.",
+          "optional": true
+        },
+        "width": {
+          "type": "DimensionValue",
+          "description": "Window width in points.",
+          "optional": true
+        },
+        "height": {
+          "type": "DimensionValue",
+          "description": "Window height in points.",
+          "optional": true
+        },
+        "x": {
+          "type": "DimensionValue",
+          "description": "Window x position.",
+          "optional": true
+        },
+        "y": {
+          "type": "DimensionValue",
+          "description": "Window y position.",
+          "optional": true
+        },
+        "window": {
+          "type": "SpawnOptions['window']",
+          "description": "Chrome options (decorations, alwaysOnTop, etc.)",
+          "optional": true
+        }
+      }
+    },
+    "WindowAckResult": {
+      "description": "The result returned from a window ack.",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        },
+        "windowId": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "value": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "json": {
+          "type": "any",
+          "description": "",
+          "optional": true
+        }
+      }
+    },
+    "WindowScreenGrabOptions": {
+      "description": "Options for capturing a screenshot from a native window.",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window ID. If omitted, the launcher uses the most recent window.",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "description": "Output file path for the PNG image."
+        }
+      }
+    },
+    "WindowVideoOptions": {
+      "description": "Options for recording video from a native window.",
+      "properties": {
+        "windowId": {
+          "type": "string",
+          "description": "Window ID. If omitted, the launcher uses the most recent window.",
+          "optional": true
+        },
+        "path": {
+          "type": "string",
+          "description": "Output file path for the video file."
+        },
+        "durationMs": {
+          "type": "number",
+          "description": "Recording duration in milliseconds.",
+          "optional": true
+        }
+      }
+    }
+  }
+});
+
+setBuildTimeData('features.preferences', {
+  "id": "features.preferences",
+  "description": "The Preferences feature manages the global preferences of the Agentic Loop and allows users to control things like the default coding assistant to use when running tasks / plays etc.",
+  "shortcut": "features.preferences",
+  "className": "Preferences",
+  "methods": {
+    "afterInitialize": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    }
+  },
+  "getters": {
+    "configFilePath": {
+      "description": "",
+      "returns": "any"
+    },
+    "loopConfigFileData": {
+      "description": "",
+      "returns": "any"
+    },
+    "manifestPreferences": {
+      "description": "",
+      "returns": "any"
+    }
+  },
+  "events": {},
+  "state": {},
+  "options": {},
+  "envVars": [],
+  "examples": [
+    {
+      "language": "ts",
+      "code": "const preferences = container.feature('preferences')"
+    }
+  ]
 });
 
 setBuildTimeData('features.voiceRouter', {
@@ -327,7 +1663,26 @@ setBuildTimeData('features.voiceRouter', {
   },
   "state": {},
   "options": {},
-  "envVars": []
+  "envVars": [],
+  "types": {
+    "WorkspaceEntry": {
+      "description": "",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": ""
+        },
+        "path": {
+          "type": "string",
+          "description": ""
+        },
+        "aliases": {
+          "type": "string[]",
+          "description": ""
+        }
+      }
+    }
+  }
 });
 
 setBuildTimeData('features.voiceChat', {
@@ -533,6 +1888,195 @@ setBuildTimeData('features.voiceChat', {
   },
   "state": {},
   "options": {},
+  "envVars": [],
+  "types": {
+    "CapabilityResult": {
+      "description": "",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": ""
+        },
+        "missing": {
+          "type": "string[]",
+          "description": ""
+        }
+      }
+    },
+    "VoiceConfig": {
+      "description": "",
+      "properties": {
+        "voiceId": {
+          "type": "string",
+          "description": ""
+        },
+        "modelId": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "voiceSettings": {
+          "type": "any",
+          "description": "",
+          "optional": true
+        },
+        "conversationModePrefix": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "maxChunkLength": {
+          "type": "number",
+          "description": "",
+          "optional": true
+        }
+      }
+    }
+  }
+});
+
+setBuildTimeData('features.workflowService', {
+  "id": "features.workflowService",
+  "description": "WorkflowService — one Express server that: - Discovers all workflows public directories and serves them statically - Loads ContentDB once and attaches it to app.locals.docs - Serves shared CSS at /shared/base.css - Exposes GET /api/workflows - Renders a landing page at /",
+  "shortcut": "features.workflowService",
+  "className": "WorkflowService",
+  "methods": {
+    "start": {
+      "description": "Start the unified workflow server. Discovers all workflows, mounts their public dirs, loads ContentDB, and begins listening.",
+      "parameters": {},
+      "required": [],
+      "returns": "Promise<this>"
+    },
+    "stop": {
+      "description": "Stop the server and clean up.",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    }
+  },
+  "getters": {
+    "expressServer": {
+      "description": "",
+      "returns": "ExpressServer"
+    },
+    "port": {
+      "description": "",
+      "returns": "number | null"
+    },
+    "isListening": {
+      "description": "",
+      "returns": "boolean"
+    }
+  },
+  "events": {
+    "started": {
+      "name": "started",
+      "description": "Event emitted by WorkflowService",
+      "arguments": {}
+    },
+    "stopped": {
+      "name": "stopped",
+      "description": "Event emitted by WorkflowService",
+      "arguments": {}
+    }
+  },
+  "state": {},
+  "options": {},
+  "envVars": []
+});
+
+setBuildTimeData('features.instanceRegistry', {
+  "id": "features.instanceRegistry",
+  "description": "Manages ~/.luca/agentic-loops/ as a shared registry so multiple luca main processes on the same machine can coexist without port collisions. Instance ID is derived from the CWD basename (e.g. \"@agentic-loop\").",
+  "shortcut": "features.instanceRegistry",
+  "className": "InstanceRegistry",
+  "methods": {
+    "ensureDir": {
+      "description": "Ensure the registry directory exists",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "listInstances": {
+      "description": "Read all currently registered instances",
+      "parameters": {},
+      "required": [],
+      "returns": "InstanceEntry[]"
+    },
+    "getInstance": {
+      "description": "Get a specific instance by ID",
+      "parameters": {
+        "id": {
+          "type": "string",
+          "description": "Parameter id"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "returns": "InstanceEntry | null"
+    },
+    "getSelf": {
+      "description": "Get the entry for the current project, if registered",
+      "parameters": {},
+      "required": [],
+      "returns": "InstanceEntry | null"
+    },
+    "claimedPorts": {
+      "description": "Collect all ports currently claimed by other instances",
+      "parameters": {},
+      "required": [],
+      "returns": "Set<number>"
+    },
+    "allocatePorts": {
+      "description": "Allocate ports for this instance, avoiding collisions with other registered instances and verifying ports are actually open.",
+      "parameters": {},
+      "required": [],
+      "returns": "Promise<InstanceEntry['ports']>"
+    },
+    "register": {
+      "description": "Register this instance with its allocated ports",
+      "parameters": {
+        "ports": {
+          "type": "InstanceEntry['ports']",
+          "description": "Parameter ports"
+        }
+      },
+      "required": [
+        "ports"
+      ],
+      "returns": "InstanceEntry"
+    },
+    "deregister": {
+      "description": "Deregister this instance (called on shutdown)",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "pruneStale": {
+      "description": "Clean up stale entries whose processes are no longer alive",
+      "parameters": {},
+      "required": [],
+      "returns": "string[]"
+    }
+  },
+  "getters": {
+    "registryDir": {
+      "description": "",
+      "returns": "any"
+    },
+    "instanceId": {
+      "description": "",
+      "returns": "string"
+    },
+    "instanceFile": {
+      "description": "",
+      "returns": "string"
+    }
+  },
+  "events": {},
+  "state": {},
+  "options": {},
   "envVars": []
 });
 
@@ -633,7 +2177,7 @@ setBuildTimeData('features.imsg', {
       "returns": "Promise<SendResult>"
     },
     "watch": {
-      "description": "Watch for incoming messages. Returns an abort function to stop watching.",
+      "description": "Watch for incoming messages. Emits events: 'message' — new message received (payload: Message) 'error'   — stderr output from imsg watch 'stop'    — watcher was stopped Returns { stop() } to kill the watcher process.",
       "parameters": {
         "opts": {
           "type": "WatchOptions",
@@ -662,24 +2206,32 @@ setBuildTimeData('features.imsg', {
             "debounce": {
               "type": "string",
               "description": ""
-            },
-            "onMessage": {
-              "type": "(msg: Message) => void",
-              "description": ""
-            },
-            "onError": {
-              "type": "(err: string) => void",
-              "description": ""
             }
           }
         }
       },
       "required": [],
-      "returns": "Promise<{ stop: () => void }>"
+      "returns": "{ stop: () => void }"
     }
   },
   "getters": {},
-  "events": {},
+  "events": {
+    "message": {
+      "name": "message",
+      "description": "Event emitted by Imsg",
+      "arguments": {}
+    },
+    "error": {
+      "name": "error",
+      "description": "Event emitted by Imsg",
+      "arguments": {}
+    },
+    "stop": {
+      "name": "stop",
+      "description": "Event emitted by Imsg",
+      "arguments": {}
+    }
+  },
   "state": {},
   "options": {},
   "envVars": [],
@@ -688,7 +2240,158 @@ setBuildTimeData('features.imsg', {
       "language": "ts",
       "code": "const imsg = container.feature('imsg')\nconst chats = await imsg.chats({ limit: 5 })\nconst messages = await imsg.history(6, { limit: 10 })\nawait imsg.send('+15551234567', 'Hello from luca')"
     }
-  ]
+  ],
+  "types": {
+    "Chat": {
+      "description": "",
+      "properties": {
+        "id": {
+          "type": "number",
+          "description": ""
+        },
+        "name": {
+          "type": "string",
+          "description": ""
+        },
+        "identifier": {
+          "type": "string",
+          "description": ""
+        },
+        "service": {
+          "type": "string",
+          "description": ""
+        },
+        "last_message_at": {
+          "type": "string",
+          "description": ""
+        }
+      }
+    },
+    "HistoryOptions": {
+      "description": "",
+      "properties": {
+        "limit": {
+          "type": "number",
+          "description": "",
+          "optional": true
+        },
+        "participants": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "start": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "end": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "attachments": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        }
+      }
+    },
+    "Message": {
+      "description": "",
+      "properties": {
+        "id": {
+          "type": "number",
+          "description": ""
+        },
+        "guid": {
+          "type": "string",
+          "description": ""
+        },
+        "chat_id": {
+          "type": "number",
+          "description": ""
+        },
+        "sender": {
+          "type": "string",
+          "description": ""
+        },
+        "text": {
+          "type": "string",
+          "description": ""
+        },
+        "is_from_me": {
+          "type": "boolean",
+          "description": ""
+        },
+        "created_at": {
+          "type": "string",
+          "description": ""
+        },
+        "destination_caller_id": {
+          "type": "string",
+          "description": ""
+        },
+        "reactions": {
+          "type": "any[]",
+          "description": ""
+        },
+        "attachments": {
+          "type": "any[]",
+          "description": ""
+        }
+      }
+    },
+    "SendResult": {
+      "description": "",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": ""
+        },
+        "error": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        }
+      }
+    },
+    "WatchOptions": {
+      "description": "",
+      "properties": {
+        "chatId": {
+          "type": "number",
+          "description": "",
+          "optional": true
+        },
+        "participants": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        },
+        "sinceRowid": {
+          "type": "number",
+          "description": "",
+          "optional": true
+        },
+        "attachments": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        },
+        "reactions": {
+          "type": "boolean",
+          "description": "",
+          "optional": true
+        },
+        "debounce": {
+          "type": "string",
+          "description": "",
+          "optional": true
+        }
+      }
+    }
+  }
 });
 
 setBuildTimeData('features.projectBuilder', {
@@ -928,6 +2631,168 @@ setBuildTimeData('features.projectBuilder', {
   "envVars": []
 });
 
+setBuildTimeData('features.workflowLibrary', {
+  "id": "features.workflowLibrary",
+  "description": "WorkflowLibrary helper",
+  "shortcut": "features.workflowLibrary",
+  "className": "WorkflowLibrary",
+  "methods": {
+    "afterInitialize": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "discover": {
+      "description": "Scan the workflows directory and parse each ABOUT.md",
+      "parameters": {},
+      "required": [],
+      "returns": "Promise<WorkflowInfo[]>"
+    },
+    "get": {
+      "description": "Get a specific workflow by name",
+      "parameters": {
+        "name": {
+          "type": "string",
+          "description": "Parameter name"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "returns": "WorkflowInfo | undefined"
+    },
+    "listAvailableWorkflows": {
+      "description": "",
+      "parameters": {
+        "options": {
+          "type": "{ tag?: string }",
+          "description": "Parameter options"
+        }
+      },
+      "required": [],
+      "returns": "Promise<WorkflowInfo[]>"
+    },
+    "viewWorkflow": {
+      "description": "",
+      "parameters": {
+        "options": {
+          "type": "{ name: string }",
+          "description": "Parameter options"
+        }
+      },
+      "required": [
+        "options"
+      ],
+      "returns": "Promise<WorkflowInfo & { content?: string }>"
+    },
+    "runWorkflow": {
+      "description": "",
+      "parameters": {
+        "options": {
+          "type": "{ name: string }",
+          "description": "Parameter options"
+        }
+      },
+      "required": [
+        "options"
+      ],
+      "returns": "Promise<{ url: string; pid?: number }>"
+    },
+    "generateSummary": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "setupToolsConsumer": {
+      "description": "",
+      "parameters": {
+        "assistant": {
+          "type": "Assistant",
+          "description": "Parameter assistant"
+        }
+      },
+      "required": [
+        "assistant"
+      ],
+      "returns": "void"
+    }
+  },
+  "getters": {
+    "workflowsDir": {
+      "description": "",
+      "returns": "string"
+    },
+    "workflows": {
+      "description": "",
+      "returns": "WorkflowInfo[]"
+    },
+    "isLoaded": {
+      "description": "",
+      "returns": "boolean"
+    },
+    "available": {
+      "description": "",
+      "returns": "any"
+    }
+  },
+  "events": {
+    "discovered": {
+      "name": "discovered",
+      "description": "Event emitted by WorkflowLibrary",
+      "arguments": {}
+    },
+    "workflowStarted": {
+      "name": "workflowStarted",
+      "description": "Event emitted by WorkflowLibrary",
+      "arguments": {}
+    }
+  },
+  "state": {},
+  "options": {},
+  "envVars": [],
+  "types": {
+    "WorkflowInfo": {
+      "description": "",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": ""
+        },
+        "title": {
+          "type": "string",
+          "description": ""
+        },
+        "description": {
+          "type": "string",
+          "description": ""
+        },
+        "tags": {
+          "type": "string[]",
+          "description": ""
+        },
+        "folderPath": {
+          "type": "string",
+          "description": ""
+        },
+        "hasServeHook": {
+          "type": "boolean",
+          "description": ""
+        },
+        "hasPublicDir": {
+          "type": "boolean",
+          "description": ""
+        },
+        "raw": {
+          "type": "Record<string, any>",
+          "description": ""
+        }
+      }
+    }
+  }
+});
+
 setBuildTimeData('features.voiceListener', {
   "id": "features.voiceListener",
   "description": "WhisperMLX server side based listener",
@@ -938,13 +2803,13 @@ setBuildTimeData('features.voiceListener', {
       "description": "Lock the listener, preventing it from reacting to wakewords until it is unlocked",
       "parameters": {},
       "required": [],
-      "returns": "void"
+      "returns": "VoiceListener"
     },
     "unlock": {
       "description": "Unlock the listener, allowing it to react to wakewords",
       "parameters": {},
       "required": [],
-      "returns": "void"
+      "returns": "VoiceListener"
     },
     "checkCapabilities": {
       "description": "",
@@ -1068,7 +2933,22 @@ setBuildTimeData('features.voiceListener', {
       "language": "ts",
       "code": "const voiceListener = container.feature('voiceListener')"
     }
-  ]
+  ],
+  "types": {
+    "CapabilityResult": {
+      "description": "",
+      "properties": {
+        "available": {
+          "type": "boolean",
+          "description": ""
+        },
+        "missing": {
+          "type": "string[]",
+          "description": ""
+        }
+      }
+    }
+  }
 });
 
 setBuildTimeData('features.voiceService', {
@@ -1404,13 +3284,346 @@ setBuildTimeData('features.taskScheduler', {
   "options": {},
   "envVars": []
 });
+
+setBuildTimeData('features.communications', {
+  "id": "features.communications",
+  "description": "The Communications Feature is a centralized hub that monitors multiple channels for incoming messages, and reacts when they arrive.  The communications feature can also be used to send messages back over those same channels. Supported channels are imessage, telegram, and gmail for now",
+  "shortcut": "features.communications",
+  "className": "Communications",
+  "methods": {
+    "pause": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "unpause": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "start": {
+      "description": "",
+      "parameters": {},
+      "required": [],
+      "returns": "void"
+    },
+    "activateChannel": {
+      "description": "",
+      "parameters": {
+        "channelName": {
+          "type": "Channel",
+          "description": "Parameter channelName"
+        },
+        "options": {
+          "type": "any",
+          "description": "Parameter options"
+        }
+      },
+      "required": [
+        "channelName",
+        "options"
+      ],
+      "returns": "void"
+    }
+  },
+  "getters": {
+    "imessage": {
+      "description": "",
+      "returns": "any"
+    },
+    "activeChannels": {
+      "description": "",
+      "returns": "any"
+    },
+    "telegramBot": {
+      "description": "",
+      "returns": "any"
+    },
+    "isPaused": {
+      "description": "",
+      "returns": "any"
+    },
+    "isStarted": {
+      "description": "",
+      "returns": "any"
+    }
+  },
+  "events": {
+    "paused": {
+      "name": "paused",
+      "description": "Event emitted by Communications",
+      "arguments": {}
+    },
+    "unpaused": {
+      "name": "unpaused",
+      "description": "Event emitted by Communications",
+      "arguments": {}
+    },
+    "message": {
+      "name": "message",
+      "description": "Event emitted by Communications",
+      "arguments": {}
+    },
+    "started": {
+      "name": "started",
+      "description": "Event emitted by Communications",
+      "arguments": {}
+    }
+  },
+  "state": {},
+  "options": {},
+  "envVars": []
+});
 export const introspectionData = [
+  {
+    "id": "features.chatService",
+    "description": "Reusable real-time chat service. Manages WebSocket connections, assistant sessions, and the streaming protocol (init → user_message → chunks/tool events → complete). Usage: const chatService = container.feature('chatService', { threadPrefix: 'my-workflow' }) chatService.attach(httpServer)",
+    "shortcut": "features.chatService",
+    "className": "ChatService",
+    "methods": {
+      "setVoiceChat": {
+        "description": "Attach a VoiceChat instance for voice responses. When set, the service can route messages through voice based on voiceMode.",
+        "parameters": {
+          "voiceChat": {
+            "type": "VoiceChat",
+            "description": "Parameter voiceChat"
+          }
+        },
+        "required": [
+          "voiceChat"
+        ],
+        "returns": "void"
+      },
+      "setVoiceMode": {
+        "description": "",
+        "parameters": {
+          "mode": {
+            "type": "VoiceMode",
+            "description": "Parameter mode"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "returns": "void"
+      },
+      "onMessage": {
+        "description": "Register a handler for custom message types (e.g. 'start_review'). Called for any message that isn't 'init' or 'user_message'.",
+        "parameters": {
+          "handler": {
+            "type": "CustomMessageHandler",
+            "description": "Parameter handler"
+          }
+        },
+        "required": [
+          "handler"
+        ],
+        "returns": "void"
+      },
+      "attach": {
+        "description": "Attach a WebSocket server to an existing HTTP server. Call this after your express/HTTP server is listening.",
+        "parameters": {
+          "httpServer": {
+            "type": "HttpServer",
+            "description": "Parameter httpServer"
+          }
+        },
+        "required": [
+          "httpServer"
+        ],
+        "returns": "WebSocketServer"
+      },
+      "listen": {
+        "description": "Create a standalone WebSocket server on a given port.",
+        "parameters": {
+          "port": {
+            "type": "number",
+            "description": "Parameter port"
+          },
+          "host": {
+            "type": "any",
+            "description": "Parameter host"
+          }
+        },
+        "required": [
+          "port"
+        ],
+        "returns": "WebSocketServer"
+      },
+      "resolveAssistantName": {
+        "description": "Resolve a short assistant name to its full registered name.",
+        "parameters": {
+          "shortName": {
+            "type": "string",
+            "description": "Parameter shortName"
+          }
+        },
+        "required": [
+          "shortName"
+        ],
+        "returns": "string | null"
+      },
+      "listAssistants": {
+        "description": "List available assistants as { id, name } pairs.",
+        "parameters": {},
+        "required": [],
+        "returns": "Array<{ id: string; name: string }>"
+      },
+      "getOrCreateSession": {
+        "description": "Get or create a session for the given sessionId + assistantId combo. When a voiceChat is attached, its assistant is used as the session assistant.",
+        "parameters": {
+          "sessionId": {
+            "type": "string",
+            "description": "Parameter sessionId"
+          },
+          "assistantId": {
+            "type": "string",
+            "description": "Parameter assistantId"
+          }
+        },
+        "required": [
+          "sessionId",
+          "assistantId"
+        ],
+        "returns": "Promise<ChatSession | null>"
+      },
+      "streamResponse": {
+        "description": "Send a message to an assistant and stream the response over a WebSocket. Can be used directly without WebSocket by passing event callbacks instead.",
+        "parameters": {
+          "session": {
+            "type": "ChatSession",
+            "description": "Parameter session",
+            "properties": {
+              "assistant": {
+                "type": "Assistant",
+                "description": ""
+              },
+              "assistantId": {
+                "type": "string",
+                "description": ""
+              },
+              "sessionKey": {
+                "type": "string",
+                "description": ""
+              }
+            }
+          },
+          "text": {
+            "type": "string",
+            "description": "Parameter text"
+          },
+          "callbacks": {
+            "type": "{\n\t\t\tonStart: (messageId: string) => void\n\t\t\tonChunk: (messageId: string, textDelta: string) => void\n\t\t\tonToolStart: (id: string, name: string, startedAt: number) => void\n\t\t\tonToolEnd: (id: string, name: string, ok: boolean, endedAt: number, durationMs: number, detail?: string) => void\n\t\t\tonComplete: (messageId: string, text: string) => void\n\t\t\tonError: (message: string) => void\n\t\t}",
+            "description": "Parameter callbacks"
+          }
+        },
+        "required": [
+          "session",
+          "text",
+          "callbacks"
+        ],
+        "returns": "Promise<string>"
+      },
+      "shutdown": {
+        "description": "Close all sessions and the WebSocket server.",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      }
+    },
+    "getters": {
+      "voiceChat": {
+        "description": "",
+        "returns": "VoiceChat | null"
+      },
+      "voiceMode": {
+        "description": "",
+        "returns": "VoiceMode"
+      },
+      "assistantsManager": {
+        "description": "",
+        "returns": "AssistantsManager"
+      }
+    },
+    "events": {
+      "voiceModeChanged": {
+        "name": "voiceModeChanged",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      },
+      "attached": {
+        "name": "attached",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      },
+      "listening": {
+        "name": "listening",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      },
+      "sessionCreated": {
+        "name": "sessionCreated",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      },
+      "shutdown": {
+        "name": "shutdown",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      },
+      "connection": {
+        "name": "connection",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      },
+      "disconnection": {
+        "name": "disconnection",
+        "description": "Event emitted by ChatService",
+        "arguments": {}
+      }
+    },
+    "state": {},
+    "options": {},
+    "envVars": [],
+    "types": {
+      "ChatSession": {
+        "description": "── Session ──",
+        "properties": {
+          "assistant": {
+            "type": "Assistant",
+            "description": ""
+          },
+          "assistantId": {
+            "type": "string",
+            "description": ""
+          },
+          "sessionKey": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      }
+    }
+  },
   {
     "id": "features.gws",
     "description": "Google Workspace CLI wrapper providing access to the full GWS API surface via subprocess. Supports profile-based credential management and typed sub-interfaces for Gmail, Sheets, Calendar, Drive, Docs, and Chat.",
     "shortcut": "features.gws",
     "className": "Gws",
     "methods": {
+      "configDirForProfile": {
+        "description": "Returns the config directory for a given profile. No profile uses ~/.config/gws, named profiles use ~/.config/gws-<name>.",
+        "parameters": {
+          "profile": {
+            "type": "string | null",
+            "description": "Parameter profile"
+          }
+        },
+        "required": [],
+        "returns": "string"
+      },
       "isAvailable": {
         "description": "Checks whether the GWS CLI binary can be resolved on this system.",
         "parameters": {},
@@ -1481,7 +3694,7 @@ export const introspectionData = [
         "returns": "Promise<any>"
       },
       "useProfile": {
-        "description": "Activates a named credential profile. Throws if the profile directory does not exist.",
+        "description": "Activates a named credential profile. Throws if ~/.config/gws-<name> does not exist.",
         "parameters": {
           "name": {
             "type": "string",
@@ -1513,13 +3726,205 @@ export const introspectionData = [
         "returns": "void"
       },
       "profiles": {
-        "description": "Lists all available credential profile names found in the profiles directory.",
+        "description": "Lists all available credential profile names by scanning for ~/.config/gws-* directories.",
         "parameters": {},
         "required": [],
         "returns": "string[]"
+      },
+      "gwsListProfiles": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "gwsSendEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ to: string; subject: string; body: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsSearchEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ query: string; maxResults?: number; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsReadEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ id: string; markAsRead?: boolean; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsTriageEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ max?: number; query?: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsTrashEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ id: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsArchiveEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ id: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsValidateEmail": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ id: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsGetCalendarAgenda": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ days?: number; calendar?: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsCreateCalendarEvent": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{\n    summary: string; start: string; end?: string; duration?: number;\n    calendar?: string; location?: string; description?: string;\n    attendees?: string[]; profile?: string\n  }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsReadSpreadsheet": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ spreadsheet: string; range: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsAppendToSpreadsheet": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ spreadsheet: string; values?: string; jsonValues?: string[][]; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsSearchDrive": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ query: string; pageSize?: number; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsSendChatMessage": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ space: string; text: string; profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "gwsCheckAuth": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ profile?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
       }
     },
     "getters": {
+      "configDir": {
+        "description": "",
+        "returns": "string"
+      },
       "currentProfile": {
         "description": "Returns the name of the currently active credential profile, or null if none is set.",
         "returns": "string | null"
@@ -1528,7 +3933,907 @@ export const introspectionData = [
     "events": {},
     "state": {},
     "options": {},
-    "envVars": []
+    "envVars": [],
+    "types": {
+      "GwsExecOptions": {
+        "description": "Interfaces",
+        "properties": {
+          "params": {
+            "type": "Record<string, string | number | boolean>",
+            "description": "",
+            "optional": true
+          },
+          "flags": {
+            "type": "string[]",
+            "description": "",
+            "optional": true
+          },
+          "json": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          },
+          "ndjson": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          },
+          "profile": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "features.windowManager",
+    "description": "WindowManager Feature — Native window control via LucaVoiceLauncher Uses a broker/producer architecture so multiple luca processes can trigger window operations without competing for the same Unix socket. **Architecture:** - The first process to call `listen()` becomes the **broker**. It owns the app-facing socket (`ipc-window.sock`) and a control socket (`ipc-window-control.sock`). - Subsequent processes detect the broker and become **producers**. They connect to the control socket and route commands through the broker. - The broker forwards producer commands to the native app and routes acks and lifecycle events back to the originating producer. **Protocol:** - Bun listens on a Unix domain socket; the native app connects as a client - Window dispatch commands are sent as NDJSON with a `window` field - The app executes window commands and sends back `windowAck` messages - Any non-windowAck message from the app is emitted as a `message` event - Other features can use `send()` to write arbitrary NDJSON to the app **Capabilities:** - Spawn native browser windows with configurable chrome - Navigate, focus, close, and eval JavaScript in windows - Multiple luca processes can trigger window operations simultaneously - Automatic broker detection and producer fallback Observable state includes `windows` (open window metadata), `pendingOperations` (in-flight command ids), and `producerCount` (broker). Sockets, promises, and `WindowHandle` instances stay internal. **Producer state:** The broker pushes `windowStateSync` on the control socket when a producer connects and whenever the window roster changes, so every process sees the same `windows` / `windowCount` / `clientConnected` as the broker (not only its own acks).",
+    "shortcut": "features.windowManager",
+    "className": "WindowManager",
+    "methods": {
+      "enable": {
+        "description": "",
+        "parameters": {
+          "options": {
+            "type": "any",
+            "description": "Parameter options"
+          }
+        },
+        "required": [],
+        "returns": "Promise<this>"
+      },
+      "listen": {
+        "description": "Start the window manager. Automatically detects whether a broker already exists and either becomes the broker or connects as a producer. - If no broker is running: becomes the broker, binds the app socket and a control socket for producers. - If a broker is already running: connects as a producer through the control socket.",
+        "parameters": {
+          "socketPath": {
+            "type": "string",
+            "description": "Override the configured app socket path"
+          }
+        },
+        "required": [],
+        "returns": "Promise<this>"
+      },
+      "cleanupSocket": {
+        "description": "Remove stale socket files without starting or stopping the server. Useful when a previous process crashed and left dead sockets behind. Will not remove sockets that have live listeners.",
+        "parameters": {
+          "socketPath": {
+            "type": "string",
+            "description": "Override the configured socket path"
+          }
+        },
+        "required": [],
+        "returns": "Promise<boolean>"
+      },
+      "stop": {
+        "description": "Stop the window manager and clean up all connections. Rejects any pending window operation requests.",
+        "parameters": {},
+        "required": [],
+        "returns": "Promise<this>"
+      },
+      "spawn": {
+        "description": "Spawn a new native browser window. Sends a window dispatch to the app and waits for the ack.",
+        "parameters": {
+          "opts": {
+            "type": "SpawnOptions",
+            "description": "Window configuration (url, dimensions, chrome options)",
+            "properties": {
+              "url": {
+                "type": "string",
+                "description": ""
+              },
+              "width": {
+                "type": "DimensionValue",
+                "description": ""
+              },
+              "height": {
+                "type": "DimensionValue",
+                "description": ""
+              },
+              "x": {
+                "type": "DimensionValue",
+                "description": ""
+              },
+              "y": {
+                "type": "DimensionValue",
+                "description": ""
+              },
+              "alwaysOnTop": {
+                "type": "boolean",
+                "description": ""
+              },
+              "window": {
+                "type": "{\n    decorations?: 'normal' | 'hiddenTitleBar' | 'none'\n    transparent?: boolean\n    shadow?: boolean\n    alwaysOnTop?: boolean\n    opacity?: number\n    clickThrough?: boolean\n  }",
+                "description": ""
+              }
+            }
+          }
+        },
+        "required": [],
+        "returns": "Promise<WindowHandle>"
+      },
+      "spawnTTY": {
+        "description": "Spawn a native terminal window running a command. The terminal is read-only — stdout/stderr are rendered with ANSI support. Closing the window terminates the process.",
+        "parameters": {
+          "opts": {
+            "type": "SpawnTTYOptions",
+            "description": "Terminal configuration (command, args, cwd, dimensions, etc.)",
+            "properties": {
+              "command": {
+                "type": "string",
+                "description": "Executable name or path (required)."
+              },
+              "args": {
+                "type": "string[]",
+                "description": "Arguments passed after the command."
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the process."
+              },
+              "env": {
+                "type": "Record<string, string>",
+                "description": "Environment variable overrides."
+              },
+              "cols": {
+                "type": "number",
+                "description": "Initial terminal columns."
+              },
+              "rows": {
+                "type": "number",
+                "description": "Initial terminal rows."
+              },
+              "title": {
+                "type": "string",
+                "description": "Window title."
+              },
+              "width": {
+                "type": "DimensionValue",
+                "description": "Window width in points."
+              },
+              "height": {
+                "type": "DimensionValue",
+                "description": "Window height in points."
+              },
+              "x": {
+                "type": "DimensionValue",
+                "description": "Window x position."
+              },
+              "y": {
+                "type": "DimensionValue",
+                "description": "Window y position."
+              },
+              "window": {
+                "type": "SpawnOptions['window']",
+                "description": "Chrome options (decorations, alwaysOnTop, etc.)"
+              }
+            }
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "Promise<WindowHandle>"
+      },
+      "focus": {
+        "description": "Bring a window to the front.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID. If omitted, the app uses the most recent window."
+          }
+        },
+        "required": [],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "close": {
+        "description": "Close a window.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID. If omitted, the app closes the most recent window."
+          }
+        },
+        "required": [],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "navigate": {
+        "description": "Navigate a window to a new URL.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID"
+          },
+          "url": {
+            "type": "string",
+            "description": "The URL to navigate to"
+          }
+        },
+        "required": [
+          "windowId",
+          "url"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "eval": {
+        "description": "Evaluate JavaScript in a window's web view.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID"
+          },
+          "code": {
+            "type": "string",
+            "description": "JavaScript code to evaluate"
+          },
+          "opts": {
+            "type": "{ timeoutMs?: number; returnJson?: boolean }",
+            "description": "timeoutMs (default 5000), returnJson (default true)"
+          }
+        },
+        "required": [
+          "windowId",
+          "code"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "screengrab": {
+        "description": "Capture a PNG screenshot from a window.",
+        "parameters": {
+          "opts": {
+            "type": "WindowScreenGrabOptions",
+            "description": "Window target and output path",
+            "properties": {
+              "windowId": {
+                "type": "string",
+                "description": "Window ID. If omitted, the launcher uses the most recent window."
+              },
+              "path": {
+                "type": "string",
+                "description": "Output file path for the PNG image."
+              }
+            }
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "video": {
+        "description": "Record a video from a window to disk.",
+        "parameters": {
+          "opts": {
+            "type": "WindowVideoOptions",
+            "description": "Window target, output path, and optional duration",
+            "properties": {
+              "windowId": {
+                "type": "string",
+                "description": "Window ID. If omitted, the launcher uses the most recent window."
+              },
+              "path": {
+                "type": "string",
+                "description": "Output file path for the video file."
+              },
+              "durationMs": {
+                "type": "number",
+                "description": "Recording duration in milliseconds."
+              }
+            }
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "move": {
+        "description": "Move a window to a new position.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID"
+          },
+          "x": {
+            "type": "DimensionValue",
+            "description": "New x position (absolute points or percentage string like \"25%\")"
+          },
+          "y": {
+            "type": "DimensionValue",
+            "description": "New y position (absolute points or percentage string like \"10%\")"
+          }
+        },
+        "required": [
+          "windowId",
+          "x",
+          "y"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "resize": {
+        "description": "Resize a window.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID"
+          },
+          "width": {
+            "type": "DimensionValue",
+            "description": "New width (absolute points or percentage string like \"50%\")"
+          },
+          "height": {
+            "type": "DimensionValue",
+            "description": "New height (absolute points or percentage string like \"70%\")"
+          }
+        },
+        "required": [
+          "windowId",
+          "width",
+          "height"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "setFrame": {
+        "description": "Set a window's full frame (position and/or size).",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID"
+          },
+          "frame": {
+            "type": "{ x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }",
+            "description": "Object with x, y, width, height (all optional, supports percentage strings)"
+          }
+        },
+        "required": [
+          "windowId",
+          "frame"
+        ],
+        "returns": "Promise<WindowAckResult>"
+      },
+      "window": {
+        "description": "Get a WindowHandle for chainable operations on a specific window. Returns the tracked handle if one exists, otherwise creates a new one.",
+        "parameters": {
+          "windowId": {
+            "type": "string",
+            "description": "The window ID"
+          }
+        },
+        "required": [
+          "windowId"
+        ],
+        "returns": "WindowHandle"
+      },
+      "spawnLayout": {
+        "description": "Spawn multiple windows in parallel from a layout configuration. Returns handles in the same order as the config entries.",
+        "parameters": {
+          "config": {
+            "type": "LayoutEntry[]",
+            "description": "Array of layout entries (window or tty)"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "returns": "Promise<WindowHandle[]>",
+        "examples": [
+          {
+            "language": "ts",
+            "code": "const handles = await wm.spawnLayout([\n { type: 'window', url: 'https://google.com', width: 800, height: 600 },\n { type: 'tty', command: 'htop' },\n { url: 'https://github.com' }, // defaults to window\n])"
+          }
+        ]
+      },
+      "spawnLayouts": {
+        "description": "Spawn multiple layouts sequentially. Each layout's windows spawn in parallel, but the next layout waits for the previous one to fully complete.",
+        "parameters": {
+          "configs": {
+            "type": "LayoutEntry[][]",
+            "description": "Array of layout configurations"
+          }
+        },
+        "required": [
+          "configs"
+        ],
+        "returns": "Promise<WindowHandle[][]>",
+        "examples": [
+          {
+            "language": "ts",
+            "code": "const [firstBatch, secondBatch] = await wm.spawnLayouts([\n [{ url: 'https://google.com' }, { url: 'https://github.com' }],\n [{ type: 'tty', command: 'htop' }],\n])"
+          }
+        ]
+      },
+      "send": {
+        "description": "Write an NDJSON message to the connected app client. In producer mode, routes through the broker. Public so other features can send arbitrary protocol messages over the same socket.",
+        "parameters": {
+          "msg": {
+            "type": "Record<string, any>",
+            "description": "The message object to send (will be JSON-serialized + newline)"
+          }
+        },
+        "required": [
+          "msg"
+        ],
+        "returns": "boolean"
+      },
+      "wmListWindows": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "wmSpawnBrowser": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ url?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmSpawnTerminal": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ command: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmCloseWindow": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmCloseAllWindows": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "wmFocusWindow": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId?: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmNavigate": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId: string; url: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmMoveWindow": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId: string; x: DimensionValue; y: DimensionValue }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmResizeWindow": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId: string; width: DimensionValue; height: DimensionValue }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmSetFrame": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId: string; x?: DimensionValue; y?: DimensionValue; width?: DimensionValue; height?: DimensionValue }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmArrangeWindows": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ pattern: 'grid' | 'stack' | 'row' | 'column'; gap?: number }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmScreenshot": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId?: string; path: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmStartRecording": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId?: string; path: string; durationMs?: number }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmStopRecording": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ recordingId: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmListRecordings": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "wmEval": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windowId: string; code: string }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmSpawnLayout": {
+        "description": "",
+        "parameters": {
+          "opts": {
+            "type": "{ windows: Array<{ type?: 'window' | 'tty'; url?: string; command?: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }> }",
+            "description": "Parameter opts"
+          }
+        },
+        "required": [
+          "opts"
+        ],
+        "returns": "void"
+      },
+      "wmGetStatus": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      }
+    },
+    "getters": {
+      "isBroker": {
+        "description": "Whether this instance is acting as the broker.",
+        "returns": "boolean"
+      },
+      "isProducer": {
+        "description": "Whether this instance is acting as a producer.",
+        "returns": "boolean"
+      },
+      "isListening": {
+        "description": "Whether the IPC server is currently listening (broker) or connected to broker (producer).",
+        "returns": "boolean"
+      },
+      "isClientConnected": {
+        "description": "Whether the native app client is currently connected (only meaningful for broker).",
+        "returns": "boolean"
+      }
+    },
+    "events": {
+      "listening": {
+        "name": "listening",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "clientConnected": {
+        "name": "clientConnected",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "clientDisconnected": {
+        "name": "clientDisconnected",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "windowAck": {
+        "name": "windowAck",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "windowClosed": {
+        "name": "windowClosed",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "terminalExited": {
+        "name": "terminalExited",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "windowFocus": {
+        "name": "windowFocus",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      },
+      "message": {
+        "name": "message",
+        "description": "Event emitted by WindowManager",
+        "arguments": {}
+      }
+    },
+    "state": {},
+    "options": {},
+    "envVars": [],
+    "examples": [
+      {
+        "language": "ts",
+        "code": "const wm = container.feature('windowManager', { enable: true, autoListen: true })\n\nconst handle = await wm.spawn({ url: 'https://google.com', width: 800, height: 600 })\nhandle.on('close', (msg) => console.log('window closed'))\nawait handle.navigate('https://news.ycombinator.com')\nconst title = await handle.eval('document.title')\nawait handle.close()\n\n// Other features can listen for non-window messages\nwm.on('message', (msg) => console.log('App says:', msg))\n\n// Other features can write raw NDJSON to the app\nwm.send({ id: 'abc', status: 'processing', speech: 'Working on it' })"
+      }
+    ],
+    "types": {
+      "SpawnOptions": {
+        "description": "Options for spawning a new native browser window. Dimensions and positions accept absolute points or percentage strings (e.g. `\"50%\"`) resolved against the primary display.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "width": {
+            "type": "DimensionValue",
+            "description": "",
+            "optional": true
+          },
+          "height": {
+            "type": "DimensionValue",
+            "description": "",
+            "optional": true
+          },
+          "x": {
+            "type": "DimensionValue",
+            "description": "",
+            "optional": true
+          },
+          "y": {
+            "type": "DimensionValue",
+            "description": "",
+            "optional": true
+          },
+          "alwaysOnTop": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          },
+          "window": {
+            "type": "{\n    decorations?: 'normal' | 'hiddenTitleBar' | 'none'\n    transparent?: boolean\n    shadow?: boolean\n    alwaysOnTop?: boolean\n    opacity?: number\n    clickThrough?: boolean\n  }",
+            "description": "",
+            "optional": true
+          }
+        }
+      },
+      "SpawnTTYOptions": {
+        "description": "Options for spawning a native terminal window. Dimensions and positions accept absolute points or percentage strings (e.g. `\"50%\"`) resolved against the primary display.",
+        "properties": {
+          "command": {
+            "type": "string",
+            "description": "Executable name or path (required)."
+          },
+          "args": {
+            "type": "string[]",
+            "description": "Arguments passed after the command.",
+            "optional": true
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Working directory for the process.",
+            "optional": true
+          },
+          "env": {
+            "type": "Record<string, string>",
+            "description": "Environment variable overrides.",
+            "optional": true
+          },
+          "cols": {
+            "type": "number",
+            "description": "Initial terminal columns.",
+            "optional": true
+          },
+          "rows": {
+            "type": "number",
+            "description": "Initial terminal rows.",
+            "optional": true
+          },
+          "title": {
+            "type": "string",
+            "description": "Window title.",
+            "optional": true
+          },
+          "width": {
+            "type": "DimensionValue",
+            "description": "Window width in points.",
+            "optional": true
+          },
+          "height": {
+            "type": "DimensionValue",
+            "description": "Window height in points.",
+            "optional": true
+          },
+          "x": {
+            "type": "DimensionValue",
+            "description": "Window x position.",
+            "optional": true
+          },
+          "y": {
+            "type": "DimensionValue",
+            "description": "Window y position.",
+            "optional": true
+          },
+          "window": {
+            "type": "SpawnOptions['window']",
+            "description": "Chrome options (decorations, alwaysOnTop, etc.)",
+            "optional": true
+          }
+        }
+      },
+      "WindowAckResult": {
+        "description": "The result returned from a window ack.",
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          },
+          "windowId": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "value": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "json": {
+            "type": "any",
+            "description": "",
+            "optional": true
+          }
+        }
+      },
+      "WindowScreenGrabOptions": {
+        "description": "Options for capturing a screenshot from a native window.",
+        "properties": {
+          "windowId": {
+            "type": "string",
+            "description": "Window ID. If omitted, the launcher uses the most recent window.",
+            "optional": true
+          },
+          "path": {
+            "type": "string",
+            "description": "Output file path for the PNG image."
+          }
+        }
+      },
+      "WindowVideoOptions": {
+        "description": "Options for recording video from a native window.",
+        "properties": {
+          "windowId": {
+            "type": "string",
+            "description": "Window ID. If omitted, the launcher uses the most recent window.",
+            "optional": true
+          },
+          "path": {
+            "type": "string",
+            "description": "Output file path for the video file."
+          },
+          "durationMs": {
+            "type": "number",
+            "description": "Recording duration in milliseconds.",
+            "optional": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "features.preferences",
+    "description": "The Preferences feature manages the global preferences of the Agentic Loop and allows users to control things like the default coding assistant to use when running tasks / plays etc.",
+    "shortcut": "features.preferences",
+    "className": "Preferences",
+    "methods": {
+      "afterInitialize": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      }
+    },
+    "getters": {
+      "configFilePath": {
+        "description": "",
+        "returns": "any"
+      },
+      "loopConfigFileData": {
+        "description": "",
+        "returns": "any"
+      },
+      "manifestPreferences": {
+        "description": "",
+        "returns": "any"
+      }
+    },
+    "events": {},
+    "state": {},
+    "options": {},
+    "envVars": [],
+    "examples": [
+      {
+        "language": "ts",
+        "code": "const preferences = container.feature('preferences')"
+      }
+    ]
   },
   {
     "id": "features.voiceRouter",
@@ -1728,7 +5033,26 @@ export const introspectionData = [
     },
     "state": {},
     "options": {},
-    "envVars": []
+    "envVars": [],
+    "types": {
+      "WorkspaceEntry": {
+        "description": "",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": ""
+          },
+          "path": {
+            "type": "string",
+            "description": ""
+          },
+          "aliases": {
+            "type": "string[]",
+            "description": ""
+          }
+        }
+      }
+    }
   },
   {
     "id": "features.voiceChat",
@@ -1933,6 +5257,193 @@ export const introspectionData = [
     },
     "state": {},
     "options": {},
+    "envVars": [],
+    "types": {
+      "CapabilityResult": {
+        "description": "",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": ""
+          },
+          "missing": {
+            "type": "string[]",
+            "description": ""
+          }
+        }
+      },
+      "VoiceConfig": {
+        "description": "",
+        "properties": {
+          "voiceId": {
+            "type": "string",
+            "description": ""
+          },
+          "modelId": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "voiceSettings": {
+            "type": "any",
+            "description": "",
+            "optional": true
+          },
+          "conversationModePrefix": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "maxChunkLength": {
+            "type": "number",
+            "description": "",
+            "optional": true
+          }
+        }
+      }
+    }
+  },
+  {
+    "id": "features.workflowService",
+    "description": "WorkflowService — one Express server that: - Discovers all workflows public directories and serves them statically - Loads ContentDB once and attaches it to app.locals.docs - Serves shared CSS at /shared/base.css - Exposes GET /api/workflows - Renders a landing page at /",
+    "shortcut": "features.workflowService",
+    "className": "WorkflowService",
+    "methods": {
+      "start": {
+        "description": "Start the unified workflow server. Discovers all workflows, mounts their public dirs, loads ContentDB, and begins listening.",
+        "parameters": {},
+        "required": [],
+        "returns": "Promise<this>"
+      },
+      "stop": {
+        "description": "Stop the server and clean up.",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      }
+    },
+    "getters": {
+      "expressServer": {
+        "description": "",
+        "returns": "ExpressServer"
+      },
+      "port": {
+        "description": "",
+        "returns": "number | null"
+      },
+      "isListening": {
+        "description": "",
+        "returns": "boolean"
+      }
+    },
+    "events": {
+      "started": {
+        "name": "started",
+        "description": "Event emitted by WorkflowService",
+        "arguments": {}
+      },
+      "stopped": {
+        "name": "stopped",
+        "description": "Event emitted by WorkflowService",
+        "arguments": {}
+      }
+    },
+    "state": {},
+    "options": {},
+    "envVars": []
+  },
+  {
+    "id": "features.instanceRegistry",
+    "description": "Manages ~/.luca/agentic-loops/ as a shared registry so multiple luca main processes on the same machine can coexist without port collisions. Instance ID is derived from the CWD basename (e.g. \"@agentic-loop\").",
+    "shortcut": "features.instanceRegistry",
+    "className": "InstanceRegistry",
+    "methods": {
+      "ensureDir": {
+        "description": "Ensure the registry directory exists",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "listInstances": {
+        "description": "Read all currently registered instances",
+        "parameters": {},
+        "required": [],
+        "returns": "InstanceEntry[]"
+      },
+      "getInstance": {
+        "description": "Get a specific instance by ID",
+        "parameters": {
+          "id": {
+            "type": "string",
+            "description": "Parameter id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "returns": "InstanceEntry | null"
+      },
+      "getSelf": {
+        "description": "Get the entry for the current project, if registered",
+        "parameters": {},
+        "required": [],
+        "returns": "InstanceEntry | null"
+      },
+      "claimedPorts": {
+        "description": "Collect all ports currently claimed by other instances",
+        "parameters": {},
+        "required": [],
+        "returns": "Set<number>"
+      },
+      "allocatePorts": {
+        "description": "Allocate ports for this instance, avoiding collisions with other registered instances and verifying ports are actually open.",
+        "parameters": {},
+        "required": [],
+        "returns": "Promise<InstanceEntry['ports']>"
+      },
+      "register": {
+        "description": "Register this instance with its allocated ports",
+        "parameters": {
+          "ports": {
+            "type": "InstanceEntry['ports']",
+            "description": "Parameter ports"
+          }
+        },
+        "required": [
+          "ports"
+        ],
+        "returns": "InstanceEntry"
+      },
+      "deregister": {
+        "description": "Deregister this instance (called on shutdown)",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "pruneStale": {
+        "description": "Clean up stale entries whose processes are no longer alive",
+        "parameters": {},
+        "required": [],
+        "returns": "string[]"
+      }
+    },
+    "getters": {
+      "registryDir": {
+        "description": "",
+        "returns": "any"
+      },
+      "instanceId": {
+        "description": "",
+        "returns": "string"
+      },
+      "instanceFile": {
+        "description": "",
+        "returns": "string"
+      }
+    },
+    "events": {},
+    "state": {},
+    "options": {},
     "envVars": []
   },
   {
@@ -2032,7 +5543,7 @@ export const introspectionData = [
         "returns": "Promise<SendResult>"
       },
       "watch": {
-        "description": "Watch for incoming messages. Returns an abort function to stop watching.",
+        "description": "Watch for incoming messages. Emits events: 'message' — new message received (payload: Message) 'error'   — stderr output from imsg watch 'stop'    — watcher was stopped Returns { stop() } to kill the watcher process.",
         "parameters": {
           "opts": {
             "type": "WatchOptions",
@@ -2061,24 +5572,32 @@ export const introspectionData = [
               "debounce": {
                 "type": "string",
                 "description": ""
-              },
-              "onMessage": {
-                "type": "(msg: Message) => void",
-                "description": ""
-              },
-              "onError": {
-                "type": "(err: string) => void",
-                "description": ""
               }
             }
           }
         },
         "required": [],
-        "returns": "Promise<{ stop: () => void }>"
+        "returns": "{ stop: () => void }"
       }
     },
     "getters": {},
-    "events": {},
+    "events": {
+      "message": {
+        "name": "message",
+        "description": "Event emitted by Imsg",
+        "arguments": {}
+      },
+      "error": {
+        "name": "error",
+        "description": "Event emitted by Imsg",
+        "arguments": {}
+      },
+      "stop": {
+        "name": "stop",
+        "description": "Event emitted by Imsg",
+        "arguments": {}
+      }
+    },
     "state": {},
     "options": {},
     "envVars": [],
@@ -2087,7 +5606,158 @@ export const introspectionData = [
         "language": "ts",
         "code": "const imsg = container.feature('imsg')\nconst chats = await imsg.chats({ limit: 5 })\nconst messages = await imsg.history(6, { limit: 10 })\nawait imsg.send('+15551234567', 'Hello from luca')"
       }
-    ]
+    ],
+    "types": {
+      "Chat": {
+        "description": "",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": ""
+          },
+          "name": {
+            "type": "string",
+            "description": ""
+          },
+          "identifier": {
+            "type": "string",
+            "description": ""
+          },
+          "service": {
+            "type": "string",
+            "description": ""
+          },
+          "last_message_at": {
+            "type": "string",
+            "description": ""
+          }
+        }
+      },
+      "HistoryOptions": {
+        "description": "",
+        "properties": {
+          "limit": {
+            "type": "number",
+            "description": "",
+            "optional": true
+          },
+          "participants": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "start": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "end": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "attachments": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          }
+        }
+      },
+      "Message": {
+        "description": "",
+        "properties": {
+          "id": {
+            "type": "number",
+            "description": ""
+          },
+          "guid": {
+            "type": "string",
+            "description": ""
+          },
+          "chat_id": {
+            "type": "number",
+            "description": ""
+          },
+          "sender": {
+            "type": "string",
+            "description": ""
+          },
+          "text": {
+            "type": "string",
+            "description": ""
+          },
+          "is_from_me": {
+            "type": "boolean",
+            "description": ""
+          },
+          "created_at": {
+            "type": "string",
+            "description": ""
+          },
+          "destination_caller_id": {
+            "type": "string",
+            "description": ""
+          },
+          "reactions": {
+            "type": "any[]",
+            "description": ""
+          },
+          "attachments": {
+            "type": "any[]",
+            "description": ""
+          }
+        }
+      },
+      "SendResult": {
+        "description": "",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": ""
+          },
+          "error": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          }
+        }
+      },
+      "WatchOptions": {
+        "description": "",
+        "properties": {
+          "chatId": {
+            "type": "number",
+            "description": "",
+            "optional": true
+          },
+          "participants": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          },
+          "sinceRowid": {
+            "type": "number",
+            "description": "",
+            "optional": true
+          },
+          "attachments": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          },
+          "reactions": {
+            "type": "boolean",
+            "description": "",
+            "optional": true
+          },
+          "debounce": {
+            "type": "string",
+            "description": "",
+            "optional": true
+          }
+        }
+      }
+    }
   },
   {
     "id": "features.projectBuilder",
@@ -2326,6 +5996,167 @@ export const introspectionData = [
     "envVars": []
   },
   {
+    "id": "features.workflowLibrary",
+    "description": "WorkflowLibrary helper",
+    "shortcut": "features.workflowLibrary",
+    "className": "WorkflowLibrary",
+    "methods": {
+      "afterInitialize": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "discover": {
+        "description": "Scan the workflows directory and parse each ABOUT.md",
+        "parameters": {},
+        "required": [],
+        "returns": "Promise<WorkflowInfo[]>"
+      },
+      "get": {
+        "description": "Get a specific workflow by name",
+        "parameters": {
+          "name": {
+            "type": "string",
+            "description": "Parameter name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "returns": "WorkflowInfo | undefined"
+      },
+      "listAvailableWorkflows": {
+        "description": "",
+        "parameters": {
+          "options": {
+            "type": "{ tag?: string }",
+            "description": "Parameter options"
+          }
+        },
+        "required": [],
+        "returns": "Promise<WorkflowInfo[]>"
+      },
+      "viewWorkflow": {
+        "description": "",
+        "parameters": {
+          "options": {
+            "type": "{ name: string }",
+            "description": "Parameter options"
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "returns": "Promise<WorkflowInfo & { content?: string }>"
+      },
+      "runWorkflow": {
+        "description": "",
+        "parameters": {
+          "options": {
+            "type": "{ name: string }",
+            "description": "Parameter options"
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "returns": "Promise<{ url: string; pid?: number }>"
+      },
+      "generateSummary": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "setupToolsConsumer": {
+        "description": "",
+        "parameters": {
+          "assistant": {
+            "type": "Assistant",
+            "description": "Parameter assistant"
+          }
+        },
+        "required": [
+          "assistant"
+        ],
+        "returns": "void"
+      }
+    },
+    "getters": {
+      "workflowsDir": {
+        "description": "",
+        "returns": "string"
+      },
+      "workflows": {
+        "description": "",
+        "returns": "WorkflowInfo[]"
+      },
+      "isLoaded": {
+        "description": "",
+        "returns": "boolean"
+      },
+      "available": {
+        "description": "",
+        "returns": "any"
+      }
+    },
+    "events": {
+      "discovered": {
+        "name": "discovered",
+        "description": "Event emitted by WorkflowLibrary",
+        "arguments": {}
+      },
+      "workflowStarted": {
+        "name": "workflowStarted",
+        "description": "Event emitted by WorkflowLibrary",
+        "arguments": {}
+      }
+    },
+    "state": {},
+    "options": {},
+    "envVars": [],
+    "types": {
+      "WorkflowInfo": {
+        "description": "",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": ""
+          },
+          "title": {
+            "type": "string",
+            "description": ""
+          },
+          "description": {
+            "type": "string",
+            "description": ""
+          },
+          "tags": {
+            "type": "string[]",
+            "description": ""
+          },
+          "folderPath": {
+            "type": "string",
+            "description": ""
+          },
+          "hasServeHook": {
+            "type": "boolean",
+            "description": ""
+          },
+          "hasPublicDir": {
+            "type": "boolean",
+            "description": ""
+          },
+          "raw": {
+            "type": "Record<string, any>",
+            "description": ""
+          }
+        }
+      }
+    }
+  },
+  {
     "id": "features.voiceListener",
     "description": "WhisperMLX server side based listener",
     "shortcut": "features.voiceListener",
@@ -2335,13 +6166,13 @@ export const introspectionData = [
         "description": "Lock the listener, preventing it from reacting to wakewords until it is unlocked",
         "parameters": {},
         "required": [],
-        "returns": "void"
+        "returns": "VoiceListener"
       },
       "unlock": {
         "description": "Unlock the listener, allowing it to react to wakewords",
         "parameters": {},
         "required": [],
-        "returns": "void"
+        "returns": "VoiceListener"
       },
       "checkCapabilities": {
         "description": "",
@@ -2465,7 +6296,22 @@ export const introspectionData = [
         "language": "ts",
         "code": "const voiceListener = container.feature('voiceListener')"
       }
-    ]
+    ],
+    "types": {
+      "CapabilityResult": {
+        "description": "",
+        "properties": {
+          "available": {
+            "type": "boolean",
+            "description": ""
+          },
+          "missing": {
+            "type": "string[]",
+            "description": ""
+          }
+        }
+      }
+    }
   },
   {
     "id": "features.voiceService",
@@ -2792,6 +6638,97 @@ export const introspectionData = [
       "taskCompleted": {
         "name": "taskCompleted",
         "description": "Event emitted by TaskScheduler",
+        "arguments": {}
+      }
+    },
+    "state": {},
+    "options": {},
+    "envVars": []
+  },
+  {
+    "id": "features.communications",
+    "description": "The Communications Feature is a centralized hub that monitors multiple channels for incoming messages, and reacts when they arrive.  The communications feature can also be used to send messages back over those same channels. Supported channels are imessage, telegram, and gmail for now",
+    "shortcut": "features.communications",
+    "className": "Communications",
+    "methods": {
+      "pause": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "unpause": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "start": {
+        "description": "",
+        "parameters": {},
+        "required": [],
+        "returns": "void"
+      },
+      "activateChannel": {
+        "description": "",
+        "parameters": {
+          "channelName": {
+            "type": "Channel",
+            "description": "Parameter channelName"
+          },
+          "options": {
+            "type": "any",
+            "description": "Parameter options"
+          }
+        },
+        "required": [
+          "channelName",
+          "options"
+        ],
+        "returns": "void"
+      }
+    },
+    "getters": {
+      "imessage": {
+        "description": "",
+        "returns": "any"
+      },
+      "activeChannels": {
+        "description": "",
+        "returns": "any"
+      },
+      "telegramBot": {
+        "description": "",
+        "returns": "any"
+      },
+      "isPaused": {
+        "description": "",
+        "returns": "any"
+      },
+      "isStarted": {
+        "description": "",
+        "returns": "any"
+      }
+    },
+    "events": {
+      "paused": {
+        "name": "paused",
+        "description": "Event emitted by Communications",
+        "arguments": {}
+      },
+      "unpaused": {
+        "name": "unpaused",
+        "description": "Event emitted by Communications",
+        "arguments": {}
+      },
+      "message": {
+        "name": "message",
+        "description": "Event emitted by Communications",
+        "arguments": {}
+      },
+      "started": {
+        "name": "started",
+        "description": "Event emitted by Communications",
         "arguments": {}
       }
     },

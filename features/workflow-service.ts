@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { Feature, FeatureStateSchema, FeatureOptionsSchema, features } from '@soederpop/luca'
-import type { ContainerContext } from '@soederpop/luca'
+import type { ExpressServer } from '@soederpop/luca'
+import type { AGIContainer} from '@soederpop/luca/agi'
 
 declare module '@soederpop/luca' {
   interface AvailableFeatures {
@@ -44,9 +45,17 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
   }
 
   private _expressServer: any = null
+  
+  override get container() : AGIContainer {
+    return super.container as unknown as AGIContainer
+  }
 
-  get expressServer() {
-    return this._expressServer
+  get expressServer(): ExpressServer {
+    return this.container.server('express', {
+      port: this.options.port,
+      host: this.options.host,
+      cors: true,
+    })
   }
 
   get port(): number | null {
@@ -62,32 +71,19 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
    * Discovers all workflows, mounts their public dirs, loads ContentDB,
    * and begins listening.
    */
-  async start(options: { port?: number; host?: string } = {}): Promise<any> {
-    const port = options.port ?? this.options.port
-    const host = options.host ?? this.options.host
-
-    // 1. Discover workflows
+  async start(): Promise<this> {
     const library = this.container.feature('workflowLibrary')
     if (!library.isLoaded) await library.discover()
 
     const workflows = library.workflows.filter((w) => w.hasPublicDir)
-
-    // 2. Create the Express server (no static dir — we mount manually)
-    const server = this.container.server('express', {
-      port,
-      host,
-      cors: true,
-    })
-
-    this._expressServer = server
+    
+    const server = this.expressServer
 
     const app = server.app
     const express = server.express
+    
+    const { docs } = this.container
 
-    // 3. Load ContentDB once and attach to app.locals
-    const docs = this.container.feature('contentDb', {
-      rootPath: this.container.paths.resolve('docs'),
-    })
     await docs.load()
     app.locals.docs = docs
     app.locals.container = this.container
@@ -119,22 +115,16 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
       })
     })
 
-    // 7. Landing page at /
-    app.get('/', (_req: any, res: any) => {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8')
-      res.send(this._renderLandingPage(library.workflows, port))
-    })
+    // 7. Start listening
+    await server.start()
 
-    // 8. Start listening
-    await server.start({ port, host })
-
-    this.state.set('port', port)
+    this.state.set('port', server.port)
     this.state.set('listening', true)
     this.state.set('workflowCount', workflows.length)
 
-    this.emit('started', { port, host, workflowCount: workflows.length })
+    this.emit('started', { port: server.port, workflowCount: workflows.length })
 
-    return server
+    return this 
   }
 
   /** Stop the server and clean up. */
@@ -148,142 +138,6 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
     this.emit('stopped')
   }
 
-  // ── Private ──────────────────────────────────────────────────────────────
-
-  private _renderLandingPage(workflows: any[], port: number): string {
-    const workflowItems = workflows
-      .filter((w) => w.hasPublicDir)
-      .map((w) => {
-        const tags = (w.tags || []).map((t: string) => `<span class="tag">${t}</span>`).join('')
-        return `
-      <a class="workflow-card" href="/workflows/${w.name}/">
-        <div class="card-name">${w.name}</div>
-        <div class="card-title">${w.title || w.name}</div>
-        ${w.description ? `<div class="card-desc">${w.description}</div>` : ''}
-        ${tags ? `<div class="card-tags">${tags}</div>` : ''}
-      </a>`
-      })
-      .join('\n')
-
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Agentic Loop — Workflows</title>
-<link rel="stylesheet" href="/shared/base.css">
-<style>
-  body {
-    padding: 32px 24px;
-    max-width: 900px;
-    margin: 0 auto;
-  }
-
-  .header {
-    margin-bottom: 32px;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 20px;
-  }
-
-  .header h1 {
-    font-size: 18px;
-    font-weight: 700;
-    color: var(--accent);
-    letter-spacing: 2px;
-    text-transform: uppercase;
-  }
-
-  .header p {
-    color: var(--text-dim);
-    font-size: 12px;
-    margin-top: 6px;
-  }
-
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 12px;
-  }
-
-  .workflow-card {
-    display: block;
-    text-decoration: none;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 16px;
-    transition: border-color 0.15s, background 0.15s;
-    animation: fadeIn 0.2s ease-out;
-  }
-
-  .workflow-card:hover {
-    border-color: var(--accent);
-    background: var(--surface-2);
-  }
-
-  .card-name {
-    font-size: 10px;
-    color: var(--text-faint);
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 4px;
-  }
-
-  .card-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 6px;
-  }
-
-  .card-desc {
-    font-size: 11px;
-    color: var(--text-dim);
-    line-height: 1.4;
-    margin-bottom: 8px;
-  }
-
-  .card-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-top: 8px;
-  }
-
-  .tag {
-    font-size: 10px;
-    padding: 2px 6px;
-    background: var(--accent-dim);
-    color: var(--accent);
-    border-radius: 3px;
-  }
-
-  .footer {
-    margin-top: 40px;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-    font-size: 11px;
-    color: var(--text-faint);
-    display: flex;
-    justify-content: space-between;
-  }
-</style>
-</head>
-<body>
-  <div class="header">
-    <h1>Agentic Loop</h1>
-    <p>${workflows.filter((w) => w.hasPublicDir).length} workflows available &mdash; port ${port}</p>
-  </div>
-  <div class="grid">
-${workflowItems}
-  </div>
-  <div class="footer">
-    <span>workflow service</span>
-    <span><a href="/api/workflows" style="color:var(--accent);text-decoration:none">/api/workflows</a></span>
-  </div>
-</body>
-</html>`
-  }
 }
 
 export default features.register('workflowService', WorkflowService)

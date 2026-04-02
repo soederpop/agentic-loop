@@ -6,6 +6,13 @@ import type { Assistant, AssistantsManager } from '@soederpop/luca/agi'
 import type { Server as HttpServer } from 'http'
 import type { VoiceChat } from './voice-chat'
 
+declare module '@soederpop/luca' {
+  interface AvailableFeatures {
+    chatService: typeof ChatService
+  }
+}
+
+
 // ── Voice mode ──
 
 export type VoiceMode = 'off' | 'always'
@@ -257,6 +264,7 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 		callbacks.onStart(messageId)
 
 		const toolTimers = new Map<string, number>()
+		const toolCallIds = new Map<string, string>()
 		let toolCallCounter = 0
 
 		const onChunk = (chunk: string) => {
@@ -265,25 +273,31 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 		const onToolCall = (toolName: string, _args: any) => {
 			const callId = `${messageId}:tool:${toolCallCounter++}`
-			toolTimers.set(toolName, Date.now())
+			toolTimers.set(callId, Date.now())
+			toolCallIds.set(toolName, callId)
 			callbacks.onToolStart(callId, toolName, Date.now())
 		}
 
 		const onToolResult = (toolName: string, result: string) => {
-			const startedAt = toolTimers.get(toolName) || Date.now()
+			const callId = toolCallIds.get(toolName) || toolName
+			const startedAt = toolTimers.get(callId) || Date.now()
 			const endedAt = Date.now()
-			toolTimers.delete(toolName)
+			toolTimers.delete(callId)
+			toolCallIds.delete(toolName)
 			const summary = typeof result === 'string' && result.length > 120
 				? result.slice(0, 120) + '…'
 				: result
-			callbacks.onToolEnd(toolName, toolName, true, endedAt, endedAt - startedAt, summary)
+			callbacks.onToolEnd(callId, toolName, true, endedAt, endedAt - startedAt, summary)
 		}
 
 		const onToolError = (toolName: string, error: any) => {
-			const startedAt = toolTimers.get(toolName) || Date.now()
+			const callId = toolCallIds.get(toolName) || toolName
+			const startedAt = toolTimers.get(callId) || Date.now()
 			const endedAt = Date.now()
-			toolTimers.delete(toolName)
-			callbacks.onToolEnd(toolName, toolName, false, endedAt, endedAt - startedAt, error?.message || String(error))
+			toolTimers.delete(callId)
+			toolCallIds.delete(toolName)
+			console.error(`[chat-service] tool error: ${toolName}`, error)
+			callbacks.onToolEnd(callId, toolName, false, endedAt, endedAt - startedAt, error?.message || String(error))
 		}
 
 		session.assistant.on('chunk', onChunk)
