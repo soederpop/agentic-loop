@@ -64,34 +64,10 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
       } catch {}
 
       if (!serviceRunning) {
-        const onOutputListeners: Array<(output: string) => void> = []
-        const serviceReady = new Promise<boolean>((resolve) => {
-          const timeout = setTimeout(() => resolve(false), 20000)
-          onOutputListeners.push((output: string) => {
-            if (String(output).includes('listening on')) {
-              clearTimeout(timeout)
-              resolve(true)
-            }
-          })
-        })
-
         console.log('[workflow] starting shared workflow service...')
-        container.proc.spawnAndCapture('luca', ['workflow-service', '--no-open', `--port=${servicePort}`], {
-          onOutput(output: string) {
-            const line = String(output).trim()
-            console.log(`[workflow-service:stdout] ${line}`)
-            for (const listener of onOutputListeners) listener(line)
-          },
-          onError(output: string) {
-            console.log(`[workflow-service:stderr] ${String(output).trim()}`)
-          },
-        })
-
-        const started = await serviceReady
-        if (!started) {
-          ui.print.red('Workflow service failed to start within 20 seconds')
-          return
-        }
+        const service = container.feature('workflowService')
+        await service.start({ port: servicePort })
+        console.log(`[workflow] service listening on http://localhost:${servicePort}`)
       }
 
       actualPort = servicePort
