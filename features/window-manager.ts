@@ -181,7 +181,19 @@ export interface SpawnTTYOptions {
   x?: DimensionValue
   /** Window y position. */
   y?: DimensionValue
-  /** Chrome options (decorations, alwaysOnTop, etc.) */
+  /** Keep the window above all other windows. */
+  alwaysOnTop?: boolean
+  /** Window chrome style: "normal" (default), "hiddenTitleBar", or "none" (borderless). */
+  decorations?: 'normal' | 'hiddenTitleBar' | 'none'
+  /** Make the window background transparent. */
+  transparent?: boolean
+  /** Show/hide the window drop shadow. */
+  shadow?: boolean
+  /** Window opacity (0.0–1.0). */
+  opacity?: number
+  /** Ignore mouse events (click-through). */
+  clickThrough?: boolean
+  /** Chrome options (decorations, alwaysOnTop, etc.) — use flat fields above instead when possible */
   window?: SpawnOptions['window']
 }
 
@@ -429,14 +441,21 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       schema: z.object({}),
     },
     wmSpawnBrowser: {
-      description: 'Open a new browser window with an optional URL and position/size',
+      description: 'Open a new browser window with an optional URL or inline HTML, position, size, and chrome options',
       schema: z.object({
-        url: z.string().optional().describe('URL to load in the window'),
+        url: z.string().optional().describe('URL to load in the window (mutually exclusive with html)'),
+        html: z.string().optional().describe('Inline HTML string to load (mutually exclusive with url)'),
+        title: z.string().optional().describe('Window title'),
         width: z.union([z.number(), z.string()]).optional().describe('Window width in points or percentage (e.g. "50%")'),
         height: z.union([z.number(), z.string()]).optional().describe('Window height in points or percentage (e.g. "50%")'),
         x: z.union([z.number(), z.string()]).optional().describe('Window x position in points or percentage'),
         y: z.union([z.number(), z.string()]).optional().describe('Window y position in points or percentage'),
         alwaysOnTop: z.boolean().optional().describe('Keep the window above other windows'),
+        decorations: z.enum(['normal', 'hiddenTitleBar', 'none']).optional().describe('Window chrome: "normal" (default), "hiddenTitleBar" (no title bar buttons), "none" (borderless)'),
+        transparent: z.boolean().optional().describe('Make the window background transparent'),
+        shadow: z.boolean().optional().describe('Show/hide the window drop shadow (default true)'),
+        opacity: z.number().min(0).max(1).optional().describe('Window opacity from 0.0 (invisible) to 1.0 (fully opaque)'),
+        clickThrough: z.boolean().optional().describe('Make the window ignore mouse events (click-through)'),
       }),
     },
     wmSpawnTerminal: {
@@ -445,11 +464,20 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         command: z.string().describe('Command to run in the terminal'),
         args: z.array(z.string()).optional().describe('Arguments for the command'),
         cwd: z.string().optional().describe('Working directory'),
+        env: z.record(z.string()).optional().describe('Environment variable overrides (merged with the process environment)'),
+        cols: z.number().int().positive().optional().describe('Initial terminal column count'),
+        rows: z.number().int().positive().optional().describe('Initial terminal row count'),
         title: z.string().optional().describe('Window title'),
         width: z.union([z.number(), z.string()]).optional().describe('Window width in points or percentage'),
         height: z.union([z.number(), z.string()]).optional().describe('Window height in points or percentage'),
         x: z.union([z.number(), z.string()]).optional().describe('Window x position in points or percentage'),
         y: z.union([z.number(), z.string()]).optional().describe('Window y position in points or percentage'),
+        alwaysOnTop: z.boolean().optional().describe('Keep the window above other windows'),
+        decorations: z.enum(['normal', 'hiddenTitleBar', 'none']).optional().describe('Window chrome: "normal" (default), "hiddenTitleBar", "none" (borderless)'),
+        transparent: z.boolean().optional().describe('Make the window background transparent'),
+        shadow: z.boolean().optional().describe('Show/hide the window drop shadow (default true)'),
+        opacity: z.number().min(0).max(1).optional().describe('Window opacity from 0.0 to 1.0'),
+        clickThrough: z.boolean().optional().describe('Make the window ignore mouse events (click-through)'),
       }),
     },
     wmCloseWindow: {
@@ -523,19 +551,29 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       }),
     },
     wmSpawnLayout: {
-      description: 'Spawn multiple windows at once from a layout configuration. Each entry is either a browser window (with url, position, size) or a terminal (with command, args, cwd).',
+      description: 'Spawn multiple windows at once from a layout configuration. Each entry is either a browser window (with url/html, position, size) or a terminal (with command, args, cwd).',
       schema: z.object({
         windows: z.array(z.object({
           type: z.enum(['window', 'tty']).optional().describe('Window type: "window" for browser (default), "tty" for terminal'),
-          url: z.string().optional().describe('URL for browser windows'),
+          url: z.string().optional().describe('URL for browser windows (mutually exclusive with html)'),
+          html: z.string().optional().describe('Inline HTML for browser windows (mutually exclusive with url)'),
           command: z.string().optional().describe('Command for terminal windows'),
           args: z.array(z.string()).optional().describe('Args for terminal command'),
           cwd: z.string().optional().describe('Working directory for terminal'),
-          title: z.string().optional().describe('Window title (terminal)'),
+          env: z.record(z.string()).optional().describe('Environment variable overrides for terminal'),
+          cols: z.number().int().positive().optional().describe('Initial terminal column count'),
+          rows: z.number().int().positive().optional().describe('Initial terminal row count'),
+          title: z.string().optional().describe('Window title'),
           width: z.union([z.number(), z.string()]).optional().describe('Width'),
           height: z.union([z.number(), z.string()]).optional().describe('Height'),
           x: z.union([z.number(), z.string()]).optional().describe('X position'),
           y: z.union([z.number(), z.string()]).optional().describe('Y position'),
+          alwaysOnTop: z.boolean().optional().describe('Keep the window above other windows'),
+          decorations: z.enum(['normal', 'hiddenTitleBar', 'none']).optional().describe('Window chrome style'),
+          transparent: z.boolean().optional().describe('Transparent background'),
+          shadow: z.boolean().optional().describe('Drop shadow'),
+          opacity: z.number().min(0).max(1).optional().describe('Window opacity (0.0–1.0)'),
+          clickThrough: z.boolean().optional().describe('Ignore mouse events'),
         })).describe('Array of window configurations to spawn'),
       }),
     },
@@ -1157,12 +1195,12 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     }
   }
 
-  async wmSpawnBrowser(opts: { url?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean }) {
+  async wmSpawnBrowser(opts: { url?: string; html?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean }) {
     const handle = await this.spawn(opts)
     return { windowId: handle.windowId, result: handle.result }
   }
 
-  async wmSpawnTerminal(opts: { command: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }) {
+  async wmSpawnTerminal(opts: { command: string; args?: string[]; cwd?: string; env?: Record<string, string>; cols?: number; rows?: number; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean }) {
     const handle = await this.spawnTTY(opts)
     return { windowId: handle.windowId, result: handle.result }
   }
@@ -1354,12 +1392,20 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     return this.eval(opts.windowId, opts.code)
   }
 
-  async wmSpawnLayout(opts: { windows: Array<{ type?: 'window' | 'tty'; url?: string; command?: string; args?: string[]; cwd?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue }> }) {
+  async wmSpawnLayout(opts: { windows: Array<{ type?: 'window' | 'tty'; url?: string; html?: string; command?: string; args?: string[]; cwd?: string; env?: Record<string, string>; cols?: number; rows?: number; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean }> }) {
+    const chromeFields = (entry: typeof opts.windows[number]) => ({
+      ...(entry.alwaysOnTop !== undefined && { alwaysOnTop: entry.alwaysOnTop }),
+      ...(entry.decorations !== undefined && { decorations: entry.decorations }),
+      ...(entry.transparent !== undefined && { transparent: entry.transparent }),
+      ...(entry.shadow !== undefined && { shadow: entry.shadow }),
+      ...(entry.opacity !== undefined && { opacity: entry.opacity }),
+      ...(entry.clickThrough !== undefined && { clickThrough: entry.clickThrough }),
+    })
     const config: LayoutEntry[] = opts.windows.map((entry) => {
       if (entry.type === 'tty' || entry.command) {
-        return { type: 'tty' as const, command: entry.command!, args: entry.args, cwd: entry.cwd, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y }
+        return { type: 'tty' as const, command: entry.command!, args: entry.args, cwd: entry.cwd, env: entry.env, cols: entry.cols, rows: entry.rows, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y, ...chromeFields(entry) }
       }
-      return { type: 'window' as const, url: entry.url, width: entry.width, height: entry.height, x: entry.x, y: entry.y }
+      return { type: 'window' as const, url: entry.url, html: entry.html, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y, ...chromeFields(entry) }
     })
     const handles = await this.spawnLayout(config)
     return {
