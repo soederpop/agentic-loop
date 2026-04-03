@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# ---- Config ----
+MODEL="${MODEL:-mlx-community/whisper-large-v3-mlx}"
+SILENCE_SECS="${SILENCE_SECS:-1.5}"
+THRESH="${THRESH:-2%}"
+SR="${SR:-16000}"
+CHANNELS="${CHANNELS:-1}"
+# Minimum peak amplitude to consider as speech (filters out background noise)
+SPEECH_THRESH="${SPEECH_THRESH:-0.02}"
+# How long to sample when waiting for speech
+SAMPLE_DURATION="${SAMPLE_DURATION:-0.5}"
+
+OUTDIR="${1:-./tmp}"
+mkdir -p "$OUTDIR"
+
+command -v sox >/dev/null 2>&1 || { echo "Missing sox. Install: brew install sox"; exit 1; }
+command -v mlx_whisper >/dev/null 2>&1 || { echo "Missing mlx_whisper. Install: pipx install mlx-whisper"; exit 1; }
+
+cleanup() {
+  echo ""
+  echo "Listener stopped."
+  exit 0
+}
+trap cleanup SIGINT SIGTERM
+
+echo "=== Always-on dictation listener ==="
+echo "Model: $MODEL"
+echo "Silence threshold: $SILENCE_SECS s / $THRESH"
+echo "Speech detection threshold: $SPEECH_THRESH"
+echo "Output dir: $OUTDIR"
+echo "Press Ctrl+C to stop."
+echo ""
+
+while true; do
+  # ---- Phase 1: Wait for speech ----
+  echo "[listening]"
+  while true; do
+    PEAK=$(sox -d -n trim 0 "$SAMPLE_DURATION" stat 2>&1 | awk '/Maximum amplitude/{print $3}' || true)
+
+    if [ -n "$PEAK" ] && [ "$(echo "$PEAK > $SPEECH_THRESH" | bc)" -eq 1 ]; then
+      break
+    fi
+  done
+
+  # ---- Phase 2: Record until silence ----
+  ts="$(date +"%Y%m%d-%H%M%S")"
+  base="dictation-$ts"
+  wav="$OUTDIR/$base.wav"
+
+  echo "[recording] $ts"
+  sox -d -c "$CHANNELS" -r "$SR" "$wav" silence 1 0.1 "$THRESH" 1 "$SILENCE_SECS" "$THRESH" 2>/dev/null
+
+  # Skip tiny files (< 1KB) — likely just noise
+  filesize=$(wc -c < "$wav" | tr -d ' ')
+  if [ "$filesize" -lt 1024 ]; then
+    rm -f "$wav"
+    continue
+  fi
+
+  # ---- Phase 3: Transcribe ----
+  echo "[transcribing]"
+  mlx_whisper "$wav" --model "$MODEL" -f txt --output-dir "$OUTDIR" --output-name "$base" 2>/dev/null
+
+  txt_file="$OUTDIR/$base.txt"
+  if [ -f "$txt_file" ]; then
+    transcript=$(cat "$txt_file" | sed '/^$/d' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -n "$transcript" ]; then
+      echo "---START_TRANSCRIPT---"
+      echo "$transcript"
+      echo "---END_TRANSCRIPT---"
+    fi
+  fi
+
+  # Clean up wav to avoid filling disk (keep txt for history)
+  rm -f "$wav"
+done

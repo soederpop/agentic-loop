@@ -6,6 +6,10 @@
 <title>Assistant Designer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/typescript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/markdown.min.js"></script>
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -92,8 +96,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 .main { flex: 1; display: flex; overflow: hidden; }
 
 .panel { display: flex; flex-direction: column; overflow: hidden; border-right: 1px solid var(--border); }
-.panel-left { width: 50%; min-width: 300px; }
-.panel-right { flex: 1; min-width: 300px; border-right: none; }
+.panel-left { width: 50%; min-width: 300px; transition: width 0.2s ease; }
+.panel-right { flex: 1; min-width: 300px; border-right: none; transition: flex 0.2s ease; }
+
+/* When tool editor is open, left panel takes full width */
+.main.tool-editing .panel-left { width: 100%; }
+.main.tool-editing .panel-right { flex: 0; min-width: 0; width: 0; overflow: hidden; border: none; }
 
 .tabs {
   display: flex; border-bottom: 1px solid var(--border); background: var(--surface); flex-shrink: 0;
@@ -126,47 +134,189 @@ body { display: flex; flex-direction: column; overflow: hidden; }
 }
 .editor::placeholder { color: var(--text-faint); }
 
-/* ── Tool Cards ──────────────────── */
-.tools-panel { flex: 1; overflow-y: auto; padding: 8px; }
+/* ── Tool List + Editor ──────────── */
+.tools-panel { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; }
 
-.tool-card {
+.tool-list-item {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  margin-bottom: 8px; overflow: hidden;
+  margin-bottom: 6px; padding: 8px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  transition: border-color 0.1s;
 }
-.tool-card-header {
-  padding: 6px 10px; display: flex; align-items: center; gap: 8px;
-  border-bottom: 1px solid var(--border); background: var(--surface-2);
-  cursor: pointer;
-}
-.tool-card-header:hover { background: var(--surface-3); }
-.tool-name-input {
-  background: transparent; border: none; color: var(--accent); font-family: var(--mono);
-  font-size: 12px; font-weight: 600; outline: none; flex: 1; min-width: 0;
-}
-.tool-desc-input {
-  background: transparent; border: none; color: var(--text-dim); font-family: var(--mono);
-  font-size: 11px; outline: none; width: 100%; padding: 4px 10px;
-  border-bottom: 1px solid var(--border);
-}
-.tool-desc-input::placeholder { color: var(--text-faint); }
-
-.tool-section-label {
-  font-size: 9px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 1px;
-  padding: 6px 10px 2px; font-weight: 600;
-}
-.tool-editor {
-  width: 100%; background: var(--bg); color: var(--text);
-  font-family: var(--mono); font-size: 11px; line-height: 1.6;
-  padding: 6px 10px; border: none; outline: none; resize: vertical;
-  min-height: 60px; tab-size: 2;
-}
+.tool-list-item:hover { border-color: var(--accent); background: var(--surface-2); }
+.tool-list-name { color: var(--accent); font-weight: 600; font-size: 12px; }
+.tool-list-meta { color: var(--text-faint); font-size: 10px; flex: 1; }
+.tool-list-params { color: var(--text-dim); font-size: 10px; }
 
 .add-tool-btn {
   width: 100%; padding: 8px; background: var(--surface); border: 1px dashed var(--border-light);
   border-radius: var(--radius); color: var(--text-dim); font-family: var(--mono);
-  font-size: 11px; cursor: pointer; text-align: center;
+  font-size: 11px; cursor: pointer; text-align: center; flex-shrink: 0;
 }
 .add-tool-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+/* ── Tool Edit View ─────────────── */
+.tool-edit-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.tool-edit-header {
+  padding: 6px 10px; display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.tool-edit-back {
+  background: none; border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-family: var(--mono); font-size: 11px; padding: 2px 8px; cursor: pointer;
+}
+.tool-edit-back:hover { color: var(--text); border-color: var(--border-light); }
+.tool-edit-name {
+  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
+  color: var(--accent); font-family: var(--mono); font-size: 13px; font-weight: 600;
+  padding: 2px 6px; outline: none; flex: 1;
+}
+.tool-edit-name:hover, .tool-edit-name:focus { border-color: var(--border); background: var(--bg); }
+.tool-edit-desc {
+  width: 100%; background: var(--bg); border: none; border-bottom: 1px solid var(--border);
+  color: var(--text-dim); font-family: var(--mono); font-size: 11px; padding: 5px 10px; outline: none;
+  flex-shrink: 0;
+}
+.tool-edit-desc::placeholder { color: var(--text-faint); }
+
+/* Horizontal split: schema left, code right */
+.tool-edit-body {
+  flex: 1; display: flex; overflow: hidden; min-height: 0;
+}
+.tool-edit-left {
+  width: 320px; min-width: 260px; max-width: 400px; display: flex; flex-direction: column;
+  border-right: 1px solid var(--border); overflow: hidden;
+  resize: horizontal;
+}
+.tool-edit-right {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+}
+
+/* ── Schema Builder ─────────────── */
+.schema-section {
+  flex: 1; overflow-y: auto;
+}
+.schema-section-header {
+  padding: 4px 10px; font-size: 9px; color: var(--text-faint); text-transform: uppercase;
+  letter-spacing: 1px; font-weight: 600; background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 1;
+}
+.schema-section-header .spacer { flex: 1; }
+
+.field-row {
+  display: grid; grid-template-columns: 1fr 70px 28px; gap: 0;
+  border-bottom: 1px solid var(--border); font-size: 11px; align-items: stretch;
+}
+.field-row > * {
+  padding: 4px 6px; border-right: 1px solid var(--border);
+}
+.field-row > *:last-child { border-right: none; }
+.field-row-header { background: var(--surface-2); color: var(--text-faint); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+
+.field-input {
+  background: transparent; border: none; color: var(--text); font-family: var(--mono);
+  font-size: 11px; outline: none; width: 100%; padding: 4px 6px;
+}
+.field-input::placeholder { color: var(--text-faint); }
+.field-select {
+  background: transparent; border: none; color: var(--text); font-family: var(--mono);
+  font-size: 11px; outline: none; width: 100%; padding: 4px 2px;
+}
+.field-select option { background: var(--surface-2); }
+
+.field-remove {
+  background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 14px;
+  font-family: var(--mono); display: flex; align-items: center; justify-content: center;
+}
+.field-remove:hover { color: var(--error); }
+
+.add-field-btn {
+  width: 100%; padding: 4px; background: none; border: none; border-bottom: 1px solid var(--border);
+  color: var(--text-faint); font-family: var(--mono); font-size: 10px; cursor: pointer; text-align: center;
+}
+.add-field-btn:hover { color: var(--accent); background: var(--accent-dim); }
+
+.field-detail-row {
+  display: flex; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--border);
+  background: var(--surface); font-size: 10px; align-items: center; flex-wrap: wrap;
+}
+.field-detail-row label { color: var(--text-faint); white-space: nowrap; }
+.field-detail-row input[type="number"] {
+  width: 50px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 10px; padding: 1px 4px; outline: none;
+}
+.field-detail-row input[type="checkbox"] { accent-color: var(--accent); }
+.field-detail-row input[type="text"] {
+  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-family: var(--mono); font-size: 10px; padding: 1px 4px; outline: none;
+}
+
+.raw-schema-badge {
+  font-size: 8px; padding: 1px 5px; border-radius: 2px; background: var(--warn-dim); color: var(--warn);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* ── Tool Body Editor (Monaco) ──── */
+.tool-body-section {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
+}
+.tool-body-header {
+  padding: 4px 10px; font-size: 9px; color: var(--text-faint); text-transform: uppercase;
+  letter-spacing: 1px; font-weight: 600; background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.tool-body-header .spacer { flex: 1; }
+#toolMonacoContainer { flex: 1; min-height: 0; }
+/* Read-only signature/closing brace lines in Monaco */
+.readonly-line { opacity: 0.4; }
+.readonly-line-hidden { opacity: 0.25; }
+
+/* ── Tool Test Panel ────────────── */
+.tool-test-panel {
+  flex-shrink: 0; border-top: 1px solid var(--border); height: 160px; min-height: 80px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.tool-test-header {
+  padding: 4px 10px; font-size: 9px; color: var(--text-faint); text-transform: uppercase;
+  letter-spacing: 1px; font-weight: 600; background: var(--surface); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.tool-test-header .spacer { flex: 1; }
+.tool-test-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
+.tool-test-args {
+  width: 50%; background: var(--bg); color: var(--text); font-family: var(--mono);
+  font-size: 11px; padding: 6px 8px; border: none; outline: none; resize: none;
+  border-right: 1px solid var(--border); overflow-y: auto;
+}
+.tool-test-output {
+  width: 50%; padding: 6px 8px; font-family: var(--mono); font-size: 11px;
+  color: var(--text-dim); overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  background: var(--bg);
+}
+.tool-test-output.error { color: var(--error); }
+.btn-test { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); font-weight: 600; }
+.btn-test:hover { background: #60a5fa30; }
+.btn-test.running { opacity: 0.5; pointer-events: none; }
+
+/* ── Hooks Builder ──────────────── */
+.hook-chip {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
+  font-family: var(--mono); font-size: 10px; color: var(--text); cursor: pointer;
+  transition: all 0.1s;
+}
+.hook-chip:hover { border-color: var(--accent); color: var(--accent); }
+.hook-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.hook-chip-remove {
+  font-size: 12px; color: var(--text-faint); cursor: pointer; margin-left: 2px;
+}
+.hook-chip-remove:hover { color: var(--error); }
+.hook-chip-add {
+  display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px;
+  background: none; border: 1px dashed var(--border); border-radius: var(--radius);
+  font-family: var(--mono); font-size: 9px; color: var(--text-faint); cursor: pointer;
+}
+.hook-chip-add:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+#hookMonacoContainer { flex: 1; min-height: 0; }
 
 /* ── Chat ────────────────────────── */
 .chat-messages {
@@ -225,10 +375,12 @@ body { display: flex; flex-direction: column; overflow: hidden; }
   border-bottom: 1px solid var(--border); margin-bottom: 4px;
 }
 .preview-code {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 10px; font-size: 11px; white-space: pre-wrap; word-break: break-word;
-  color: var(--text-dim); line-height: 1.6; max-height: 400px; overflow-y: auto;
+  background: var(--surface) !important; border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px !important; font-size: 11px !important; white-space: pre-wrap; word-break: break-word;
+  color: var(--text-dim); line-height: 1.6; max-height: 500px; overflow-y: auto;
+  font-family: var(--mono) !important;
 }
+.preview-code .hljs { background: transparent !important; padding: 0 !important; }
 
 /* ── Loader Select ───────────────── */
 .loader-dropdown {
@@ -446,40 +598,109 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     </div>
 
     <!-- CORE.md editor -->
-    <div class="tab-content active" id="core-tab" style="display:flex;flex-direction:column;">
+    <div class="tab-content active" id="core-tab">
       <div class="file-header">
         <span class="filename">CORE.md</span>
         <span class="path">assistants/<span id="pathName">my-assistant</span>/</span>
       </div>
-      <textarea class="editor" id="coreEditor" placeholder="# My Assistant&#10;&#10;You are a helpful assistant.&#10;&#10;Write your system prompt here as markdown..."></textarea>
+      <div id="coreMonacoContainer" style="flex:1;min-height:0;"></div>
     </div>
 
     <!-- Tools editor -->
-    <div class="tab-content" id="tools-tab" style="display:flex;flex-direction:column;">
+    <div class="tab-content" id="tools-tab">
       <div class="file-header">
         <span class="filename">tools.ts</span>
         <span class="path">assistants/<span id="pathName2">my-assistant</span>/</span>
         <span class="spacer" style="flex:1"></span>
+        <span id="toolCountBadge" style="font-size:9px;color:var(--text-faint);"></span>
       </div>
-      <div class="tools-panel" id="toolsPanel">
-        <!-- Tool cards rendered here -->
-      </div>
-      <div style="padding:8px;">
+      <!-- List view -->
+      <div class="tools-panel" id="toolsListView">
+        <div id="toolsList"></div>
         <button class="add-tool-btn" id="addToolBtn">+ add tool</button>
+      </div>
+      <!-- Edit view (hidden by default) -->
+      <div class="tool-edit-view" id="toolEditView" style="display:none;">
+        <div class="tool-edit-header">
+          <button class="tool-edit-back" id="toolEditBack">&larr; tools</button>
+          <input class="tool-edit-name" id="toolEditName" placeholder="toolName">
+          <button class="btn btn-sm btn-danger" id="toolEditDelete">delete</button>
+        </div>
+        <input class="tool-edit-desc" id="toolEditDesc" placeholder="Tool description (shown to the LLM)...">
+        <!-- Horizontal split: schema left, code+test right -->
+        <div class="tool-edit-body">
+          <div class="tool-edit-left">
+            <div class="schema-section" id="schemaSection">
+              <div class="schema-section-header">
+                <span>parameters</span>
+                <span id="rawSchemaBadge" class="raw-schema-badge" style="display:none;">raw mode</span>
+                <span class="spacer"></span>
+                <button class="btn btn-sm" id="toggleRawSchemaBtn" style="font-size:9px;padding:1px 6px;">raw</button>
+              </div>
+              <div id="schemaBuilderFields"></div>
+              <textarea id="rawSchemaEditor" class="field-input" style="display:none;min-height:80px;padding:8px 10px;resize:vertical;width:100%;background:var(--bg);border-bottom:1px solid var(--border);" placeholder="z.object({ ... })"></textarea>
+              <button class="add-field-btn" id="addFieldBtn">+ add parameter</button>
+            </div>
+          </div>
+          <div class="tool-edit-right">
+            <!-- Function body -->
+            <div class="tool-body-section">
+              <div class="tool-body-header">
+                <span>function body</span>
+                <span class="spacer"></span>
+                <label class="local-toggle" style="font-size:9px;"><input type="checkbox" id="silenceDiagnosticsToggle"> quiet</label>
+              </div>
+              <div id="toolMonacoContainer"></div>
+            </div>
+            <!-- Test panel -->
+            <div class="tool-test-panel">
+              <div class="tool-test-header">
+                <span>test</span>
+                <span class="spacer"></span>
+                <button class="btn btn-sm btn-test" id="runToolTestBtn">&#9654; run</button>
+              </div>
+              <div class="tool-test-body">
+                <textarea class="tool-test-args" id="toolTestArgs" placeholder='{ "key": "value" }'>{}</textarea>
+                <div class="tool-test-output" id="toolTestOutput">// output appears here</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Hooks editor -->
-    <div class="tab-content" id="hooks-tab" style="display:flex;flex-direction:column;">
+    <div class="tab-content" id="hooks-tab">
       <div class="file-header">
         <span class="filename">hooks.ts</span>
         <span class="path">assistants/<span id="pathName3">my-assistant</span>/</span>
+        <span style="flex:1"></span>
+        <button class="btn btn-sm" id="hooksToggleRawBtn" style="font-size:9px;padding:1px 6px;">raw</button>
       </div>
-      <textarea class="editor" id="hooksEditor" placeholder="import type { Assistant } from '@soederpop/luca/agi'&#10;&#10;export function created(assistant: Assistant) {&#10;  // called when assistant is created&#10;}&#10;&#10;export async function formatSystemPrompt(prompt: string) {&#10;  // modify the system prompt before each turn&#10;  return prompt&#10;}"></textarea>
+      <!-- Guided hooks view -->
+      <div id="hooksGuidedView" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+        <div style="padding:6px 10px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;">
+          <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:4px;">active hooks</div>
+          <div id="activeHooksList"></div>
+        </div>
+        <div style="padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0;">
+          <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:4px;">add hook</div>
+          <div id="availableHooksList" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
+        </div>
+        <div id="hookEditorArea" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
+          <div id="hookEditorHeader" style="padding:4px 10px;font-size:10px;color:var(--text-dim);background:var(--surface);border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
+            Editing: <span id="hookEditorName" style="color:var(--accent);font-weight:600;"></span>
+            <span style="flex:1"></span>
+          </div>
+          <div id="hookMonacoContainer" style="flex:1;min-height:0;"></div>
+        </div>
+      </div>
+      <!-- Raw hooks view (hidden by default) -->
+      <textarea class="editor" id="hooksEditor" style="display:none;" placeholder="import type { Assistant } from '@soederpop/luca/agi'&#10;&#10;export function created() {&#10;  // called when assistant is created&#10;}"></textarea>
     </div>
 
     <!-- Preview -->
-    <div class="tab-content" id="preview-tab" style="display:flex;flex-direction:column;">
+    <div class="tab-content" id="preview-tab">
       <div class="file-header">
         <span class="filename">generated files</span>
         <span class="spacer" style="flex:1"></span>
@@ -497,7 +718,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     </div>
 
     <!-- Chat -->
-    <div class="tab-content active" id="chat-tab" style="display:flex;flex-direction:column;">
+    <div class="tab-content active" id="chat-tab">
       <div class="chat-messages" id="chatMessages">
         <div class="not-deployed" id="notDeployedMsg">
           Design your assistant on the left, then click <strong style="color:var(--accent)">Deploy</strong> to start chatting.
@@ -511,7 +732,7 @@ body { display: flex; flex-direction: column; overflow: hidden; }
     </div>
 
     <!-- REPL -->
-    <div class="tab-content" id="repl-tab" style="display:flex;flex-direction:column;">
+    <div class="tab-content" id="repl-tab">
       <div class="repl-output" id="replOutput">
         <div style="color:var(--text-faint);font-size:10px;margin-bottom:6px;">
           // REPL — evaluate JS expressions<br>
@@ -613,6 +834,16 @@ class ApiClient extends Feature {
     return res.json()
   }
 
+  /** Evaluate a tool function body with test args */
+  async evalTool(handler, testArgs) {
+    const res = await fetch(`${this.base}/api/eval-tool`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ handler, testArgs }),
+    })
+    return res.json()
+  }
+
   /** Export assistant files for preview */
   async exportFiles() {
     const res = await fetch(`${this.base}/api/export`)
@@ -645,7 +876,8 @@ class DesignerStore extends Feature {
   static stateSchema = {
     assistantName: { type: 'string', default: 'my-assistant', describe: 'Current assistant name' },
     systemPrompt: { type: 'string', default: '', describe: 'System prompt (CORE.md content)' },
-    tools: { type: 'array', default: [], describe: 'Tool definitions array' },
+    tools: { type: 'array', default: [], describe: 'Tool definitions array (fields-based)' },
+    toolsImports: { type: 'array', default: [], describe: 'Extra import lines from tools.ts' },
     hooksSource: { type: 'string', default: '', describe: 'Hooks file source code' },
     model: { type: 'string', default: 'gpt-4o', describe: 'Selected model ID' },
     provider: { type: 'string', default: 'openai', describe: 'Active provider (openai|lm-studio)' },
@@ -664,7 +896,8 @@ class DesignerStore extends Feature {
     'deploy:failed':      { args: ['error'],       describe: 'Deployment failed' },
     'assistant:loaded':   { args: ['data'],        describe: 'An existing assistant was loaded' },
     'assistants:listed':  { args: ['assistants'],  describe: 'Available assistants list refreshed' },
-    'tools:changed':      { args: [],              describe: 'Tools array was modified' },
+    'tools:changed':      { args: [],              describe: 'Tools array was modified (add/remove)' },
+    'tool:fieldsChanged': { args: ['toolIndex'],   describe: 'A tools schema fields were modified' },
     'name:changed':       { args: ['name'],        describe: 'Assistant name changed' },
     'provider:changed':   { args: ['provider'],    describe: 'Provider toggled' },
     'error':              { args: ['error'],        describe: 'Store error' },
@@ -680,7 +913,7 @@ class DesignerStore extends Feature {
   async start() {
     try {
       const data = await this.api.getState()
-      for (const key of ['assistantName', 'systemPrompt', 'tools', 'hooksSource', 'model', 'provider', 'maxTokens', 'temperature', 'deployed']) {
+      for (const key of ['assistantName', 'systemPrompt', 'tools', 'toolsImports', 'hooksSource', 'model', 'provider', 'maxTokens', 'temperature', 'deployed']) {
         if (data[key] !== undefined) this.state.set(key, data[key])
       }
       this.emit('state:loaded')
@@ -709,6 +942,7 @@ class DesignerStore extends Feature {
       assistantName: s.get('assistantName'),
       systemPrompt: s.get('systemPrompt'),
       tools: s.get('tools'),
+      toolsImports: s.get('toolsImports'),
       hooksSource: s.get('hooksSource'),
       model: s.get('model'),
       provider: s.get('provider'),
@@ -755,7 +989,7 @@ class DesignerStore extends Feature {
   /** Add a new tool */
   addTool() {
     const tools = [...this.state.get('tools')]
-    tools.push({ name: 'newTool', description: '', schema: 'z.object({\n  \n})', handler: "return { result: 'not implemented' }" })
+    tools.push({ name: 'newTool', description: '', fields: [], handler: "return { result: 'not implemented' }" })
     this.state.set('tools', tools)
     this.emit('tools:changed')
     this.scheduleSync()
@@ -770,11 +1004,50 @@ class DesignerStore extends Feature {
     this.scheduleSync()
   }
 
-  /** Update a tool field */
+  /** Update a single property on a tool */
   updateTool(index, field, value) {
     const tools = [...this.state.get('tools')]
     tools[index] = { ...tools[index], [field]: value }
     this.state.set('tools', tools)
+    this.scheduleSync()
+  }
+
+  /** Add a field to a tool's schema */
+  addField(toolIndex) {
+    const tools = [...this.state.get('tools')]
+    const tool = { ...tools[toolIndex] }
+    tool.fields = [...(tool.fields || []), { name: 'newParam', type: 'string', description: '', required: true }]
+    // Clear rawSchema when adding fields via builder
+    delete tool.rawSchema
+    tools[toolIndex] = tool
+    this.state.set('tools', tools)
+    this.emit('tool:fieldsChanged', toolIndex)
+    this.scheduleSync()
+  }
+
+  /** Remove a field from a tool's schema */
+  removeField(toolIndex, fieldIndex) {
+    const tools = [...this.state.get('tools')]
+    const tool = { ...tools[toolIndex] }
+    tool.fields = [...(tool.fields || [])]
+    tool.fields.splice(fieldIndex, 1)
+    delete tool.rawSchema
+    tools[toolIndex] = tool
+    this.state.set('tools', tools)
+    this.emit('tool:fieldsChanged', toolIndex)
+    this.scheduleSync()
+  }
+
+  /** Update a field property */
+  updateField(toolIndex, fieldIndex, prop, value) {
+    const tools = [...this.state.get('tools')]
+    const tool = { ...tools[toolIndex] }
+    tool.fields = [...(tool.fields || [])]
+    tool.fields[fieldIndex] = { ...tool.fields[fieldIndex], [prop]: value }
+    delete tool.rawSchema
+    tools[toolIndex] = tool
+    this.state.set('tools', tools)
+    this.emit('tool:fieldsChanged', toolIndex)
     this.scheduleSync()
   }
 
@@ -804,6 +1077,7 @@ class DesignerStore extends Feature {
         this.state.set('assistantName', data.assistantName)
         this.state.set('systemPrompt', data.systemPrompt)
         this.state.set('tools', data.tools || [])
+        this.state.set('toolsImports', data.toolsImports || [])
         this.state.set('hooksSource', data.hooksSource || '')
         this.state.set('deployed', false)
         this.emit('assistant:loaded', data)
@@ -1081,13 +1355,15 @@ const repl = app.repl
 
 // ── DOM refs ──
 const $name = document.getElementById('assistantName')
-const $core = document.getElementById('coreEditor')
+// $core is now a Monaco editor — see initCoreMonaco below
+let _coreMonacoEditor = null
+let _coreMonacoReady = false
 const $hooks = document.getElementById('hooksEditor')
 const $modelSelect = document.getElementById('modelSelect')
 const $localToggle = document.getElementById('localToggle')
 const $statusBadge = document.getElementById('statusBadge')
 const $deployBtn = document.getElementById('deployBtn')
-const $toolsPanel = document.getElementById('toolsPanel')
+// $toolsPanel removed — tool editor uses $toolsList / $toolEditView now
 const $chatMessages = document.getElementById('chatMessages')
 const $chatInput = document.getElementById('chatInput')
 const $sendBtn = document.getElementById('sendBtn')
@@ -1117,7 +1393,7 @@ document.querySelectorAll('.tab[data-tab]').forEach(btn => {
 
 // ── Header controls ──
 $name.addEventListener('input', () => store.setName($name.value))
-$core.addEventListener('input', () => store.setSystemPrompt($core.value))
+// Core editor input is handled by Monaco onChange — see initCoreMonaco
 $hooks.addEventListener('input', () => store.setHooksSource($hooks.value))
 
 $modelSelect.addEventListener('change', () => {
@@ -1198,12 +1474,17 @@ async function refreshPreview() {
     const data = await app.getPreview()
     let html = ''
     for (const [name, content] of Object.entries(data.files || {})) {
+      const lang = name.endsWith('.ts') ? 'typescript' : name.endsWith('.md') ? 'markdown' : 'plaintext'
       html += `<div class="preview-file">
         <div class="preview-file-header">assistants/${esc(data.assistantName)}/${esc(name)}</div>
-        <pre class="preview-code">${esc(content)}</pre>
+        <pre class="preview-code"><code class="language-${lang}">${esc(content)}</code></pre>
       </div>`
     }
     $previewPanel.innerHTML = html
+    // Apply syntax highlighting
+    if (window.hljs) {
+      $previewPanel.querySelectorAll('pre code').forEach(el => window.hljs.highlightElement(el))
+    }
   } catch (err) {
     $previewPanel.innerHTML = `<div style="color:var(--error)">${esc(err.message)}</div>`
   }
@@ -1224,7 +1505,7 @@ document.querySelectorAll('.chat-input, .repl-input').forEach(el => {
 // ── Store: state loaded → populate UI ──
 store.on('state:loaded', () => {
   $name.value = store.state.get('assistantName')
-  $core.value = store.state.get('systemPrompt')
+  if (_coreMonacoEditor) _coreMonacoEditor.setValue(store.state.get('systemPrompt') || '')
   $hooks.value = store.state.get('hooksSource')
   updatePathNames()
   renderTools()
@@ -1250,9 +1531,14 @@ store.on('tools:changed', () => renderTools())
 // ── Store: assistant loaded → refresh UI ──
 store.on('assistant:loaded', () => {
   $name.value = store.state.get('assistantName')
-  $core.value = store.state.get('systemPrompt')
+  if (_coreMonacoEditor) _coreMonacoEditor.setValue(store.state.get('systemPrompt') || '')
   $hooks.value = store.state.get('hooksSource')
   updatePathNames()
+  // Reset tool editor to list view when loading a different assistant
+  _editingToolIndex = -1
+  $toolEditView.style.display = 'none'
+  $toolsListView.style.display = 'flex'
+  document.querySelector('.main').classList.remove('tool-editing')
   renderTools()
   updateStatusBadge()
 })
@@ -1371,30 +1657,655 @@ function renderModelSelect() {
   }
 }
 
-function renderTools() {
+// ── Tool Editor State ──
+let _editingToolIndex = -1
+let _toolMonacoEditor = null
+let _toolMonacoReady = false
+const $toolsList = document.getElementById('toolsList')
+const $toolsListView = document.getElementById('toolsListView')
+const $toolEditView = document.getElementById('toolEditView')
+const $toolEditName = document.getElementById('toolEditName')
+const $toolEditDesc = document.getElementById('toolEditDesc')
+const $toolEditBack = document.getElementById('toolEditBack')
+const $toolEditDelete = document.getElementById('toolEditDelete')
+const $schemaBuilderFields = document.getElementById('schemaBuilderFields')
+const $addFieldBtn = document.getElementById('addFieldBtn')
+// signature is now rendered inside Monaco as read-only first line
+const $rawSchemaEditor = document.getElementById('rawSchemaEditor')
+const $rawSchemaBadge = document.getElementById('rawSchemaBadge')
+const $toggleRawSchemaBtn = document.getElementById('toggleRawSchemaBtn')
+const $runToolTestBtn = document.getElementById('runToolTestBtn')
+const $toolTestArgs = document.getElementById('toolTestArgs')
+const $toolTestOutput = document.getElementById('toolTestOutput')
+const $toolCountBadge = document.getElementById('toolCountBadge')
+
+function renderToolsList() {
   const tools = store.state.get('tools') || []
-  $toolsPanel.innerHTML = ''
+  $toolCountBadge.textContent = tools.length ? `${tools.length} tool${tools.length > 1 ? 's' : ''}` : ''
+  $toolsList.innerHTML = ''
   tools.forEach((tool, i) => {
-    const card = document.createElement('div')
-    card.className = 'tool-card'
-    card.innerHTML = `
-      <div class="tool-card-header">
-        <input class="tool-name-input" value="${esc(tool.name)}" placeholder="toolName" data-idx="${i}" data-field="name">
-        <button class="btn btn-sm btn-danger" data-remove="${i}">×</button>
-      </div>
-      <input class="tool-desc-input" value="${esc(tool.description)}" placeholder="Tool description..." data-idx="${i}" data-field="description">
-      <div class="tool-section-label">schema (zod)</div>
-      <textarea class="tool-editor" rows="3" placeholder="z.object({&#10;  query: z.string().describe('The search query')&#10;})" data-idx="${i}" data-field="schema">${esc(tool.schema)}</textarea>
-      <div class="tool-section-label">handler</div>
-      <textarea class="tool-editor" rows="4" placeholder="// args has the parsed schema fields&#10;return { result: 'hello' }" data-idx="${i}" data-field="handler">${esc(tool.handler)}</textarea>
+    const item = document.createElement('div')
+    item.className = 'tool-list-item'
+    const fieldNames = (tool.fields || []).map(f => f.name).join(', ')
+    const paramCount = (tool.fields || []).length
+    const rawBadge = tool.rawSchema ? ' <span class="raw-schema-badge">raw</span>' : ''
+    item.innerHTML = `
+      <span class="tool-list-name">${esc(tool.name)}</span>
+      <span class="tool-list-meta">${esc(tool.description || '').slice(0, 60)}${rawBadge}</span>
+      <span class="tool-list-params">${paramCount ? `${paramCount}p: ${esc(fieldNames)}` : 'no params'}</span>
     `
-    // Bind events on the card
-    card.querySelectorAll('[data-idx][data-field]').forEach(input => {
-      input.addEventListener('input', () => store.updateTool(Number(input.dataset.idx), input.dataset.field, input.value))
-    })
-    card.querySelector('[data-remove]').addEventListener('click', () => store.removeTool(i))
-    $toolsPanel.appendChild(card)
+    item.addEventListener('click', () => openToolEditor(i))
+    $toolsList.appendChild(item)
   })
+}
+
+function openToolEditor(index) {
+  _editingToolIndex = index
+  const tools = store.state.get('tools') || []
+  const tool = tools[index]
+  if (!tool) return
+
+  $toolsListView.style.display = 'none'
+  $toolEditView.style.display = 'flex'
+  document.querySelector('.main').classList.add('tool-editing')
+
+  $toolEditName.value = tool.name
+  $toolEditDesc.value = tool.description || ''
+
+  // Determine if raw schema mode
+  const isRaw = !!tool.rawSchema
+  renderSchemaBuilder(tool, isRaw)
+
+  // Set up Monaco with full function wrapper
+  const fullValue = buildMonacoValue(tool)
+  if (_toolMonacoEditor) {
+    _toolMonacoEditor.setValue(fullValue)
+    applySignatureDecoration()
+    // Position cursor on first body line
+    _toolMonacoEditor.setPosition({ lineNumber: PREAMBLE_LINES + 2, column: 3 })
+    _toolMonacoEditor.focus()
+  } else {
+    initToolMonaco(fullValue)
+  }
+
+  // Reset test output
+  $toolTestOutput.textContent = '// output appears here'
+  $toolTestOutput.classList.remove('error')
+  // Pre-fill test args from fields
+  const argObj = {}
+  for (const f of (tool.fields || [])) {
+    if (f.type === 'string') argObj[f.name] = ''
+    else if (f.type === 'number') argObj[f.name] = 0
+    else if (f.type === 'boolean') argObj[f.name] = false
+    else if (f.type === 'enum' && f.enumValues?.length) argObj[f.name] = f.enumValues[0]
+  }
+  $toolTestArgs.value = JSON.stringify(argObj, null, 2)
+}
+
+function closeToolEditor() {
+  // Save current Monaco content back to tool (extract body only)
+  if (_editingToolIndex >= 0 && _toolMonacoEditor) {
+    store.updateTool(_editingToolIndex, 'handler', extractHandlerFromMonaco())
+  }
+  _editingToolIndex = -1
+  $toolEditView.style.display = 'none'
+  $toolsListView.style.display = 'flex'
+  document.querySelector('.main').classList.remove('tool-editing')
+  renderToolsList()
+}
+
+function renderSchemaBuilder(tool, isRaw) {
+  const $fields = $schemaBuilderFields
+  const $rawEditor = $rawSchemaEditor
+
+  if (isRaw) {
+    $fields.style.display = 'none'
+    $rawEditor.style.display = 'block'
+    $rawEditor.value = tool.rawSchema || ''
+    $rawSchemaBadge.style.display = ''
+    $addFieldBtn.style.display = 'none'
+    $toggleRawSchemaBtn.textContent = 'visual'
+  } else {
+    $fields.style.display = 'block'
+    $rawEditor.style.display = 'none'
+    $rawSchemaBadge.style.display = 'none'
+    $addFieldBtn.style.display = ''
+    $toggleRawSchemaBtn.textContent = 'raw'
+    renderFields(tool.fields || [])
+  }
+}
+
+function renderFields(fields) {
+  const $fields = $schemaBuilderFields
+  $fields.innerHTML = ''
+
+  if (fields.length === 0) {
+    $fields.innerHTML = '<div style="padding:8px 10px;color:var(--text-faint);font-size:10px;">No parameters — click "+ add parameter" below</div>'
+    return
+  }
+
+  // Header row
+  const header = document.createElement('div')
+  header.className = 'field-row field-row-header'
+  header.innerHTML = '<span>name</span><span>type</span><span></span>'
+  $fields.appendChild(header)
+
+  fields.forEach((field, fi) => {
+    // Main row: name + type + remove
+    const row = document.createElement('div')
+    row.className = 'field-row'
+
+    const nameInput = document.createElement('input')
+    nameInput.className = 'field-input'
+    nameInput.value = field.name
+    nameInput.placeholder = 'paramName'
+    nameInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'name', nameInput.value))
+
+    const typeSelect = document.createElement('select')
+    typeSelect.className = 'field-select'
+    for (const t of ['string', 'number', 'boolean', 'enum']) {
+      const opt = document.createElement('option')
+      opt.value = t; opt.textContent = t
+      if (t === field.type) opt.selected = true
+      typeSelect.appendChild(opt)
+    }
+    typeSelect.addEventListener('change', () => store.updateField(_editingToolIndex, fi, 'type', typeSelect.value))
+
+    const removeBtn = document.createElement('button')
+    removeBtn.className = 'field-remove'
+    removeBtn.textContent = '×'
+    removeBtn.addEventListener('click', () => store.removeField(_editingToolIndex, fi))
+
+    const nameCell = document.createElement('div'); nameCell.appendChild(nameInput)
+    const typeCell = document.createElement('div'); typeCell.appendChild(typeSelect)
+    const removeCell = document.createElement('div'); removeCell.appendChild(removeBtn)
+
+    row.appendChild(nameCell)
+    row.appendChild(typeCell)
+    row.appendChild(removeCell)
+    $fields.appendChild(row)
+
+    // Description row (full width)
+    const descRow = document.createElement('div')
+    descRow.style.cssText = 'border-bottom:1px solid var(--border);'
+    const descInput = document.createElement('input')
+    descInput.className = 'field-input'
+    descInput.value = field.description || ''
+    descInput.placeholder = 'Description for LLM...'
+    descInput.style.cssText = 'width:100%;color:var(--text-dim);font-size:10px;padding:2px 8px;'
+    descInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'description', descInput.value))
+    descRow.appendChild(descInput)
+    $fields.appendChild(descRow)
+
+    // Detail row (validation options)
+    const detail = document.createElement('div')
+    detail.className = 'field-detail-row'
+
+    const reqLabel = document.createElement('label')
+    reqLabel.innerHTML = `<input type="checkbox" ${field.required !== false ? 'checked' : ''}> req`
+    reqLabel.querySelector('input').addEventListener('change', (e) => store.updateField(_editingToolIndex, fi, 'required', e.target.checked))
+    detail.appendChild(reqLabel)
+
+    if (field.type === 'string' || field.type === 'number') {
+      const minLabel = document.createElement('label')
+      minLabel.textContent = 'min:'
+      const minInput = document.createElement('input')
+      minInput.type = 'number'
+      minInput.value = field.min ?? ''
+      minInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'min', minInput.value ? Number(minInput.value) : undefined))
+      detail.appendChild(minLabel)
+      detail.appendChild(minInput)
+
+      const maxLabel = document.createElement('label')
+      maxLabel.textContent = 'max:'
+      const maxInput = document.createElement('input')
+      maxInput.type = 'number'
+      maxInput.value = field.max ?? ''
+      maxInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'max', maxInput.value ? Number(maxInput.value) : undefined))
+      detail.appendChild(maxLabel)
+      detail.appendChild(maxInput)
+    }
+
+    if (field.type === 'number') {
+      const intLabel = document.createElement('label')
+      intLabel.innerHTML = `<input type="checkbox" ${field.integer ? 'checked' : ''}> int`
+      intLabel.querySelector('input').addEventListener('change', (e) => store.updateField(_editingToolIndex, fi, 'integer', e.target.checked))
+      detail.appendChild(intLabel)
+    }
+
+    if (field.type === 'enum') {
+      const enumLabel = document.createElement('label')
+      enumLabel.textContent = 'values:'
+      const enumInput = document.createElement('input')
+      enumInput.type = 'text'
+      enumInput.value = (field.enumValues || []).join(', ')
+      enumInput.placeholder = 'val1, val2'
+      enumInput.addEventListener('input', () => {
+        const vals = enumInput.value.split(',').map(v => v.trim()).filter(Boolean)
+        store.updateField(_editingToolIndex, fi, 'enumValues', vals)
+      })
+      detail.appendChild(enumLabel)
+      detail.appendChild(enumInput)
+    }
+
+    $fields.appendChild(detail)
+  })
+}
+
+function getSignatureLine(tool) {
+  const name = tool?.name || 'toolName'
+  return `async function ${name}(options: z.infer<typeof schemas.${name}>) {`
+}
+
+function buildMonacoValue(tool) {
+  const sig = getSignatureLine(tool)
+  const body = (tool.handler || '').split('\n').map(l => '  ' + l).join('\n')
+  return `${sig}\n${body || '  '}\n}`
+}
+
+// Number of preamble lines before the function body (just the signature line)
+const PREAMBLE_LINES = 0
+
+function extractHandlerFromMonaco() {
+  if (!_toolMonacoEditor) return ''
+  const lines = _toolMonacoEditor.getValue().split('\n')
+  // Strip preamble lines, signature line, and closing brace
+  const bodyLines = lines.slice(PREAMBLE_LINES + 1, -1)
+  return bodyLines.map(l => l.startsWith('  ') ? l.slice(2) : l).join('\n')
+}
+
+/** Make preamble, signature, and closing brace lines read-only and dimmed */
+let _signatureDecorations = []
+function applySignatureDecoration() {
+  if (!_toolMonacoEditor || !window.monaco) return
+  const model = _toolMonacoEditor.getModel()
+  const lineCount = model.getLineCount()
+  const sigLine = 1 // the function signature is always line 1
+  const decos = []
+  // Dim signature line
+  decos.push({ range: new window.monaco.Range(sigLine, 1, sigLine, model.getLineMaxColumn(sigLine)), options: { inlineClassName: 'readonly-line', isWholeLine: true } })
+  // Dim closing brace
+  decos.push({ range: new window.monaco.Range(lineCount, 1, lineCount, model.getLineMaxColumn(lineCount)), options: { inlineClassName: 'readonly-line', isWholeLine: true } })
+  _signatureDecorations = _toolMonacoEditor.deltaDecorations(_signatureDecorations, decos)
+}
+
+/** Refresh the signature line when name/fields change without losing cursor position */
+function refreshMonacoSignature(tool) {
+  if (!_toolMonacoEditor || !window.monaco) return
+  const model = _toolMonacoEditor.getModel()
+  const sigLineNum = 1
+  const newSig = getSignatureLine(tool)
+  const currentSigLine = model.getLineContent(sigLineNum)
+  if (currentSigLine !== newSig) {
+    const range = new window.monaco.Range(sigLineNum, 1, sigLineNum, currentSigLine.length + 1)
+    _toolMonacoEditor.executeEdits('signature-refresh', [{ range, text: newSig }])
+    applySignatureDecoration()
+  }
+}
+
+/** Configure Monaco TypeScript with global type declarations — called once */
+let _monacoTsConfigured = false
+function configureMonacoTs(monaco) {
+  if (_monacoTsConfigured) return
+  _monacoTsConfigured = true
+
+  const tsDefaults = monaco.languages.typescript.typescriptDefaults
+  tsDefaults.setCompilerOptions({
+    target: monaco.languages.typescript.ScriptTarget.ESNext,
+    module: monaco.languages.typescript.ModuleKind.ESNext,
+    allowJs: true,
+    strict: false,
+    noEmit: true,
+    allowNonTsExtensions: true,
+  })
+  tsDefaults.setDiagnosticsOptions({
+    noSemanticValidation: false,
+    noSyntaxValidation: false,
+  })
+  tsDefaults.addExtraLib(`
+    /** @soederpop/luca/agi — Assistant feature */
+    declare interface Assistant {
+      /** Register a plugin function or feature helper */
+      use(fnOrHelper: ((assistant: Assistant) => void | Promise<void>) | any): Assistant;
+      /** Send a message and get a response */
+      ask(message: string, options?: { tools?: Record<string, any>; maxTokens?: number }): Promise<string>;
+      /** Start the assistant (loads prompt, tools, hooks) */
+      start(): Promise<void>;
+      /** Reload tools, hooks, and prompt from disk */
+      reload(): Promise<void>;
+      /** Listen to an assistant event */
+      on(event: 'created' | 'started' | 'turnStart' | 'turnEnd' | 'chunk' | 'response' | 'toolCall' | 'toolResult' | 'toolError' | 'reloaded' | string, handler: (...args: any[]) => void): void;
+      /** Remove an event listener */
+      off(event: string, handler: (...args: any[]) => void): void;
+      /** Register an interceptor for tool call lifecycle */
+      intercept(point: 'beforeToolCall' | 'afterToolCall', fn: (ctx: any, next: () => Promise<void>) => Promise<void>): this;
+      /** Add a tool at runtime */
+      addTool(name: string, handler: (...args: any[]) => any, schema?: any): this;
+      /** Remove a tool at runtime */
+      removeTool(nameOrHandler: string | ((...args: any[]) => any)): this;
+      /** Add a system prompt extension by key */
+      addSystemPromptExtension(key: string, value: string): this;
+      /** Remove a system prompt extension by key */
+      removeSystemPromptExtension(key: string): this;
+      /** The content database for this assistant's docs folder */
+      readonly contentDb: any;
+      /** The conversation messages array */
+      readonly messages: any[];
+      /** The raw system prompt from CORE.md */
+      readonly systemPrompt: string;
+      /** The effective system prompt including extensions */
+      readonly effectiveSystemPrompt: string;
+      /** System prompt extensions map */
+      readonly systemPromptExtensions: Record<string, string>;
+      /** List of available tool names */
+      readonly availableTools: string[];
+      /** The underlying conversation instance */
+      readonly conversation: any;
+      /** Whether the assistant has been started */
+      readonly isStarted: boolean;
+      /** The assistant name */
+      readonly name: string | undefined;
+      /** Resolved folder path */
+      readonly resolvedFolder: string;
+      /** The parent container */
+      readonly container: AGIContainer;
+      /** Arbitrary metadata */
+      readonly meta: Record<string, any>;
+      /** Path helpers scoped to the assistant folder */
+      readonly paths: { resolve(...args: string[]): string; join(...args: string[]): string };
+      [key: string]: any;
+    }
+
+    /** @soederpop/luca — AGI Container */
+    declare interface AGIContainer {
+      /** Get a feature by name */
+      feature(name: 'fs'): { readFile(path: string, enc?: string): Promise<string | Buffer>; writeFile(path: string, data: string | Buffer): Promise<void>; readFileAsync(path: string, enc?: string): Promise<Buffer>; writeFileAsync(path: string, data: string | Buffer): Promise<void>; readdir(path: string): Promise<string[]>; mkdirp(path: string): Promise<void>; exists(path: string): Promise<boolean>; [key: string]: any };
+      feature(name: 'proc'): { exec(cmd: string, options?: any): Promise<string>; spawnAndCapture(cmd: string, args?: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }>; [key: string]: any };
+      feature(name: 'ui'): { colors: any; asciiArt(text: string): string; print: { info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void; success(...args: any[]): void }; [key: string]: any };
+      feature(name: 'yaml'): { parse(str: string): any; stringify(obj: any): string };
+      feature(name: 'sqlite'): any;
+      feature(name: 'vm'): { createContext(globals?: Record<string, any>): any; run(code: string, ctx?: any): Promise<any>; [key: string]: any };
+      feature(name: 'grep'): { search(opts: any): Promise<any>; codeAnnotations(opts?: any): Promise<any> };
+      feature(name: 'contentDb'): any;
+      feature(name: string, options?: any): any;
+      /** Get a client by name */
+      client(name: 'rest', options?: { baseURL: string }): { get(path: string): Promise<any>; post(path: string, body?: any): Promise<any>; put(path: string, body?: any): Promise<any>; delete(path: string): Promise<any> };
+      client(name: 'openai', options?: any): any;
+      client(name: string, options?: any): any;
+      /** Path utilities */
+      paths: { resolve(...parts: string[]): string; join(...parts: string[]): string; dirname(p: string): string; basename(p: string): string; extname(p: string): string };
+      /** Common utilities */
+      utils: { uuid(): string; lodash: any; stringUtils: { camelCase(s: string): string; kebabCase(s: string): string; pluralize(s: string): string; singularize(s: string): string; [key: string]: any }; [key: string]: any };
+      /** Alias for contentDb feature */
+      docs: any;
+      /** Current working directory */
+      cwd: string;
+      [key: string]: any;
+    }
+
+    declare var assistant: Assistant;
+    declare var container: AGIContainer;
+  `, 'ts:globals.d.ts')
+  tsDefaults.addExtraLib('declare module "zod" { export const z: any; export type ZodType = any; }', 'ts:zod.d.ts')
+  tsDefaults.addExtraLib('declare const z: any;\ndeclare const schemas: Record<string, any>;', 'ts:tool-env.d.ts')
+}
+
+function initToolMonaco(value) {
+  if (_toolMonacoReady) return
+  const doInit = (monaco) => {
+    configureMonacoTs(monaco)
+    try {
+      monaco.editor.defineTheme('assistant-designer', {
+        base: 'vs-dark', inherit: true,
+        rules: [
+          { token: 'comment', foreground: '505068' },
+          { token: 'keyword', foreground: 'a78bfa' },
+          { token: 'string', foreground: '4ade80' },
+          { token: 'number', foreground: 'fb923c' },
+          { token: 'type', foreground: '60a5fa' },
+        ],
+        colors: {
+          'editor.background': '#131320',
+          'editor.foreground': '#c8c8d8',
+          'editor.lineHighlightBackground': '#1a1a26',
+          'editor.selectionBackground': '#2c2c40',
+          'editorCursor.foreground': '#a78bfa',
+          'editorLineNumber.foreground': '#505068',
+          'editorLineNumber.activeForeground': '#7e7e98',
+          'editor.inactiveSelectionBackground': '#212130',
+        }
+      })
+    } catch {}
+
+    _toolMonacoEditor = monaco.editor.create(document.getElementById('toolMonacoContainer'), {
+      value,
+      language: 'typescript',
+      theme: 'assistant-designer',
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      lineHeight: 1.7 * 12,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      wordWrap: 'on',
+      padding: { top: 8, bottom: 8 },
+      renderLineHighlight: 'line',
+      lineNumbers: 'on',
+      glyphMargin: false,
+      folding: true,
+      automaticLayout: true,
+      tabSize: 2,
+    })
+    _toolMonacoReady = true
+    applySignatureDecoration()
+
+    // Strip diagnostic markers from signature and closing brace lines
+    const toolModel = _toolMonacoEditor.getModel()
+    monaco.editor.onDidChangeMarkers(([uri]) => {
+      if (!toolModel || uri.toString() !== toolModel.uri.toString()) return
+      const markers = monaco.editor.getModelMarkers({ resource: toolModel.uri })
+      const lineCount = toolModel.getLineCount()
+      const filtered = markers.filter(m => m.startLineNumber !== 1 && m.startLineNumber !== lineCount)
+      if (filtered.length !== markers.length) {
+        monaco.editor.setModelMarkers(toolModel, 'typescript', filtered)
+      }
+    })
+
+    // Prevent editing preamble, signature, and closing brace lines
+    _toolMonacoEditor.onKeyDown((e) => {
+      const model = _toolMonacoEditor.getModel()
+      const pos = _toolMonacoEditor.getPosition()
+      const lineCount = model.getLineCount()
+      const protectedTop = PREAMBLE_LINES + 1 // preamble + signature
+      const navKeys = ['ArrowDown','ArrowRight','ArrowLeft','ArrowUp','End','Home','PageDown','PageUp']
+      // Block typing on preamble and signature lines
+      if (pos.lineNumber <= protectedTop && !e.ctrlKey && !e.metaKey) {
+        if (!navKeys.includes(e.code)) {
+          if (!(e.code === 'Enter' && pos.lineNumber === protectedTop)) {
+            e.preventDefault(); e.stopPropagation()
+          }
+        }
+      }
+      // Block typing on last line (closing brace), except Enter
+      if (pos.lineNumber === lineCount && !e.ctrlKey && !e.metaKey) {
+        if (!navKeys.includes(e.code) && e.code !== 'Enter') {
+          e.preventDefault(); e.stopPropagation()
+        }
+      }
+    })
+
+    // Re-enforce signature after any edit (in case paste/undo mangled it)
+    let saveTimer
+    _toolMonacoEditor.onDidChangeModelContent(() => {
+      clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => {
+        if (_editingToolIndex >= 0) {
+          // Re-apply decoration
+          applySignatureDecoration()
+          // Extract body and save
+          store.updateTool(_editingToolIndex, 'handler', extractHandlerFromMonaco())
+        }
+      }, 400)
+    })
+
+    // Cmd+Enter to run test
+    _toolMonacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      runToolTest()
+    })
+  }
+
+  if (window.monaco) {
+    doInit(window.monaco)
+  } else if (window.require && window.require.config) {
+    window.require(['vs/editor/editor.main'], (monaco) => { window.monaco = monaco; doInit(monaco) })
+  } else {
+    const loaderScript = document.createElement('script')
+    loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
+    loaderScript.onload = () => {
+      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
+      window.require(['vs/editor/editor.main'], (monaco) => { window.monaco = monaco; doInit(monaco) })
+    }
+    document.head.appendChild(loaderScript)
+  }
+}
+
+async function runToolTest() {
+  if (_editingToolIndex < 0) return
+  const tool = (store.state.get('tools') || [])[_editingToolIndex]
+  if (!tool) return
+
+  const handler = _toolMonacoEditor ? extractHandlerFromMonaco() : tool.handler
+  let testArgs = {}
+  try { testArgs = JSON.parse($toolTestArgs.value) } catch (e) {
+    $toolTestOutput.textContent = `Invalid JSON in test args: ${e.message}`
+    $toolTestOutput.classList.add('error')
+    return
+  }
+
+  $runToolTestBtn.classList.add('running')
+  $runToolTestBtn.textContent = 'running...'
+  $toolTestOutput.textContent = ''
+  $toolTestOutput.classList.remove('error')
+
+  try {
+    const data = await app.api.evalTool(handler, testArgs)
+    if (data.ok) {
+      $toolTestOutput.textContent = data.output
+      $toolTestOutput.classList.remove('error')
+    } else {
+      $toolTestOutput.textContent = data.error
+      $toolTestOutput.classList.add('error')
+    }
+  } catch (err) {
+    $toolTestOutput.textContent = err.message
+    $toolTestOutput.classList.add('error')
+  } finally {
+    $runToolTestBtn.classList.remove('running')
+    $runToolTestBtn.textContent = '▶ run'
+  }
+}
+
+// ── Tool editor event bindings ──
+$toolEditBack.addEventListener('click', closeToolEditor)
+$toolEditName.addEventListener('input', () => {
+  if (_editingToolIndex < 0) return
+  const clean = $toolEditName.value.replace(/[^a-zA-Z0-9_]/g, '')
+  store.updateTool(_editingToolIndex, 'name', clean)
+  refreshMonacoSignature(store.state.get('tools')[_editingToolIndex])
+})
+$toolEditDesc.addEventListener('input', () => {
+  if (_editingToolIndex < 0) return
+  store.updateTool(_editingToolIndex, 'description', $toolEditDesc.value)
+})
+$toolEditDelete.addEventListener('click', () => {
+  if (_editingToolIndex < 0) return
+  const idx = _editingToolIndex
+  closeToolEditor()
+  store.removeTool(idx)
+})
+$addFieldBtn.addEventListener('click', () => {
+  if (_editingToolIndex < 0) return
+  store.addField(_editingToolIndex)
+})
+$toggleRawSchemaBtn.addEventListener('click', () => {
+  if (_editingToolIndex < 0) return
+  const tool = store.state.get('tools')[_editingToolIndex]
+  if (tool.rawSchema) {
+    // Switch to visual - clear rawSchema
+    store.updateTool(_editingToolIndex, 'rawSchema', undefined)
+    renderSchemaBuilder(store.state.get('tools')[_editingToolIndex], false)
+  } else {
+    // Switch to raw - generate raw from fields
+    const rawSchema = generateZodFromFields(tool.fields || [])
+    store.updateTool(_editingToolIndex, 'rawSchema', rawSchema)
+    renderSchemaBuilder(store.state.get('tools')[_editingToolIndex], true)
+  }
+})
+$rawSchemaEditor.addEventListener('input', () => {
+  if (_editingToolIndex < 0) return
+  store.updateTool(_editingToolIndex, 'rawSchema', $rawSchemaEditor.value)
+})
+$runToolTestBtn.addEventListener('click', runToolTest)
+
+// Silence diagnostics toggle
+document.getElementById('silenceDiagnosticsToggle').addEventListener('change', (e) => {
+  if (!window.monaco) return
+  const quiet = e.target.checked
+  window.monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+    noSemanticValidation: quiet,
+    noSyntaxValidation: false,
+  })
+})
+
+// Helper: generate zod string from fields (client-side mirror of backend)
+function generateZodFromFields(fields) {
+  if (!fields.length) return 'z.object({})'
+  const lines = fields.map(f => {
+    let chain
+    if (f.type === 'enum' && f.enumValues?.length) {
+      chain = `z.enum([${f.enumValues.map(v => JSON.stringify(v)).join(', ')}])`
+    } else {
+      chain = `z.${f.type}()`
+    }
+    if (f.type === 'number' && f.integer) chain += '.int()'
+    if (f.min != null) chain += `.min(${f.min})`
+    if (f.max != null) chain += `.max(${f.max})`
+    if (!f.required) chain += '.optional()'
+    if (f.description) chain += `.describe(${JSON.stringify(f.description)})`
+    return `    ${f.name}: ${chain},`
+  })
+  return `z.object({\n${lines.join('\n')}\n  })`
+}
+
+// Re-render fields when they change
+store.on('tool:fieldsChanged', (toolIndex) => {
+  if (toolIndex === _editingToolIndex) {
+    const tool = store.state.get('tools')[toolIndex]
+    renderFields(tool.fields || [])
+    refreshMonacoSignature(tool)
+    // Update test args template
+    const argObj = {}
+    for (const f of (tool.fields || [])) {
+      if (f.type === 'string') argObj[f.name] = ''
+      else if (f.type === 'number') argObj[f.name] = 0
+      else if (f.type === 'boolean') argObj[f.name] = false
+      else if (f.type === 'enum' && f.enumValues?.length) argObj[f.name] = f.enumValues[0]
+    }
+    $toolTestArgs.value = JSON.stringify(argObj, null, 2)
+  }
+})
+
+function renderTools() {
+  if (_editingToolIndex >= 0) {
+    // If we're in edit mode, check if the tool still exists
+    const tools = store.state.get('tools') || []
+    if (_editingToolIndex < tools.length) {
+      openToolEditor(_editingToolIndex)
+    } else {
+      closeToolEditor()
+    }
+  } else {
+    renderToolsList()
+  }
 }
 
 function appendMessage(type, text) {
@@ -1416,6 +2327,324 @@ function scrollChat() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// Hooks Builder — guided hook creation with Monaco editor per hook
+// ═══════════════════════════════════════════════════════════════════════════
+
+const HOOK_EVENTS = [
+  { name: 'created', desc: 'Called when assistant loads prompt, tools, hooks', sig: '()', boilerplate: '// Set up features, use assistant.use(...)\n' },
+  { name: 'started', desc: 'Called after assistant fully initialized', sig: '()', boilerplate: '// Post-init setup\n' },
+  { name: 'formatSystemPrompt', desc: 'Modify system prompt before each turn', sig: '(assistant, prompt)', boilerplate: '// Modify and return the prompt\nreturn prompt\n', returns: true },
+  { name: 'turnStart', desc: 'New completion turn begins', sig: '(turn, isFollowUp)', boilerplate: '' },
+  { name: 'turnEnd', desc: 'Completion turn ends', sig: '(hasToolCalls)', boilerplate: '' },
+  { name: 'chunk', desc: 'Streaming text chunk received', sig: '(text)', boilerplate: '' },
+  { name: 'response', desc: 'Final response text', sig: '(text)', boilerplate: '' },
+  { name: 'toolCall', desc: 'A tool is called', sig: '(toolName, args)', boilerplate: '' },
+  { name: 'toolResult', desc: 'A tool returns a result', sig: '(toolName, result)', boilerplate: '' },
+  { name: 'toolError', desc: 'A tool call fails', sig: '(toolName, error)', boilerplate: '' },
+  { name: 'reloaded', desc: 'Tools, hooks, prompt reloaded from disk', sig: '()', boilerplate: '' },
+]
+
+let _hooksRawMode = false
+let _hookMonacoEditor = null
+let _hookMonacoReady = false
+let _editingHookName = null
+// parsed hooks: { [hookName]: bodyString }
+let _parsedHooks = {}
+
+const $hooksGuidedView = document.getElementById('hooksGuidedView')
+const $hooksToggleRawBtn = document.getElementById('hooksToggleRawBtn')
+const $activeHooksList = document.getElementById('activeHooksList')
+const $availableHooksList = document.getElementById('availableHooksList')
+const $hookEditorArea = document.getElementById('hookEditorArea')
+const $hookEditorHeader = document.getElementById('hookEditorHeader')
+const $hookEditorName = document.getElementById('hookEditorName')
+
+/** Parse hooks source into { hookName: bodyString } */
+function parseHooksSource(source) {
+  const hooks = {}
+  const fnRegex = /export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)\s*\{/g
+  let m
+  while ((m = fnRegex.exec(source)) !== null) {
+    const name = m[1]
+    const braceStart = source.indexOf('{', m.index + m[0].length - 1)
+    // Simple brace-balanced extraction
+    let depth = 0, i = braceStart
+    while (i < source.length) {
+      if (source[i] === '{') depth++
+      else if (source[i] === '}') { depth--; if (depth === 0) break }
+      else if (source[i] === "'" || source[i] === '"' || source[i] === '`') {
+        const q = source[i]; i++
+        while (i < source.length && source[i] !== q) { if (source[i] === '\\') i++; i++ }
+      }
+      i++
+    }
+    const body = source.slice(braceStart + 1, i)
+    // Dedent
+    const lines = body.split('\n')
+    if (lines.length && lines[0].trim() === '') lines.shift()
+    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
+    let minIndent = Infinity
+    for (const l of lines) { if (l.trim()) { const lead = l.match(/^(\s*)/); minIndent = Math.min(minIndent, lead[1].length) } }
+    if (minIndent === Infinity) minIndent = 0
+    hooks[name] = lines.map(l => l.slice(minIndent)).join('\n')
+  }
+  return hooks
+}
+
+/** Generate hooks source from parsed hooks */
+function generateHooksSource(hooks) {
+  const lines = [
+    `import type { Assistant, AGIContainer } from '@soederpop/luca/agi'`,
+    '',
+    'declare global {',
+    '\tvar assistant: Assistant',
+    '\tvar container: AGIContainer',
+    '}',
+    '',
+  ]
+  for (const [name, body] of Object.entries(hooks)) {
+    const evt = HOOK_EVENTS.find(h => h.name === name)
+    const sig = evt?.sig || '()'
+    const isAsync = (body || '').includes('await ') || evt?.returns
+    lines.push(`export ${isAsync ? 'async ' : ''}function ${name}${sig} {`)
+    for (const line of (body || '').split('\n')) lines.push(`\t${line}`)
+    lines.push('}', '')
+  }
+  return lines.join('\n')
+}
+
+function renderHooksBuilder() {
+  // Parse current hooks source
+  const source = store.state.get('hooksSource') || ''
+  _parsedHooks = parseHooksSource(source)
+
+  // Render active hooks
+  const activeNames = Object.keys(_parsedHooks)
+  $activeHooksList.innerHTML = ''
+  if (activeNames.length === 0) {
+    $activeHooksList.innerHTML = '<div style="color:var(--text-faint);font-size:10px;">No hooks defined</div>'
+  } else {
+    for (const name of activeNames) {
+      const chip = document.createElement('span')
+      chip.className = 'hook-chip' + (name === _editingHookName ? ' active' : '')
+      chip.innerHTML = `${esc(name)} <span class="hook-chip-remove" data-hook="${esc(name)}">&times;</span>`
+      chip.addEventListener('click', (e) => {
+        if (e.target.classList.contains('hook-chip-remove')) {
+          delete _parsedHooks[name]
+          syncHooksToStore()
+          if (_editingHookName === name) { _editingHookName = null; $hookEditorHeader.style.display = 'none' }
+          renderHooksBuilder()
+        } else {
+          editHook(name)
+        }
+      })
+      $activeHooksList.appendChild(chip)
+    }
+  }
+
+  // Render available hooks (not yet active)
+  $availableHooksList.innerHTML = ''
+  for (const evt of HOOK_EVENTS) {
+    if (_parsedHooks[evt.name]) continue
+    const btn = document.createElement('button')
+    btn.className = 'hook-chip-add'
+    btn.title = evt.desc
+    btn.textContent = `+ ${evt.name}`
+    btn.addEventListener('click', () => {
+      _parsedHooks[evt.name] = evt.boilerplate || '// ' + evt.desc + '\n'
+      syncHooksToStore()
+      renderHooksBuilder()
+      editHook(evt.name)
+    })
+    $availableHooksList.appendChild(btn)
+  }
+}
+
+function editHook(name) {
+  _editingHookName = name
+  $hookEditorHeader.style.display = 'flex'
+  $hookEditorName.textContent = name
+
+  const evt = HOOK_EVENTS.find(h => h.name === name)
+  const sig = evt?.sig || '()'
+  const isAsync = (_parsedHooks[name] || '').includes('await ') || evt?.returns
+  const fullFn = `export ${isAsync ? 'async ' : ''}function ${name}${sig} {\n  ${(_parsedHooks[name] || '').split('\n').join('\n  ')}\n}`
+
+  if (_hookMonacoEditor) {
+    _hookMonacoEditor.setValue(fullFn)
+    _hookMonacoEditor.revealLine(2)
+  } else {
+    initHookMonaco(fullFn)
+  }
+
+  // Highlight active chip
+  $activeHooksList.querySelectorAll('.hook-chip').forEach(c => c.classList.remove('active'))
+  const chips = $activeHooksList.querySelectorAll('.hook-chip')
+  chips.forEach(c => { if (c.textContent.trim().startsWith(name)) c.classList.add('active') })
+}
+
+function extractHookBody() {
+  if (!_hookMonacoEditor) return ''
+  const lines = _hookMonacoEditor.getValue().split('\n')
+  const bodyLines = lines.slice(1, -1)
+  return bodyLines.map(l => l.startsWith('  ') ? l.slice(2) : (l.startsWith('\t') ? l.slice(1) : l)).join('\n')
+}
+
+function syncHooksToStore() {
+  const source = generateHooksSource(_parsedHooks)
+  store.setHooksSource(source)
+  $hooks.value = source
+}
+
+function initHookMonaco(value) {
+  if (_hookMonacoReady) return
+  const doInit = (monaco) => {
+    configureMonacoTs(monaco)
+    try {
+      monaco.editor.defineTheme('assistant-designer', {
+        base: 'vs-dark', inherit: true,
+        rules: [
+          { token: 'comment', foreground: '505068' },
+          { token: 'keyword', foreground: 'a78bfa' },
+          { token: 'string', foreground: '4ade80' },
+          { token: 'number', foreground: 'fb923c' },
+          { token: 'type', foreground: '60a5fa' },
+        ],
+        colors: {
+          'editor.background': '#131320', 'editor.foreground': '#c8c8d8',
+          'editor.lineHighlightBackground': '#1a1a26', 'editor.selectionBackground': '#2c2c40',
+          'editorCursor.foreground': '#a78bfa', 'editorLineNumber.foreground': '#505068',
+          'editorLineNumber.activeForeground': '#7e7e98', 'editor.inactiveSelectionBackground': '#212130',
+        }
+      })
+    } catch {}
+
+    _hookMonacoEditor = monaco.editor.create(document.getElementById('hookMonacoContainer'), {
+      value, language: 'typescript', theme: 'assistant-designer',
+      fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, lineHeight: 1.7 * 12,
+      minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on',
+      padding: { top: 8, bottom: 8 }, renderLineHighlight: 'line', lineNumbers: 'on',
+      glyphMargin: false, folding: true, automaticLayout: true, tabSize: 2,
+    })
+    _hookMonacoReady = true
+
+    let saveTimer
+    _hookMonacoEditor.onDidChangeModelContent(() => {
+      clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => {
+        if (_editingHookName) {
+          _parsedHooks[_editingHookName] = extractHookBody()
+          syncHooksToStore()
+        }
+      }, 400)
+    })
+  }
+
+  if (window.monaco) doInit(window.monaco)
+  else if (window.require && window.require.config) {
+    window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
+  } else {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
+    s.onload = () => {
+      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
+      window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
+    }
+    document.head.appendChild(s)
+  }
+}
+
+// Toggle raw/guided mode
+$hooksToggleRawBtn.addEventListener('click', () => {
+  _hooksRawMode = !_hooksRawMode
+  if (_hooksRawMode) {
+    $hooksGuidedView.style.display = 'none'
+    $hooks.style.display = 'block'
+    $hooks.value = store.state.get('hooksSource') || ''
+    $hooksToggleRawBtn.textContent = 'guided'
+  } else {
+    $hooks.style.display = 'none'
+    $hooksGuidedView.style.display = 'flex'
+    renderHooksBuilder()
+    $hooksToggleRawBtn.textContent = 'raw'
+  }
+})
+
+// Re-render hooks builder when state changes
+store.on('state:loaded', () => { if (!_hooksRawMode) renderHooksBuilder() })
+store.on('assistant:loaded', () => { _editingHookName = null; if (!_hooksRawMode) renderHooksBuilder() })
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Core.md Monaco Editor
+// ═══════════════════════════════════════════════════════════════════════════
+function initCoreMonaco() {
+  if (_coreMonacoReady) return
+  const doInit = (monaco) => {
+    configureMonacoTs(monaco)
+    try {
+      monaco.editor.defineTheme('assistant-designer', {
+        base: 'vs-dark', inherit: true,
+        rules: [
+          { token: 'comment', foreground: '505068' }, { token: 'keyword', foreground: 'a78bfa' },
+          { token: 'string', foreground: '4ade80' }, { token: 'number', foreground: 'fb923c' },
+          { token: 'type', foreground: '60a5fa' },
+        ],
+        colors: {
+          'editor.background': '#131320', 'editor.foreground': '#c8c8d8',
+          'editor.lineHighlightBackground': '#1a1a26', 'editor.selectionBackground': '#2c2c40',
+          'editorCursor.foreground': '#a78bfa', 'editorLineNumber.foreground': '#505068',
+          'editorLineNumber.activeForeground': '#7e7e98', 'editor.inactiveSelectionBackground': '#212130',
+        }
+      })
+    } catch {}
+
+    _coreMonacoEditor = monaco.editor.create(document.getElementById('coreMonacoContainer'), {
+      value: store.state.get('systemPrompt') || '# My Assistant\n\nYou are a helpful assistant.',
+      language: 'markdown',
+      theme: 'assistant-designer',
+      fontFamily: "'IBM Plex Mono', monospace",
+      fontSize: 12,
+      lineHeight: 1.7 * 12,
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      wordWrap: 'on',
+      padding: { top: 10, bottom: 10 },
+      renderLineHighlight: 'line',
+      lineNumbers: 'on',
+      glyphMargin: false,
+      folding: true,
+      automaticLayout: true,
+      tabSize: 2,
+    })
+    _coreMonacoReady = true
+
+    let saveTimer
+    _coreMonacoEditor.onDidChangeModelContent(() => {
+      clearTimeout(saveTimer)
+      saveTimer = setTimeout(() => {
+        store.setSystemPrompt(_coreMonacoEditor.getValue())
+      }, 400)
+    })
+  }
+
+  if (window.monaco) doInit(window.monaco)
+  else if (window.require && window.require.config) {
+    window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
+  } else {
+    const s = document.createElement('script')
+    s.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
+    s.onload = () => {
+      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
+      window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
+    }
+    document.head.appendChild(s)
+  }
+}
+
+// Init core Monaco eagerly since it's the default active tab
+store.on('state:loaded', () => { initCoreMonaco() })
+
 // Boot — expose on window and start
 // ═══════════════════════════════════════════════════════════════════════════
 window.app = app
@@ -1495,7 +2724,8 @@ function loadMonaco() {
       paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' }
     })
     window.require(['vs/editor/editor.main'], (monaco) => {
-      // Define a dark theme matching our palette
+      window.monaco = monaco
+      configureMonacoTs(monaco)
       monaco.editor.defineTheme('assistant-designer', {
         base: 'vs-dark',
         inherit: true,

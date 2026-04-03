@@ -150,7 +150,7 @@ export async function onSetup({ app, docs, container }: WorkflowHooksSetupContex
       if (options.inFolder) args.push('--in-folder', options.inFolder)
       if (options.outFile) args.push('--out-file', options.outFile)
       if (options.excludeSections) args.push('--exclude-sections', options.excludeSections)
-      if (options.skipEval) args.push('--skip-eval')
+      if (options.skipEval !== false) args.push('--skip-eval')
       if (options.includeOutput) args.push('--include-output')
       if (options.chrome) args.push('--chrome')
       if (options.dryRun) args.push('--dry-run')

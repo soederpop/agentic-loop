@@ -1091,7 +1091,7 @@
     const inf = el('qo-in-folder').value.trim(); if (inf) opts.inFolder = inf
     const outf = el('qo-out-file').value.trim(); if (outf) opts.outFile = outf
     const exc = el('qo-exclude-sections').value.trim(); if (exc) opts.excludeSections = exc
-    if (el('qo-skip-eval').checked) opts.skipEval = true
+    if (!el('qo-skip-eval').checked) opts.skipEval = false
     if (el('qo-chrome').checked) opts.chrome = true
     if (el('qo-include-output').checked) opts.includeOutput = true
     if (el('qo-dry-run').checked) opts.dryRun = true
@@ -1105,7 +1105,7 @@
     el('qo-in-folder').value = opts.inFolder || ''
     el('qo-out-file').value = opts.outFile || ''
     el('qo-exclude-sections').value = opts.excludeSections || ''
-    el('qo-skip-eval').checked = !!opts.skipEval
+    el('qo-skip-eval').checked = opts.skipEval !== false
     el('qo-chrome').checked = !!opts.chrome
     el('qo-include-output').checked = !!opts.includeOutput
     el('qo-dry-run').checked = !!opts.dryRun

@@ -8,17 +8,30 @@
  */
 import type { WorkflowHooksSetupContext } from '../../features/workflow-service'
 
+interface ToolField {
+  name: string
+  type: 'string' | 'number' | 'boolean' | 'enum'
+  description: string
+  required: boolean
+  min?: number
+  max?: number
+  integer?: boolean
+  enumValues?: string[]
+}
+
 interface ToolDef {
   name: string
   description: string
-  schema: string
+  fields: ToolField[]
   handler: string
+  rawSchema?: string // fallback for schemas too complex for the visual builder
 }
 
 interface DesignerState {
   assistantName: string
   systemPrompt: string
   tools: ToolDef[]
+  toolsImports: string[] // extra import lines from loaded tools.ts
   hooksSource: string
   model: string
   provider: 'openai' | 'lm-studio'
@@ -33,17 +46,44 @@ function isChatModel(id: string): boolean {
   return OPENAI_CHAT_PREFIXES.some((p) => id.startsWith(p))
 }
 
-function generateToolsSource(tools: ToolDef[]): string {
+function fieldToZod(f: ToolField): string {
+  let chain: string
+  if (f.type === 'enum' && f.enumValues?.length) {
+    chain = `z.enum([${f.enumValues.map(v => JSON.stringify(v)).join(', ')}])`
+  } else {
+    chain = `z.${f.type}()`
+  }
+  if (f.type === 'number' && f.integer) chain += '.int()'
+  if (f.min != null) chain += `.min(${f.min})`
+  if (f.max != null) chain += `.max(${f.max})`
+  if (!f.required) chain += '.optional()'
+  if (f.description) chain += `.describe(${JSON.stringify(f.description)})`
+  return chain
+}
+
+function fieldsToZodObject(fields: ToolField[]): string {
+  if (!fields.length) return 'z.object({})'
+  const lines = fields.map(f => `    ${f.name}: ${fieldToZod(f)},`)
+  return `z.object({\n${lines.join('\n')}\n  })`
+}
+
+function generateToolsSource(tools: ToolDef[], extraImports?: string[]): string {
   if (tools.length === 0) return `import { z } from 'zod'\n\nexport const schemas = {}\n`
-  const lines: string[] = [`import { z } from 'zod'`, '']
+
+  const lines: string[] = [`import { z } from 'zod'`]
+  if (extraImports?.length) {
+    for (const imp of extraImports) lines.push(imp)
+  }
+  lines.push('')
   lines.push('export const schemas = {')
   for (const tool of tools) {
+    const zodStr = tool.rawSchema || fieldsToZodObject(tool.fields)
     const desc = tool.description ? `.describe(${JSON.stringify(tool.description)})` : ''
-    lines.push(`  ${tool.name}: ${tool.schema}${desc},`)
+    lines.push(`  ${tool.name}: ${zodStr}${desc},`)
   }
   lines.push('}', '')
   for (const tool of tools) {
-    lines.push(`export async function ${tool.name}(args: any) {`)
+    lines.push(`export async function ${tool.name}(options: z.infer<typeof schemas.${tool.name}>) {`)
     const body = tool.handler.trim() || `return { result: 'not implemented' }`
     for (const line of body.split('\n')) lines.push(`  ${line}`)
     lines.push('}', '')
@@ -51,30 +91,179 @@ function generateToolsSource(tools: ToolDef[]): string {
   return lines.join('\n')
 }
 
-function parseToolsSource(source: string): ToolDef[] {
+/** Extract balanced brace content starting at the opening brace */
+function extractBraced(src: string, startIdx: number): string {
+  let depth = 0
+  let i = startIdx
+  while (i < src.length) {
+    if (src[i] === '{') depth++
+    else if (src[i] === '}') { depth--; if (depth === 0) return src.slice(startIdx, i + 1) }
+    else if (src[i] === "'" || src[i] === '"' || src[i] === '`') {
+      const q = src[i]!; i++
+      while (i < src.length && src[i] !== q) { if (src[i] === '\\') i++; i++ }
+    }
+    i++
+  }
+  return src.slice(startIdx)
+}
+
+/** Parse z.object({...}) fields into ToolField[] */
+function parseZodObjectFields(zodStr: string): ToolField[] | null {
+  const objMatch = zodStr.match(/z\.object\(\{/)
+  if (!objMatch) return null
+
+  const innerStart = zodStr.indexOf('{', zodStr.indexOf('z.object('))
+  const inner = extractBraced(zodStr, innerStart)
+  // Strip outer braces
+  const body = inner.slice(1, -1).trim()
+  if (!body) return []
+
+  const fields: ToolField[] = []
+  // Match field entries: name: z.type()...
+  const fieldRegex = /(\w+)\s*:\s*(z\.\w+)/g
+  let match
+  while ((match = fieldRegex.exec(body)) !== null) {
+    const name = match[1] as string
+    const typeStart = match.index! + match[0].length - match[2]!.length
+    // Find the full chain for this field (everything up to the next field or end)
+    let chainEnd = body.length
+    // Look for the next top-level field declaration
+    const nextField = /,\s*\n\s*(\w+)\s*:\s*z\./g
+    nextField.lastIndex = match.index! + match[0].length
+    const nextMatch = nextField.exec(body)
+    if (nextMatch) chainEnd = nextMatch.index! + 1 // include the comma
+
+    let chain = body.slice(typeStart, chainEnd).replace(/,\s*$/, '').trim()
+
+    const field: ToolField = { name, type: 'string', description: '', required: true }
+
+    // Detect type
+    if (chain.startsWith('z.string')) field.type = 'string'
+    else if (chain.startsWith('z.number')) field.type = 'number'
+    else if (chain.startsWith('z.boolean')) field.type = 'boolean'
+    else if (chain.startsWith('z.enum')) {
+      field.type = 'enum'
+      const enumMatch = chain.match(/z\.enum\(\[([^\]]*)\]\)/)
+      if (enumMatch) {
+        field.enumValues = [...enumMatch[1]!.matchAll(/['"]([^'"]*)['"]/g)].map(m => m[1] as string)
+      }
+    }
+
+    // Parse chained methods
+    if (chain.includes('.optional()')) field.required = false
+    if (chain.includes('.int()')) field.integer = true
+    const minMatch = chain.match(/\.min\((\d+)\)/)
+    if (minMatch) field.min = Number(minMatch[1])
+    const maxMatch = chain.match(/\.max\((\d+)\)/)
+    if (maxMatch) field.max = Number(maxMatch[1])
+    const descMatch = chain.match(/\.describe\((['"`])([\s\S]*?)\1\)/)
+    if (descMatch) field.description = descMatch[2] as string
+
+    fields.push(field)
+  }
+  return fields
+}
+
+function parseToolsSource(source: string): { tools: ToolDef[], imports: string[] } {
   const tools: ToolDef[] = []
-  const schemasMatch = source.match(/export\s+const\s+schemas\s*=\s*\{([\s\S]*?)\n\}/)
-  if (!schemasMatch) return tools
-  const schemaEntries = (schemasMatch[1] as string).match(
-    /(\w+)\s*:\s*(z\.\w+\([\s\S]*?\))(?:\.describe\((['"`])([\s\S]*?)\3\))?\s*,/g,
-  )
-  if (!schemaEntries) return tools
-  for (const entry of schemaEntries) {
-    const nameMatch = entry.match(/^(\w+)\s*:/)
-    if (!nameMatch) continue
-    const name = nameMatch[1] as string
-    const schemaMatch = entry.match(/:\s*(z\.[\s\S]*?)(?:\.describe\(|,\s*$)/)
-    const schema = schemaMatch ? (schemaMatch[1] as string).trim() : 'z.object({})'
-    const descMatch = entry.match(/\.describe\((['"`])([\s\S]*?)\1\)/)
-    const description = descMatch ? (descMatch[2] as string) : ''
+
+  // Extract import lines (all non-zod imports)
+  const imports: string[] = []
+  for (const line of source.split('\n')) {
+    if (/^import\s/.test(line) && !line.includes("from 'zod'") && !line.includes('from "zod"')) {
+      imports.push(line)
+    }
+  }
+
+  // Find the schemas object using brace balancing
+  const schemasIdx = source.search(/export\s+const\s+schemas\s*=\s*\{/)
+  if (schemasIdx === -1) return { tools, imports }
+
+  const braceStart = source.indexOf('{', schemasIdx)
+  const schemasBlock = extractBraced(source, braceStart)
+  const schemasInner = schemasBlock.slice(1, -1) // strip outer braces
+
+  // Find top-level schema entries by scanning character-by-character
+  // Only match "name:" patterns that are at brace depth 0 within the schemas object
+  const entries: Array<{ name: string; valueStart: number }> = []
+  let depth = 0
+  let lineStart = 0
+  for (let i = 0; i < schemasInner.length; i++) {
+    const ch = schemasInner[i]!
+    if (ch === '{' || ch === '(' || ch === '[') depth++
+    else if (ch === '}' || ch === ')' || ch === ']') depth--
+    else if (ch === "'" || ch === '"' || ch === '`') {
+      const q = ch; i++
+      while (i < schemasInner.length && schemasInner[i] !== q) { if (schemasInner[i] === '\\') i++; i++ }
+    } else if (ch === '\n') {
+      lineStart = i + 1
+    }
+
+    // At depth 0, look for "word:" pattern at start of line (with optional whitespace)
+    if (depth === 0 && ch === ':' && i > lineStart) {
+      const beforeColon = schemasInner.slice(lineStart, i).trim()
+      if (/^\w+$/.test(beforeColon)) {
+        entries.push({ name: beforeColon, valueStart: i + 1 })
+      }
+    }
+  }
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]!
+    const nextStart = i + 1 < entries.length
+      ? schemasInner.lastIndexOf('\n', entries[i + 1]!.valueStart - 1) + 1 || entries[i + 1]!.valueStart
+      : schemasInner.length
+    let zodExpr = schemasInner.slice(entry.valueStart, nextStart).trim().replace(/,\s*$/, '')
+
+    // Extract tool-level .describe() — find the outermost one by scanning
+    let description = ''
+    // Match .describe('...') or .describe("...") at the end of the expression
+    const describeMatch = zodExpr.match(/\.describe\((['"`])([\s\S]*?)\1\)\s*$/)
+    if (describeMatch) {
+      description = describeMatch[2] as string
+      zodExpr = zodExpr.slice(0, zodExpr.lastIndexOf('.describe(')).trim()
+    }
+
+    // Try to parse into fields
+    const fields = parseZodObjectFields(zodExpr)
+
+    // Extract function body
     const fnRegex = new RegExp(
-      `export\\s+(?:async\\s+)?function\\s+${name}\\s*\\([^)]*\\)\\s*\\{([\\s\\S]*?)\\n\\}`,
+      `export\\s+(?:async\\s+)?function\\s+${entry.name}\\s*\\([^)]*\\)(?:\\s*:\\s*[^{]*)?\\s*\\{`,
     )
     const fnMatch = source.match(fnRegex)
-    const handler = fnMatch ? (fnMatch[1] as string).replace(/^\n/, '').replace(/^  /gm, '').trimEnd() : ''
-    tools.push({ name, description, schema, handler })
+    let handler = ''
+    if (fnMatch) {
+      const fnBraceStart = source.indexOf('{', fnMatch.index! + fnMatch[0].length - 1)
+      const fnBody = extractBraced(source, fnBraceStart)
+      // Dedent: find the common leading whitespace and strip it
+      const bodyLines = fnBody.slice(1, -1).split('\n')
+      // Remove leading empty line
+      if (bodyLines.length && bodyLines[0]!.trim() === '') bodyLines.shift()
+      // Remove trailing empty lines
+      while (bodyLines.length && bodyLines[bodyLines.length - 1]!.trim() === '') bodyLines.pop()
+      // Find minimum indentation (tabs or spaces)
+      let minIndent = Infinity
+      for (const line of bodyLines) {
+        if (line.trim() === '') continue
+        const leadingMatch = line.match(/^(\s+)/)
+        if (leadingMatch) minIndent = Math.min(minIndent, leadingMatch[1]!.length)
+        else { minIndent = 0; break }
+      }
+      if (minIndent === Infinity) minIndent = 0
+      handler = bodyLines.map(l => l.slice(minIndent)).join('\n')
+    }
+
+    tools.push({
+      name: entry.name,
+      description,
+      fields: fields || [],
+      handler,
+      rawSchema: fields === null ? zodExpr : undefined,
+    })
   }
-  return tools
+
+  return { tools, imports }
 }
 
 export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
@@ -89,6 +278,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     assistantName: 'my-assistant',
     systemPrompt: '# My Assistant\n\nYou are a helpful assistant.',
     tools: [],
+    toolsImports: [],
     hooksSource: '',
     model: 'gpt-4o',
     provider: 'openai',
@@ -114,6 +304,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       assistantName: designerState.assistantName,
       systemPrompt: designerState.systemPrompt,
       tools: designerState.tools,
+      toolsImports: designerState.toolsImports,
       hooksSource: designerState.hooksSource,
       model: designerState.model,
       provider: designerState.provider,
@@ -164,6 +355,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     if (body.systemPrompt !== undefined) designerState.systemPrompt = body.systemPrompt
     if (body.hooksSource !== undefined) designerState.hooksSource = body.hooksSource
     if (body.tools !== undefined && Array.isArray(body.tools)) designerState.tools = body.tools
+    if (body.toolsImports !== undefined && Array.isArray(body.toolsImports)) designerState.toolsImports = body.toolsImports
     res.json({ ok: true })
   })
 
@@ -206,15 +398,18 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       let systemPrompt = `# ${name}\n\nYou are a helpful assistant.`
       try { systemPrompt = ((await fs.readFileAsync(container.paths.join(folder, 'CORE.md'), 'utf8')) as any).toString('utf-8') } catch {}
       let tools: ToolDef[] = []
+      let toolsImports: string[] = []
       let rawToolsSource = ''
       try {
         rawToolsSource = ((await fs.readFileAsync(container.paths.join(folder, 'tools.ts'), 'utf8')) as any).toString('utf-8')
-        tools = parseToolsSource(rawToolsSource)
+        const parsed = parseToolsSource(rawToolsSource)
+        tools = parsed.tools
+        toolsImports = parsed.imports
       } catch {}
       let hooksSource = ''
       try { hooksSource = ((await fs.readFileAsync(container.paths.join(folder, 'hooks.ts'), 'utf8')) as any).toString('utf-8') } catch {}
-      Object.assign(designerState, { assistantName: name, systemPrompt, tools, hooksSource })
-      res.json({ ok: true, assistantName: name, systemPrompt, tools, hooksSource, rawToolsSource })
+      Object.assign(designerState, { assistantName: name, systemPrompt, tools, toolsImports, hooksSource })
+      res.json({ ok: true, assistantName: name, systemPrompt, tools, toolsImports, hooksSource, rawToolsSource })
     } catch (err: any) {
       res.status(500).json({ error: err.message })
     }
@@ -229,7 +424,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       const folder = container.paths.resolve('assistants', name)
       await fs.mkdirp(folder)
       await fs.writeFileAsync(container.paths.join(folder, 'CORE.md'), designerState.systemPrompt)
-      await fs.writeFileAsync(container.paths.join(folder, 'tools.ts'), generateToolsSource(designerState.tools))
+      await fs.writeFileAsync(container.paths.join(folder, 'tools.ts'), generateToolsSource(designerState.tools, designerState.toolsImports))
       if (designerState.hooksSource.trim()) {
         await fs.writeFileAsync(container.paths.join(folder, 'hooks.ts'), designerState.hooksSource)
       }
@@ -260,7 +455,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       assistantName: designerState.assistantName,
       files: {
         'CORE.md': designerState.systemPrompt,
-        'tools.ts': generateToolsSource(designerState.tools),
+        'tools.ts': generateToolsSource(designerState.tools, designerState.toolsImports),
         'hooks.ts': designerState.hooksSource || '// No hooks defined',
       },
       config: {
@@ -423,6 +618,20 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     } catch (err: any) {
       send('error', { message: err.message || String(err) })
       res.end()
+    }
+  })
+
+  // ── Eval Tool Body ─────────────────────────────────────────────────────────
+
+  app.post('/api/eval-tool', async (req: any, res: any) => {
+    const { handler, testArgs } = req.body || {}
+    if (!handler) return res.status(400).json({ error: 'Missing handler body' })
+    const code = `(async function(options) {\n${handler}\n})(${JSON.stringify(testArgs || {})})`
+    try {
+      const result = await vm.run(code, replContext)
+      res.json({ ok: true, output: result === undefined ? 'undefined' : typeof result === 'string' ? result : JSON.stringify(result, null, 2) })
+    } catch (err: any) {
+      res.json({ ok: false, error: err.message || String(err) })
     }
   })
 
