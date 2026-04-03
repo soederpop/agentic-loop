@@ -5,6 +5,8 @@ declare global {
 }
 
 export function started() {
+	const { schemas, handlers } = (assistant.container as any).selectors.toTools(assistant.container)
+	assistant.use({ schemas, handlers })
 }
 
 export async function formatSystemPrompt(prompt: string) {

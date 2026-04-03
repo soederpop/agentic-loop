@@ -3,6 +3,7 @@ import { Feature, FeatureStateSchema, FeatureOptionsSchema, features } from '@so
 import type { ExpressServer } from '@soederpop/luca'
 import type { AGIContainer } from '@soederpop/luca/agi'
 import { createHash } from 'crypto'
+import { readCurrentInstance } from './instance-registry'
 
 declare module '@soederpop/luca' {
   interface AvailableFeatures {
@@ -718,9 +719,10 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
     // ── Shared API: config (for dashboard WS URL) ──────────────────────────────
 
     app.get('/api/config', (_req: any, res: any) => {
-      const wsProto = 'ws'
-      const wsUrl = `${wsProto}://localhost:${this.options.port}`
-      res.json({ wsUrl, port: this.options.port })
+      const instance = readCurrentInstance()
+      const authorityPort = instance?.ports?.authority ?? 4410
+      const wsUrl = `ws://localhost:${authorityPort}`
+      res.json({ wsUrl, port: authorityPort, workflowPort: this.options.port })
     })
 
     // ── Workflow index ─────────────────────────────────────────────────────────

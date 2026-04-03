@@ -30,7 +30,7 @@ function formatScheduleLabel(name: string): string {
   return labels[name] || name
 }
 
-export async function onSetup({ app, docs, container }: WorkflowHooksSetupContext) {
+export async function onSetup({ app, docs, container, broadcast }: WorkflowHooksSetupContext) {
   const fs = container.feature('fs')
   const readFileStr = async (p: string): Promise<string> => ((await fs.readFile(p)) as any).toString('utf-8')
   const yaml = container.feature('yaml')
@@ -241,6 +241,7 @@ export async function onSetup({ app, docs, container }: WorkflowHooksSetupContex
             fm.lastRanAt = Date.now()
             const body = raw.replace(/^---\n[\s\S]*?\n---\n*/, '')
             await fs.writeFile(filePath, `---\n${yaml.stringify(fm).trim()}\n---\n\n${body}`)
+            broadcast('play:completed', { slug, lastRanAt: fm.lastRanAt })
           }
         } catch {}
       }
@@ -257,6 +258,8 @@ export async function onSetup({ app, docs, container }: WorkflowHooksSetupContex
         child.unref()
         child.on('exit', markComplete)
       }
+
+      broadcast('play:started', { slug, title: play.title })
 
       res.json({
         ok: true, slug, agent, outFile: `logs/prompt-outputs/${taskId.replace(/\//g, '--')}-${ts}.md`,

@@ -65,6 +65,7 @@ export const InstanceEntrySchema = z.object({
   ports: z.object({
     authority: z.number(),
     content: z.number(),
+    workflow: z.number(),
   }),
 })
 export type InstanceEntry = z.infer<typeof InstanceEntrySchema>
@@ -99,6 +100,7 @@ export class InstanceRegistry extends Feature<
   static BASE_PORTS = {
     authority: 4410,
     content: 4100,
+    workflow: 7700,
   }
 
   get registryDir() {
@@ -191,6 +193,7 @@ export class InstanceRegistry extends Feature<
     return {
       authority: await findPort(InstanceRegistry.BASE_PORTS.authority),
       content: await findPort(InstanceRegistry.BASE_PORTS.content),
+      workflow: await findPort(InstanceRegistry.BASE_PORTS.workflow),
     }
   }
 

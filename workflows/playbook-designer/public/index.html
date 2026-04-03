@@ -977,10 +977,10 @@
 </head>
 <body>
   <header>
-    <h1 onclick="navigateTo('timeline')">Playbook Designer</h1>
+    <h1 id="header-title">Playbook Designer</h1>
     <div class="header-meta">
       <span id="play-count"></span>
-      <button class="btn btn-accent" id="new-play-btn" onclick="navigateTo('create')">+ New Play</button>
+      <button class="btn btn-accent" id="new-play-btn">+ New Play</button>
       <div class="refresh-indicator" id="refresh-indicator">
         <div class="refresh-dot"></div>
         <span>live</span>
@@ -1007,12 +1007,12 @@
   <!-- Editor View -->
   <div class="editor-view" id="editor-view">
     <div class="editor-toolbar">
-      <button class="back-btn" onclick="navigateTo('timeline')" title="Back to timeline">&larr;</button>
+      <button class="back-btn" id="editor-back-btn" title="Back to timeline">&larr;</button>
       <span class="editor-title" id="editor-title">Editing play</span>
       <div class="unsaved-dot" id="unsaved-dot" title="Unsaved changes"></div>
       <span class="save-status" id="save-status"></span>
-      <button class="btn btn-purple" id="run-now-btn" onclick="runPlayNow()">Run Now</button>
-      <button class="btn btn-success" id="save-btn" onclick="savePlay()">Save</button>
+      <button class="btn btn-purple" id="run-now-btn">Run Now</button>
+      <button class="btn btn-success" id="save-btn">Save</button>
     </div>
     <div class="editor-controls">
       <div class="control-group">
@@ -1049,8 +1049,8 @@
         <div class="conditions-header">
           <h3>Conditions</h3>
           <span class="aggregate idle" id="conditions-aggregate">not tested</span>
-          <button class="btn btn-small btn-accent" id="check-all-btn" onclick="checkAllConditions()">Check All</button>
-          <button class="btn btn-small" onclick="addConditionBlock()">+ Add Condition</button>
+          <button class="btn btn-small btn-accent" id="check-all-btn">Check All</button>
+          <button class="btn btn-small" id="add-condition-btn">+ Add Condition</button>
         </div>
         <div id="conditions-list"></div>
       </div>
@@ -1059,7 +1059,7 @@
         <div class="history-header">
           <h3>Execution History</h3>
           <span id="history-count" style="font-size:11px;color:var(--text-faint)"></span>
-          <button class="btn btn-small" onclick="fetchHistory()">Refresh</button>
+          <button class="btn btn-small" id="refresh-history-btn">Refresh</button>
         </div>
         <div id="history-list"></div>
       </div>
@@ -1069,7 +1069,7 @@
   <!-- Create View -->
   <div class="create-view" id="create-view">
     <div class="create-form">
-      <button class="btn" onclick="navigateTo('timeline')" style="margin-bottom: 20px">&larr; Back to timeline</button>
+      <button class="btn" id="create-back-btn" style="margin-bottom: 20px">&larr; Back to timeline</button>
       <h2>Create New Play</h2>
       <div class="form-group">
         <label>Title</label>
@@ -1103,385 +1103,123 @@
         <pre id="cr-preview-content"></pre>
       </details>
       <div class="create-actions">
-        <button class="btn btn-success" id="cr-submit" onclick="createPlay()">Create Play</button>
-        <button class="btn" onclick="navigateTo('timeline')">Cancel</button>
+        <button class="btn btn-success" id="cr-submit">Create Play</button>
+        <button class="btn" id="cr-cancel">Cancel</button>
       </div>
     </div>
   </div>
 
   <!-- Log Viewer Modal -->
-  <div class="log-modal" id="log-modal" onclick="closeLogModal(event)">
-    <div class="log-modal-inner" onclick="event.stopPropagation()">
+  <div class="log-modal" id="log-modal">
+    <div class="log-modal-inner">
       <div class="log-modal-header">
         <h3 id="log-modal-title">Log</h3>
-        <button class="close-btn" onclick="closeLogModal()">&times;</button>
+        <button class="close-btn" id="log-modal-close">&times;</button>
       </div>
       <div class="log-modal-content" id="log-modal-content">Loading...</div>
     </div>
   </div>
 
-  <script>
-    // ─── State ────────────────────────────────────────────
-    const REFRESH_INTERVAL = 10_000  // 10s for live updates
-    let scheduleMap = {}
-    let refreshTimer = null
-    let currentView = 'timeline'
-    let currentSlug = null
-    let editorDirty = false
-    let originalBody = ''
-    let originalMeta = {}
-    let editorTags = []
-    let allPlays = []  // cached for filtering
+  <script type="module">
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Container Bootstrap
+    // ══════════════════════════════════════════════════════════════════════════════
 
-    // ─── Navigation ───────────────────────────────────────
-    function navigateTo(view, slug) {
-      if (currentView === 'editor' && editorDirty && view !== 'editor') {
-        if (!confirm('You have unsaved changes. Discard them?')) return
+    const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+    const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Pure Helpers (no state, no DOM)
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    function esc(str) {
+      const div = document.createElement('div')
+      div.textContent = str || ''
+      return div.innerHTML
+    }
+
+    function relativeTime(ts) {
+      if (!ts) return 'never'
+      const diff = Date.now() - ts
+      const mins = Math.floor(diff / 60000)
+      if (mins < 1) return 'just now'
+      if (mins < 60) return `${mins}m ago`
+      const hrs = Math.floor(mins / 60)
+      if (hrs < 24) return `${hrs}h ${mins % 60}m ago`
+      const days = Math.floor(hrs / 24)
+      return `${days}d ago`
+    }
+
+    function formatDuration(ms) {
+      if (!ms) return '-'
+      if (ms < 1000) return `${ms}ms`
+      const secs = Math.floor(ms / 1000)
+      if (secs < 60) return `${secs}s`
+      const mins = Math.floor(secs / 60)
+      return `${mins}m ${secs % 60}s`
+    }
+
+    function formatTokens(n) {
+      if (!n) return '-'
+      if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+      return String(n)
+    }
+
+    function toKebabCase(str) {
+      return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    }
+
+    function getStatus(play, scheduleMap) {
+      if (play.running) return 'running'
+      if (!play.lastRanAt) return 'never'
+      const interval = scheduleMap[play.schedule]?.intervalMs || 3600000
+      const age = Date.now() - play.lastRanAt
+      if (age > interval && age < interval * 5) return 'overdue'
+      if (age < interval * 2) return 'recent'
+      if (age > interval * 5) return 'skipped'
+      return 'recent'
+    }
+
+    function isOverdue(play, scheduleMap) {
+      if (play.running || !play.lastRanAt) return false
+      const interval = scheduleMap[play.schedule]?.intervalMs
+      if (!interval) return false
+      return (Date.now() - play.lastRanAt) > interval
+    }
+
+    function estimateNextRun(play, scheduleMap) {
+      if (!play.lastRanAt) return 'unknown'
+      const interval = scheduleMap[play.schedule]?.intervalMs
+      if (!interval) return 'unknown'
+      const next = play.lastRanAt + interval
+      const diff = next - Date.now()
+      if (diff <= 0) return 'overdue'
+      const mins = Math.floor(diff / 60000)
+      if (mins < 60) return `in ${mins}m`
+      const hrs = Math.floor(mins / 60)
+      return `in ${hrs}h ${mins % 60}m`
+    }
+
+    function groupBySchedule(plays, scheduleMap) {
+      const order = [
+        'every-five-minutes', 'every-ten-minutes', 'every-half-hour',
+        'hourly', 'daily', 'beginning-of-day', 'end-of-day', 'weekly'
+      ]
+      const groups = {}
+      for (const p of plays) {
+        const key = p.schedule || 'unknown'
+        if (!groups[key]) groups[key] = []
+        groups[key].push(p)
       }
-
-      currentView = view
-      document.body.className = view === 'timeline' ? '' : `view-${view}`
-
-      document.getElementById('editor-view').classList.toggle('active', view === 'editor')
-      document.getElementById('create-view').classList.toggle('active', view === 'create')
-      document.getElementById('refresh-indicator').style.display = view === 'timeline' ? '' : 'none'
-      document.getElementById('new-play-btn').style.display = view === 'timeline' ? '' : 'none'
-
-      if (view === 'timeline') {
-        startRefresh()
-        fetchPlays()
-      } else {
-        stopRefresh()
+      const sorted = []
+      for (const key of order) {
+        if (groups[key]) sorted.push([key, groups[key]])
+        delete groups[key]
       }
-
-      if (view === 'editor' && slug) {
-        loadEditor(slug)
+      for (const [key, val] of Object.entries(groups)) {
+        sorted.push([key, val])
       }
-    }
-
-    function startRefresh() {
-      stopRefresh()
-      refreshTimer = setInterval(fetchPlays, REFRESH_INTERVAL)
-    }
-
-    function stopRefresh() {
-      if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
-    }
-
-    // ─── Toast ────────────────────────────────────────────
-    function showToast(msg, type = 'success') {
-      const existing = document.querySelector('.toast')
-      if (existing) existing.remove()
-      const el = document.createElement('div')
-      el.className = `toast ${type}`
-      el.textContent = msg
-      document.body.appendChild(el)
-      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300) }, 2500)
-    }
-
-    // ─── Data Fetching ────────────────────────────────────
-    async function fetchSchedules() {
-      try {
-        const res = await fetch('/api/schedules')
-        const data = await res.json()
-        for (const s of data.schedules) {
-          scheduleMap[s.name] = { intervalMs: s.intervalMs, label: s.label }
-        }
-        populateScheduleDropdowns()
-      } catch (e) {
-        console.error('Failed to fetch schedules:', e)
-      }
-    }
-
-    function populateScheduleDropdowns() {
-      const html = Object.entries(scheduleMap)
-        .map(([name, info]) => `<option value="${name}">${info.label}</option>`)
-        .join('')
-      document.getElementById('ed-schedule').innerHTML = html
-      document.getElementById('cr-schedule').innerHTML = html
-
-      // Populate filter dropdown
-      const filterHtml = '<option value="">All schedules</option>' +
-        Object.entries(scheduleMap).map(([name, info]) => `<option value="${name}">${info.label}</option>`).join('')
-      document.getElementById('filter-schedule').innerHTML = filterHtml
-    }
-
-    async function fetchPlays() {
-      try {
-        const res = await fetch('/api/plays')
-        const data = await res.json()
-        allPlays = data.plays
-        renderFilteredTimeline()
-      } catch (e) {
-        console.error('Failed to fetch plays:', e)
-        document.getElementById('main').innerHTML =
-          '<div class="empty-state"><h2>Failed to load plays</h2><p>Check the server console for errors.</p></div>'
-      }
-    }
-
-    function getFilteredPlays() {
-      const search = document.getElementById('filter-search').value.toLowerCase().trim()
-      const scheduleFilter = document.getElementById('filter-schedule').value
-      const agentFilter = document.getElementById('filter-agent').value
-
-      return allPlays.filter(p => {
-        if (search) {
-          const haystack = [p.title, p.agent, ...(p.tags || [])].join(' ').toLowerCase()
-          if (!haystack.includes(search)) return false
-        }
-        if (scheduleFilter && p.schedule !== scheduleFilter) return false
-        if (agentFilter && p.agent !== agentFilter) return false
-        return true
-      })
-    }
-
-    function renderFilteredTimeline() {
-      const filtered = getFilteredPlays()
-      renderTimeline(filtered, allPlays)
-    }
-
-    // ─── Editor ───────────────────────────────────────────
-    async function loadEditor(slug) {
-      currentSlug = slug
-      editorDirty = false
-      document.getElementById('unsaved-dot').classList.remove('visible')
-      document.getElementById('save-status').textContent = ''
-      document.getElementById('editor-textarea').value = 'Loading...'
-      document.getElementById('editor-preview').innerHTML = ''
-      document.getElementById('run-now-btn').disabled = false
-      document.getElementById('run-now-btn').textContent = 'Run Now'
-
-      try {
-        const res = await fetch(`/api/plays/${encodeURIComponent(slug)}`)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const play = await res.json()
-
-        document.getElementById('editor-title').textContent = play.title
-        document.getElementById('ed-schedule').value = play.schedule
-        document.getElementById('ed-agent').value = play.agent
-
-        // Set tags
-        editorTags = play.tags || []
-        renderEditorTags()
-
-        // Set body
-        originalBody = play.body
-        originalMeta = { schedule: play.schedule, agent: play.agent, tags: [...editorTags] }
-        document.getElementById('editor-textarea').value = play.body
-
-        updatePreview(play.body)
-        loadConditionsForEditor(play.body)
-
-        // If running, update the Run Now button
-        if (play.running) {
-          document.getElementById('run-now-btn').disabled = true
-          document.getElementById('run-now-btn').textContent = 'Running...'
-        }
-      } catch (e) {
-        console.error('Failed to load play:', e)
-        document.getElementById('editor-textarea').value = `Error loading play: ${e.message}`
-      }
-
-      // Load history
-      fetchHistory()
-    }
-
-    function renderEditorTags() {
-      const wrap = document.getElementById('ed-tags-wrap')
-      const input = document.getElementById('ed-tags-input')
-      wrap.querySelectorAll('.tag').forEach(t => t.remove())
-      for (const tag of editorTags) {
-        const span = document.createElement('span')
-        span.className = 'tag'
-        span.textContent = tag
-        span.title = 'Click to remove'
-        span.onclick = () => { editorTags = editorTags.filter(t => t !== tag); renderEditorTags(); markDirty() }
-        wrap.insertBefore(span, input)
-      }
-    }
-
-    function markDirty() {
-      editorDirty = true
-      document.getElementById('unsaved-dot').classList.add('visible')
-      document.getElementById('save-status').textContent = 'unsaved changes'
-    }
-
-    function checkDirty() {
-      const body = document.getElementById('editor-textarea').value
-      const schedule = document.getElementById('ed-schedule').value
-      const agent = document.getElementById('ed-agent').value
-
-      const changed = body !== originalBody
-        || schedule !== originalMeta.schedule
-        || agent !== originalMeta.agent
-        || JSON.stringify(editorTags) !== JSON.stringify(originalMeta.tags)
-
-      if (changed) {
-        markDirty()
-      } else {
-        editorDirty = false
-        document.getElementById('unsaved-dot').classList.remove('visible')
-        document.getElementById('save-status').textContent = ''
-      }
-    }
-
-    async function savePlay() {
-      if (!currentSlug) return
-      const btn = document.getElementById('save-btn')
-      btn.disabled = true
-      btn.textContent = 'Saving...'
-
-      const body = document.getElementById('editor-textarea').value
-      const schedule = document.getElementById('ed-schedule').value
-      const agent = document.getElementById('ed-agent').value
-
-      try {
-        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body, schedule, agent, tags: editorTags })
-        })
-
-        if (!res.ok) {
-          const data = await res.json()
-          throw new Error(data.error || `HTTP ${res.status}`)
-        }
-
-        originalBody = body
-        originalMeta = { schedule, agent, tags: [...editorTags] }
-        editorDirty = false
-        document.getElementById('unsaved-dot').classList.remove('visible')
-        document.getElementById('save-status').textContent = 'saved'
-        showToast('Play saved')
-      } catch (e) {
-        showToast(`Save failed: ${e.message}`, 'error')
-      } finally {
-        btn.disabled = false
-        btn.textContent = 'Save'
-      }
-    }
-
-    // ─── Run Now ─────────────────────────────────────────
-    async function runPlayNow() {
-      if (!currentSlug) return
-      const btn = document.getElementById('run-now-btn')
-      btn.disabled = true
-      btn.innerHTML = '<span class="condition-spinner"></span> Triggering...'
-
-      try {
-        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/run`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
-
-        showToast(data.message)
-        btn.textContent = 'Running...'
-        // Keep disabled while running — poll will re-enable when done
-        pollRunStatus()
-      } catch (e) {
-        showToast(`Trigger failed: ${e.message}`, 'error')
-        btn.disabled = false
-        btn.textContent = 'Run Now'
-      }
-    }
-
-    async function pollRunStatus() {
-      // Poll the play status to detect when it finishes running
-      const check = async () => {
-        try {
-          const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}`)
-          if (!res.ok) return
-          const play = await res.json()
-          if (!play.running) {
-            document.getElementById('run-now-btn').disabled = false
-            document.getElementById('run-now-btn').textContent = 'Run Now'
-            fetchHistory()
-            return
-          }
-        } catch {}
-        setTimeout(check, 5000)
-      }
-      setTimeout(check, 5000)
-    }
-
-    // ─── Execution History ──────────────────────────────
-    async function fetchHistory() {
-      if (!currentSlug) return
-
-      const panel = document.getElementById('history-panel')
-      panel.classList.add('active')
-
-      try {
-        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/history`)
-        const data = await res.json()
-        renderHistory(data.history, data.total)
-      } catch (e) {
-        document.getElementById('history-list').innerHTML =
-          '<div class="history-empty">Failed to load history</div>'
-      }
-    }
-
-    function renderHistory(history, total) {
-      const countEl = document.getElementById('history-count')
-      countEl.textContent = total > 0 ? `${total} total runs` : ''
-
-      if (!history || history.length === 0) {
-        document.getElementById('history-list').innerHTML =
-          '<div class="history-empty">No execution history found for this play</div>'
-        return
-      }
-
-      const html = history.map(entry => {
-        const time = entry.timestamp ? relativeTime(entry.timestamp) : 'unknown'
-        const absTime = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : ''
-        const sizeKb = entry.sizeBytes ? `${(entry.sizeBytes / 1024).toFixed(1)}KB` : '-'
-
-        return `
-          <div class="history-entry" onclick="viewLog('${esc(entry.filename)}')">
-            <span class="history-time" title="${absTime}">${time}</span>
-            <span class="history-meta">
-              <span>${entry.lineCount} lines</span>
-              <span>${sizeKb}</span>
-            </span>
-            <button class="history-view-btn">View log</button>
-          </div>
-        `
-      }).join('')
-
-      document.getElementById('history-list').innerHTML = html
-    }
-
-    // ─── Log Viewer ─────────────────────────────────────
-    async function viewLog(filename) {
-      const modal = document.getElementById('log-modal')
-      const content = document.getElementById('log-modal-content')
-      const title = document.getElementById('log-modal-title')
-
-      modal.classList.add('active')
-      title.textContent = filename
-      content.textContent = 'Loading...'
-
-      try {
-        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/logs/${encodeURIComponent(filename)}`)
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Failed to load log')
-        content.textContent = data.content
-      } catch (e) {
-        content.textContent = `Error: ${e.message}`
-      }
-    }
-
-    function closeLogModal(event) {
-      if (event && event.target !== document.getElementById('log-modal')) return
-      document.getElementById('log-modal').classList.remove('active')
-    }
-
-    // ─── Markdown Preview (lightweight) ───────────────────
-    function updatePreview(md) {
-      document.getElementById('editor-preview').innerHTML = renderMarkdown(md)
+      return sorted
     }
 
     function renderMarkdown(md) {
@@ -1508,166 +1246,745 @@
       return html
     }
 
-    // ─── Create Play ──────────────────────────────────────
-    function toKebabCase(str) {
-      return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    function parseConditionsFromBody(body) {
+      const sectionPattern = /^##\s+(?:Conditions|Only\s+When|Only\s+If|Run\s+Condition)\s*$/im
+      const match = body.match(sectionPattern)
+      if (!match) return []
+      const sectionStart = match.index + match[0].length
+      const rest = body.slice(sectionStart)
+      const nextH2 = rest.match(/^## /m)
+      const sectionBody = nextH2 ? rest.slice(0, nextH2.index) : rest
+      const blocks = []
+      const codeBlockPattern = /```(?:ts|typescript)\s*\n([\s\S]*?)```/g
+      let m
+      while ((m = codeBlockPattern.exec(sectionBody)) !== null) {
+        blocks.push(m[1].trim())
+      }
+      return blocks
     }
 
-    function buildCreatePreview() {
-      const title = document.getElementById('cr-title').value.trim()
-      const schedule = document.getElementById('cr-schedule').value
-      const agent = document.getElementById('cr-agent').value
-      const tagsRaw = document.getElementById('cr-tags').value
-      const body = document.getElementById('cr-body').value
-
-      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
-
-      let fm = `---\nagent: ${agent}\nschedule: ${schedule}\n`
-      if (tags.length) fm += `tags:\n${tags.map(t => `  - ${t}`).join('\n')}\n`
-      fm += '---'
-
-      const md = `${fm}\n\n# ${title || 'Untitled'}\n\n${body}`
-      document.getElementById('cr-preview-content').textContent = md
-
-      const slug = toKebabCase(title)
-      document.getElementById('cr-slug-preview').textContent = slug ? `slug: ${slug}` : ''
-      document.getElementById('cr-submit').disabled = !title
+    function showToast(msg, type = 'success') {
+      const existing = document.querySelector('.toast')
+      if (existing) existing.remove()
+      const el = document.createElement('div')
+      el.className = `toast ${type}`
+      el.textContent = msg
+      document.body.appendChild(el)
+      setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300) }, 2500)
     }
 
-    async function createPlay() {
-      const title = document.getElementById('cr-title').value.trim()
-      if (!title) return
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature 1: ApiClient
+    // ══════════════════════════════════════════════════════════════════════════════
 
-      const btn = document.getElementById('cr-submit')
-      btn.disabled = true
-      btn.textContent = 'Creating...'
+    class ApiClient extends Feature {
+      static shortcut = 'features.apiClient'
+      static stateSchema = { loading: 'boolean' }
+      static eventsSchema = {
+        'request:start': { endpoint: 'string' },
+        'request:end': { endpoint: 'string' },
+        'request:error': { endpoint: 'string', error: 'string' },
+      }
+      static { Feature.register(this, 'apiClient') }
 
-      const schedule = document.getElementById('cr-schedule').value
-      const agent = document.getElementById('cr-agent').value
-      const tagsRaw = document.getElementById('cr-tags').value
-      const body = document.getElementById('cr-body').value
-      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+      async afterInitialize() {
+        this.state.set('loading', false)
+      }
 
-      try {
-        const res = await fetch('/api/plays', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, schedule, agent, tags, body })
+      async _get(endpoint) {
+        this.state.set('loading', true)
+        this.emit('request:start', { endpoint })
+        try {
+          const res = await fetch(endpoint)
+          if (!res.ok) throw new Error(`HTTP ${res.status}`)
+          const data = await res.json()
+          this.emit('request:end', { endpoint })
+          return data
+        } catch (err) {
+          this.emit('request:error', { endpoint, error: err.message })
+          throw err
+        } finally {
+          this.state.set('loading', false)
+        }
+      }
+
+      async _post(endpoint, body) {
+        this.state.set('loading', true)
+        this.emit('request:start', { endpoint })
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+          this.emit('request:end', { endpoint })
+          return data
+        } catch (err) {
+          this.emit('request:error', { endpoint, error: err.message })
+          throw err
+        } finally {
+          this.state.set('loading', false)
+        }
+      }
+
+      async _put(endpoint, body) {
+        this.state.set('loading', true)
+        this.emit('request:start', { endpoint })
+        try {
+          const res = await fetch(endpoint, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`)
+          this.emit('request:end', { endpoint })
+          return data
+        } catch (err) {
+          this.emit('request:error', { endpoint, error: err.message })
+          throw err
+        } finally {
+          this.state.set('loading', false)
+        }
+      }
+
+      async fetchSchedules() {
+        return this._get('/api/schedules')
+      }
+
+      async fetchPlays() {
+        return this._get('/api/plays')
+      }
+
+      async fetchPlay(slug) {
+        return this._get(`/api/plays/${encodeURIComponent(slug)}`)
+      }
+
+      async createPlay(payload) {
+        return this._post('/api/plays', payload)
+      }
+
+      async updatePlay(slug, payload) {
+        return this._put(`/api/plays/${encodeURIComponent(slug)}`, payload)
+      }
+
+      async runPlay(slug) {
+        return this._post(`/api/plays/${encodeURIComponent(slug)}/run`, {})
+      }
+
+      async fetchHistory(slug, limit = 20) {
+        return this._get(`/api/plays/${encodeURIComponent(slug)}/history?limit=${limit}`)
+      }
+
+      async fetchLog(slug, filename) {
+        return this._get(`/api/plays/${encodeURIComponent(slug)}/logs/${encodeURIComponent(filename)}`)
+      }
+
+      async evalCondition(slug, code) {
+        return this._post(`/api/plays/${encodeURIComponent(slug)}/eval-condition`, { code })
+      }
+
+      snapshot() {
+        return { loading: this.state.get('loading') }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature 2: PlayStore
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    class PlayStore extends Feature {
+      static shortcut = 'features.playStore'
+      static stateSchema = {
+        playCount: 'number',
+        currentSlug: 'string',
+        filterSearch: 'string',
+        filterSchedule: 'string',
+        filterAgent: 'string',
+      }
+      static eventsSchema = {
+        'plays:loaded': { count: 'number' },
+        'play:selected': { slug: 'string' },
+        'play:refreshed': { slug: 'string' },
+        'schedules:loaded': {},
+        'filters:changed': {},
+      }
+      static { Feature.register(this, 'playStore') }
+
+      _plays = []
+      _scheduleMap = {}
+      _current = null
+
+      async afterInitialize() {
+        this.state.set('playCount', 0)
+        this.state.set('currentSlug', '')
+        this.state.set('filterSearch', '')
+        this.state.set('filterSchedule', '')
+        this.state.set('filterAgent', '')
+      }
+
+      get plays() { return this._plays }
+      get current() { return this._current }
+      get scheduleMap() { return this._scheduleMap }
+
+      async loadSchedules() {
+        const api = container.feature('apiClient')
+        const data = await api.fetchSchedules()
+        for (const s of data.schedules) {
+          this._scheduleMap[s.name] = { intervalMs: s.intervalMs, label: s.label }
+        }
+        this.emit('schedules:loaded', {})
+      }
+
+      async loadPlays() {
+        const api = container.feature('apiClient')
+        const data = await api.fetchPlays()
+        this._plays = data.plays
+        this.state.set('playCount', this._plays.length)
+        this.emit('plays:loaded', { count: this._plays.length })
+      }
+
+      selectPlay(slug) {
+        this._current = this._plays.find(p => p.slug === slug) || null
+        this.state.set('currentSlug', slug)
+        this.emit('play:selected', { slug })
+      }
+
+      async refreshCurrentPlay() {
+        const slug = this.state.get('currentSlug')
+        if (!slug) return
+        const api = container.feature('apiClient')
+        const play = await api.fetchPlay(slug)
+        this._current = play
+        // Update in list too
+        const idx = this._plays.findIndex(p => p.slug === slug)
+        if (idx !== -1) this._plays[idx] = { ...this._plays[idx], ...play }
+        this.emit('play:refreshed', { slug })
+      }
+
+      updatePlayRunning(slug, running, lastRanAt) {
+        const play = this._plays.find(p => p.slug === slug)
+        if (play) {
+          play.running = running
+          if (lastRanAt !== undefined) play.lastRanAt = lastRanAt
+        }
+        if (this._current && this._current.slug === slug) {
+          this._current.running = running
+          if (lastRanAt !== undefined) this._current.lastRanAt = lastRanAt
+        }
+      }
+
+      setFilter(key, value) {
+        this.state.set(key, value)
+        this.emit('filters:changed', {})
+      }
+
+      getFilteredPlays() {
+        const search = (this.state.get('filterSearch') || '').toLowerCase().trim()
+        const scheduleFilter = this.state.get('filterSchedule') || ''
+        const agentFilter = this.state.get('filterAgent') || ''
+
+        return this._plays.filter(p => {
+          if (search) {
+            const haystack = [p.title, p.agent, ...(p.tags || [])].join(' ').toLowerCase()
+            if (!haystack.includes(search)) return false
+          }
+          if (scheduleFilter && p.schedule !== scheduleFilter) return false
+          if (agentFilter && p.agent !== agentFilter) return false
+          return true
         })
+      }
 
-        const data = await res.json()
+      snapshot() {
+        return {
+          playCount: this._plays.length,
+          currentSlug: this.state.get('currentSlug'),
+          filters: {
+            search: this.state.get('filterSearch'),
+            schedule: this.state.get('filterSchedule'),
+            agent: this.state.get('filterAgent'),
+          },
+        }
+      }
+    }
 
-        if (!res.ok) {
-          throw new Error(data.error || `HTTP ${res.status}`)
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature 3: PlayRunner
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    class PlayRunner extends Feature {
+      static shortcut = 'features.playRunner'
+      static stateSchema = { runningSlug: 'string' }
+      static eventsSchema = {
+        'play:started': { slug: 'string' },
+        'play:completed': { slug: 'string', lastRanAt: 'number' },
+        'play:error': { slug: 'string', error: 'string' },
+        'ws:connected': {},
+        'ws:disconnected': {},
+      }
+      static { Feature.register(this, 'playRunner') }
+
+      _ws = null
+      _reconnectTimer = null
+
+      async afterInitialize() {
+        this.state.set('runningSlug', '')
+      }
+
+      get isConnected() { return this._ws && this._ws.readyState === WebSocket.OPEN }
+
+      connect() {
+        if (this._ws) return
+        const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+        this._ws = new WebSocket(`${proto}://${location.hostname}:${location.port}`)
+
+        this._ws.onopen = () => {
+          this.emit('ws:connected', {})
         }
 
-        showToast(`Play "${data.title}" created`)
-        document.getElementById('cr-title').value = ''
-        document.getElementById('cr-tags').value = ''
-        document.getElementById('cr-body').value = ''
-        document.getElementById('cr-slug-preview').textContent = ''
-        document.getElementById('cr-preview-content').textContent = ''
+        this._ws.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data)
+            if (msg.type === 'build_event') {
+              this.handleEvent(msg)
+            }
+          } catch {}
+        }
 
-        navigateTo('editor', data.slug)
-      } catch (e) {
-        showToast(`Create failed: ${e.message}`, 'error')
-      } finally {
-        btn.disabled = false
-        btn.textContent = 'Create Play'
+        this._ws.onclose = () => {
+          this._ws = null
+          this.emit('ws:disconnected', {})
+          this._reconnectTimer = setTimeout(() => this.connect(), 3000)
+        }
+      }
+
+      handleEvent(msg) {
+        const store = container.feature('playStore')
+        if (msg.event === 'play:started') {
+          this.state.set('runningSlug', msg.slug)
+          store.updatePlayRunning(msg.slug, true)
+          this.emit('play:started', { slug: msg.slug })
+        } else if (msg.event === 'play:completed') {
+          this.state.set('runningSlug', '')
+          store.updatePlayRunning(msg.slug, false, msg.lastRanAt)
+          this.emit('play:completed', { slug: msg.slug, lastRanAt: msg.lastRanAt })
+        }
+      }
+
+      async run(slug) {
+        const api = container.feature('apiClient')
+        try {
+          const data = await api.runPlay(slug)
+          showToast(data.message)
+        } catch (err) {
+          showToast(`Trigger failed: ${err.message}`, 'error')
+          this.emit('play:error', { slug, error: err.message })
+        }
+      }
+
+      snapshot() {
+        return {
+          runningSlug: this.state.get('runningSlug'),
+          connected: this.isConnected,
+        }
       }
     }
 
-    // ─── Timeline Rendering ───────────────────────────────
-    function relativeTime(ts) {
-      if (!ts) return 'never'
-      const diff = Date.now() - ts
-      const mins = Math.floor(diff / 60000)
-      if (mins < 1) return 'just now'
-      if (mins < 60) return `${mins}m ago`
-      const hrs = Math.floor(mins / 60)
-      if (hrs < 24) return `${hrs}h ${mins % 60}m ago`
-      const days = Math.floor(hrs / 24)
-      return `${days}d ago`
-    }
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature 4: ConditionTester
+    // ══════════════════════════════════════════════════════════════════════════════
 
-    function estimateNextRun(play) {
-      if (!play.lastRanAt) return 'unknown'
-      const interval = scheduleMap[play.schedule]?.intervalMs
-      if (!interval) return 'unknown'
-      const next = play.lastRanAt + interval
-      const diff = next - Date.now()
-      if (diff <= 0) return 'overdue'
-      const mins = Math.floor(diff / 60000)
-      if (mins < 60) return `in ${mins}m`
-      const hrs = Math.floor(mins / 60)
-      return `in ${hrs}h ${mins % 60}m`
-    }
-
-    function isOverdue(play) {
-      if (play.running || !play.lastRanAt) return false
-      const interval = scheduleMap[play.schedule]?.intervalMs
-      if (!interval) return false
-      return (Date.now() - play.lastRanAt) > interval
-    }
-
-    function getStatus(play) {
-      if (play.running) return 'running'
-      if (!play.lastRanAt) return 'never'
-      const interval = scheduleMap[play.schedule]?.intervalMs || 3600000
-      const age = Date.now() - play.lastRanAt
-      if (age > interval && age < interval * 5) return 'overdue'
-      if (age < interval * 2) return 'recent'
-      if (age > interval * 5) return 'skipped'
-      return 'recent'
-    }
-
-    function formatDuration(ms) {
-      if (!ms) return '-'
-      if (ms < 1000) return `${ms}ms`
-      const secs = Math.floor(ms / 1000)
-      if (secs < 60) return `${secs}s`
-      const mins = Math.floor(secs / 60)
-      return `${mins}m ${secs % 60}s`
-    }
-
-    function formatTokens(n) {
-      if (!n) return '-'
-      if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
-      return String(n)
-    }
-
-    function groupBySchedule(plays) {
-      const order = [
-        'every-five-minutes', 'every-ten-minutes', 'every-half-hour',
-        'hourly', 'daily', 'beginning-of-day', 'end-of-day', 'weekly'
-      ]
-      const groups = {}
-      for (const p of plays) {
-        const key = p.schedule || 'unknown'
-        if (!groups[key]) groups[key] = []
-        groups[key].push(p)
+    class ConditionTester extends Feature {
+      static shortcut = 'features.conditionTester'
+      static stateSchema = {
+        blockCount: 'number',
       }
-      const sorted = []
-      for (const key of order) {
-        if (groups[key]) sorted.push([key, groups[key]])
-        delete groups[key]
+      static eventsSchema = {
+        'conditions:loaded': { count: 'number' },
+        'condition:evaluated': { index: 'number', passed: 'boolean' },
+        'condition:changed': { index: 'number' },
+        'condition:added': { index: 'number' },
+        'condition:removed': { index: 'number' },
+        'conditions:allChecked': {},
       }
-      for (const [key, val] of Object.entries(groups)) {
-        sorted.push([key, val])
+      static { Feature.register(this, 'conditionTester') }
+
+      _blocks = []
+
+      async afterInitialize() {
+        this.state.set('blockCount', 0)
       }
-      return sorted
+
+      get blocks() { return this._blocks }
+
+      loadFromBody(body) {
+        const codes = parseConditionsFromBody(body)
+        this._blocks = codes.map(code => ({ code, result: null }))
+        this.state.set('blockCount', this._blocks.length)
+        this.emit('conditions:loaded', { count: this._blocks.length })
+      }
+
+      async runCondition(index, slug) {
+        const block = this._blocks[index]
+        if (!block) return
+        const api = container.feature('apiClient')
+        try {
+          const data = await api.evalCondition(slug, block.code)
+          block.result = data
+          this.emit('condition:evaluated', { index, passed: data.passed })
+        } catch (err) {
+          block.result = { passed: false, error: err.message, durationMs: 0, logs: [] }
+          this.emit('condition:evaluated', { index, passed: false })
+        }
+      }
+
+      async checkAll(slug) {
+        for (let i = 0; i < this._blocks.length; i++) {
+          await this.runCondition(i, slug)
+        }
+        this.emit('conditions:allChecked', {})
+      }
+
+      updateCode(index, code) {
+        if (!this._blocks[index]) return
+        this._blocks[index].code = code
+        this._blocks[index].result = null
+        this.emit('condition:changed', { index })
+      }
+
+      addBlock() {
+        this._blocks.push({ code: '// New condition\n', result: null })
+        this.state.set('blockCount', this._blocks.length)
+        this.emit('condition:added', { index: this._blocks.length - 1 })
+      }
+
+      removeBlock(index) {
+        this._blocks.splice(index, 1)
+        this.state.set('blockCount', this._blocks.length)
+        this.emit('condition:removed', { index })
+      }
+
+      syncToBody(currentBody) {
+        const sectionPattern = /^(##\s+(?:Conditions|Only\s+When|Only\s+If|Run\s+Condition)\s*$)/im
+        const match = currentBody.match(sectionPattern)
+        const sectionHeading = match ? match[1] : '## Conditions'
+
+        const newSection = this._blocks.length > 0
+          ? '\n\n' + this._blocks.map(b => '```ts\n' + b.code + '\n```').join('\n\n') + '\n'
+          : ''
+
+        let body = currentBody
+        if (match) {
+          const sectionStart = match.index
+          const rest = body.slice(sectionStart + match[0].length)
+          const nextH2 = rest.match(/^## /m)
+          const sectionEnd = nextH2 ? sectionStart + match[0].length + nextH2.index : body.length
+          body = body.slice(0, sectionStart) + sectionHeading + newSection + body.slice(sectionEnd)
+        } else if (this._blocks.length > 0) {
+          body = body.trimEnd() + '\n\n' + sectionHeading + newSection
+        }
+
+        return body
+      }
+
+      getAggregateStatus() {
+        const tested = this._blocks.filter(b => b.result !== null)
+        const total = this._blocks.length
+        if (tested.length === 0) return { tested: 0, total, allPassed: false, failCount: 0 }
+        const failCount = tested.filter(b => !b.result.passed).length
+        return { tested: tested.length, total, allPassed: failCount === 0, failCount }
+      }
+
+      snapshot() {
+        return {
+          blockCount: this._blocks.length,
+          aggregate: this.getAggregateStatus(),
+        }
+      }
     }
 
-    function renderStats(filteredPlays, allPlaysArr) {
-      const plays = allPlaysArr || filteredPlays
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature 5: EditorManager
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    class EditorManager extends Feature {
+      static shortcut = 'features.editorManager'
+      static stateSchema = {
+        currentSlug: 'string',
+        dirty: 'boolean',
+        saving: 'boolean',
+        schedule: 'string',
+        agent: 'string',
+      }
+      static eventsSchema = {
+        'editor:opened': { slug: 'string' },
+        'editor:closed': {},
+        'editor:dirty': {},
+        'editor:clean': {},
+        'save:start': {},
+        'save:done': { success: 'boolean' },
+        'body:changed': { body: 'string' },
+        'tags:changed': {},
+      }
+      static { Feature.register(this, 'editorManager') }
+
+      _tags = []
+      _originalBody = ''
+      _originalMeta = {}
+      _currentBody = ''
+
+      async afterInitialize() {
+        this.state.set('currentSlug', '')
+        this.state.set('dirty', false)
+        this.state.set('saving', false)
+        this.state.set('schedule', '')
+        this.state.set('agent', '')
+      }
+
+      get tags() { return this._tags }
+      get isDirty() { return this.state.get('dirty') }
+      get body() { return this._currentBody }
+
+      async open(slug) {
+        const api = container.feature('apiClient')
+        const play = await api.fetchPlay(slug)
+
+        this.state.set('currentSlug', slug)
+        this.state.set('schedule', play.schedule)
+        this.state.set('agent', play.agent)
+        this.state.set('dirty', false)
+
+        this._tags = play.tags || []
+        this._originalBody = play.body
+        this._currentBody = play.body
+        this._originalMeta = {
+          schedule: play.schedule,
+          agent: play.agent,
+          tags: [...this._tags],
+        }
+
+        this.emit('editor:opened', { slug, title: play.title, running: play.running })
+      }
+
+      close() {
+        this.state.set('currentSlug', '')
+        this.state.set('dirty', false)
+        this._tags = []
+        this._originalBody = ''
+        this._currentBody = ''
+        this._originalMeta = {}
+        this.emit('editor:closed', {})
+      }
+
+      setBody(body) {
+        this._currentBody = body
+        this._checkDirty()
+        this.emit('body:changed', { body })
+      }
+
+      setSchedule(schedule) {
+        this.state.set('schedule', schedule)
+        this._checkDirty()
+      }
+
+      setAgent(agent) {
+        this.state.set('agent', agent)
+        this._checkDirty()
+      }
+
+      addTag(tag) {
+        if (!tag || this._tags.includes(tag)) return
+        this._tags.push(tag)
+        this._checkDirty()
+        this.emit('tags:changed', {})
+      }
+
+      removeTag(tag) {
+        this._tags = this._tags.filter(t => t !== tag)
+        this._checkDirty()
+        this.emit('tags:changed', {})
+      }
+
+      _checkDirty() {
+        const changed = this._currentBody !== this._originalBody
+          || this.state.get('schedule') !== this._originalMeta.schedule
+          || this.state.get('agent') !== this._originalMeta.agent
+          || JSON.stringify(this._tags) !== JSON.stringify(this._originalMeta.tags)
+
+        const wasDirty = this.state.get('dirty')
+        this.state.set('dirty', changed)
+
+        if (changed && !wasDirty) this.emit('editor:dirty', {})
+        if (!changed && wasDirty) this.emit('editor:clean', {})
+      }
+
+      async save() {
+        const slug = this.state.get('currentSlug')
+        if (!slug) return
+
+        this.state.set('saving', true)
+        this.emit('save:start', {})
+
+        try {
+          const api = container.feature('apiClient')
+          await api.updatePlay(slug, {
+            body: this._currentBody,
+            schedule: this.state.get('schedule'),
+            agent: this.state.get('agent'),
+            tags: this._tags,
+          })
+
+          this._originalBody = this._currentBody
+          this._originalMeta = {
+            schedule: this.state.get('schedule'),
+            agent: this.state.get('agent'),
+            tags: [...this._tags],
+          }
+          this.state.set('dirty', false)
+          this.emit('editor:clean', {})
+          this.emit('save:done', { success: true })
+        } catch (err) {
+          this.emit('save:done', { success: false, error: err.message })
+        } finally {
+          this.state.set('saving', false)
+        }
+      }
+
+      snapshot() {
+        return {
+          currentSlug: this.state.get('currentSlug'),
+          dirty: this.state.get('dirty'),
+          saving: this.state.get('saving'),
+          schedule: this.state.get('schedule'),
+          agent: this.state.get('agent'),
+          tags: [...this._tags],
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature 6: AppController
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    class AppController extends Feature {
+      static shortcut = 'features.appController'
+      static stateSchema = {
+        ready: 'boolean',
+        currentView: 'string',
+      }
+      static eventsSchema = {
+        'ready': {},
+        'view:changed': { view: 'string', slug: 'string' },
+      }
+      static { Feature.register(this, 'appController') }
+
+      _refreshTimer = null
+
+      async afterInitialize() {
+        this.state.set('ready', false)
+        this.state.set('currentView', 'timeline')
+      }
+
+      get store() { return container.feature('playStore') }
+      get runner() { return container.feature('playRunner') }
+      get editor() { return container.feature('editorManager') }
+      get conditions() { return container.feature('conditionTester') }
+      get api() { return container.feature('apiClient') }
+      get view() { return this.state.get('currentView') }
+
+      async start() {
+        await this.store.loadSchedules()
+        await this.store.loadPlays()
+        this.runner.connect()
+        this.startRefresh()
+        this.state.set('ready', true)
+        this.emit('ready', {})
+      }
+
+      navigateTo(view, slug) {
+        const editor = this.editor
+        if (this.view === 'editor' && editor.isDirty && view !== 'editor') {
+          if (!confirm('You have unsaved changes. Discard them?')) return
+        }
+
+        this.state.set('currentView', view)
+
+        if (view === 'timeline') {
+          editor.close()
+          this.startRefresh()
+          this.store.loadPlays()
+        } else {
+          this.stopRefresh()
+        }
+
+        if (view === 'editor' && slug) {
+          this.store.selectPlay(slug)
+          editor.open(slug)
+        }
+
+        this.emit('view:changed', { view, slug: slug || '' })
+      }
+
+      startRefresh() {
+        this.stopRefresh()
+        this._refreshTimer = setInterval(() => this.store.loadPlays(), 10_000)
+      }
+
+      stopRefresh() {
+        if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null }
+      }
+
+      snapshot() {
+        return {
+          ready: this.state.get('ready'),
+          currentView: this.view,
+          store: this.store.snapshot(),
+          runner: this.runner.snapshot(),
+          editor: this.editor.snapshot(),
+          conditions: this.conditions.snapshot(),
+          api: this.api.snapshot(),
+        }
+      }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Feature Instantiation
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    const api = container.feature('apiClient')
+    const store = container.feature('playStore')
+    const runner = container.feature('playRunner')
+    const conditions = container.feature('conditionTester')
+    const editorMgr = container.feature('editorManager')
+    const app = container.feature('appController')
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Render Functions (pure DOM, accept data as params)
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    function populateScheduleDropdowns(scheduleMap) {
+      const html = Object.entries(scheduleMap)
+        .map(([name, info]) => `<option value="${name}">${info.label}</option>`)
+        .join('')
+      document.getElementById('ed-schedule').innerHTML = html
+      document.getElementById('cr-schedule').innerHTML = html
+
+      const filterHtml = '<option value="">All schedules</option>' +
+        Object.entries(scheduleMap).map(([name, info]) => `<option value="${name}">${info.label}</option>`).join('')
+      document.getElementById('filter-schedule').innerHTML = filterHtml
+    }
+
+    function renderStats(filteredPlays, allPlays, scheduleMap) {
+      const plays = allPlays || filteredPlays
       const running = plays.filter(p => p.running).length
-      const recent = plays.filter(p => !p.running && p.lastRanAt && getStatus(p) === 'recent').length
-      const overdue = plays.filter(p => getStatus(p) === 'overdue').length
+      const recent = plays.filter(p => !p.running && p.lastRanAt && getStatus(p, scheduleMap) === 'recent').length
+      const overdue = plays.filter(p => getStatus(p, scheduleMap) === 'overdue').length
       const never = plays.filter(p => !p.lastRanAt).length
 
       document.getElementById('play-count').textContent = `${plays.length} plays`
 
-      // Build stats HTML, keep filter bar
       const statsHtml = `
         <div class="stat">
           <div class="stat-dot" style="background: var(--blue)"></div>
@@ -1690,23 +2007,21 @@
       `
 
       const statsBar = document.getElementById('stats-bar')
-      // Preserve the filter bar, replace only the stat divs
       const filterBar = document.getElementById('filter-bar')
       statsBar.innerHTML = statsHtml
       statsBar.appendChild(filterBar)
     }
 
-    function renderCard(play, index) {
-      const status = getStatus(play)
+    function renderCard(play, index, scheduleMap) {
+      const status = getStatus(play, scheduleMap)
       const delay = index * 50
       const tagsHtml = (play.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join('')
-      const overdueFlag = isOverdue(play)
       const absTime = play.lastRanAt ? new Date(play.lastRanAt).toLocaleString() : ''
-      const nextRun = estimateNextRun(play)
+      const nextRun = estimateNextRun(play, scheduleMap)
 
       return `
         <div class="play-card status-${status}" style="animation-delay: ${delay}ms"
-             onclick="navigateTo('editor', '${play.slug}')">
+             data-slug="${esc(play.slug)}">
           <div class="card-top">
             <div class="play-title">${esc(play.title)}</div>
             <div class="status-badges">
@@ -1734,14 +2049,14 @@
       `
     }
 
-    function renderTimeline(plays, allPlaysArr) {
-      renderStats(plays, allPlaysArr)
-      const groups = groupBySchedule(plays)
+    function renderTimeline(filteredPlays, allPlays, scheduleMap) {
+      renderStats(filteredPlays, allPlays, scheduleMap)
+      const groups = groupBySchedule(filteredPlays, scheduleMap)
 
-      if (plays.length === 0) {
-        const hasFilter = document.getElementById('filter-search').value
-          || document.getElementById('filter-schedule').value
-          || document.getElementById('filter-agent').value
+      if (filteredPlays.length === 0) {
+        const hasFilter = store.state.get('filterSearch')
+          || store.state.get('filterSchedule')
+          || store.state.get('filterAgent')
         document.getElementById('main').innerHTML = hasFilter
           ? '<div class="empty-state"><h2>No matching plays</h2><p>Try adjusting your filters.</p></div>'
           : '<div class="empty-state"><h2>No plays found</h2><p>Create your first play with the + New Play button above.</p></div>'
@@ -1752,7 +2067,7 @@
       const html = groups.map(([schedule, groupPlays]) => {
         const info = scheduleMap[schedule] || {}
         const intervalLabel = info.intervalMs ? `every ${formatDuration(info.intervalMs)}` : ''
-        const cards = groupPlays.map(p => renderCard(p, cardIndex++)).join('')
+        const cards = groupPlays.map(p => renderCard(p, cardIndex++, scheduleMap)).join('')
 
         return `
           <div class="schedule-group">
@@ -1769,71 +2084,66 @@
       document.getElementById('main').innerHTML = html
     }
 
-    function esc(str) {
-      const div = document.createElement('div')
-      div.textContent = str || ''
-      return div.innerHTML
-    }
-
-    // ─── Condition Tester ─────────────────────────────────
-    let conditionBlocks = []
-
-    function parseConditionsFromBody(body) {
-      const sectionPattern = /^##\s+(?:Conditions|Only\s+When|Only\s+If|Run\s+Condition)\s*$/im
-      const match = body.match(sectionPattern)
-      if (!match) return []
-
-      const sectionStart = match.index + match[0].length
-      const rest = body.slice(sectionStart)
-      const nextH2 = rest.match(/^## /m)
-      const sectionBody = nextH2 ? rest.slice(0, nextH2.index) : rest
-
-      const blocks = []
-      const codeBlockPattern = /```(?:ts|typescript)\s*\n([\s\S]*?)```/g
-      let m
-      while ((m = codeBlockPattern.exec(sectionBody)) !== null) {
-        blocks.push(m[1].trim())
+    function renderEditorTags(tags) {
+      const wrap = document.getElementById('ed-tags-wrap')
+      const input = document.getElementById('ed-tags-input')
+      wrap.querySelectorAll('.tag').forEach(t => t.remove())
+      for (const tag of tags) {
+        const span = document.createElement('span')
+        span.className = 'tag'
+        span.textContent = tag
+        span.title = 'Click to remove'
+        span.addEventListener('click', () => { editorMgr.removeTag(tag) })
+        wrap.insertBefore(span, input)
       }
-      return blocks
     }
 
-    function loadConditionsForEditor(body) {
-      const codes = parseConditionsFromBody(body)
-      conditionBlocks = codes.map(code => ({ code, result: null }))
-
-      const panel = document.getElementById('conditions-panel')
-      if (conditionBlocks.length > 0) {
-        panel.classList.add('active')
-      } else {
-        panel.classList.remove('active')
-      }
-
-      renderConditionBlocks()
-      updateConditionsAggregate()
-    }
-
-    function renderConditionBlocks() {
-      const container = document.getElementById('conditions-list')
-      container.innerHTML = conditionBlocks.map((block, i) => {
-        const resultHtml = renderConditionResult(block.result)
+    function renderConditionBlocksUI(blocks, slug) {
+      const listEl = document.getElementById('conditions-list')
+      listEl.innerHTML = blocks.map((block, i) => {
+        const resultHtml = renderConditionResultUI(block.result)
         return `
           <div class="condition-block" data-index="${i}">
             <div class="condition-block-header">
               <span class="condition-index">Condition ${i + 1}</span>
               <span class="condition-status" id="cond-status-${i}"></span>
-              <button class="btn btn-small btn-danger" onclick="removeConditionBlock(${i})">Remove</button>
-              <button class="btn btn-small btn-accent" id="cond-run-${i}" onclick="runCondition(${i})">Run</button>
+              <button class="btn btn-small btn-danger" data-cond-remove="${i}">Remove</button>
+              <button class="btn btn-small btn-accent" data-cond-run="${i}">Run</button>
             </div>
             <div class="condition-code">
-              <textarea id="cond-code-${i}" spellcheck="false" oninput="onConditionCodeChange(${i})">${esc(block.code)}</textarea>
+              <textarea id="cond-code-${i}" spellcheck="false" data-cond-input="${i}">${esc(block.code)}</textarea>
             </div>
             <div id="cond-result-${i}">${resultHtml}</div>
           </div>
         `
       }).join('')
+
+      // Attach event listeners for dynamically rendered condition blocks
+      listEl.querySelectorAll('[data-cond-run]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const idx = parseInt(btn.dataset.condRun)
+          btn.disabled = true
+          btn.innerHTML = '<span class="condition-spinner"></span>'
+          await conditions.runCondition(idx, slug)
+          btn.disabled = false
+          btn.textContent = 'Run'
+        })
+      })
+
+      listEl.querySelectorAll('[data-cond-remove]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          conditions.removeBlock(parseInt(btn.dataset.condRemove))
+        })
+      })
+
+      listEl.querySelectorAll('[data-cond-input]').forEach(textarea => {
+        textarea.addEventListener('input', () => {
+          conditions.updateCode(parseInt(textarea.dataset.condInput), textarea.value)
+        })
+      })
     }
 
-    function renderConditionResult(result) {
+    function renderConditionResultUI(result) {
       if (!result) return ''
       const cls = result.passed ? 'pass' : 'fail'
       const icon = result.passed ? '&#10003;' : '&#10007;'
@@ -1855,204 +2165,430 @@
       `
     }
 
-    function updateConditionsAggregate() {
+    function updateConditionsAggregateUI(aggregate) {
       const el = document.getElementById('conditions-aggregate')
-      const tested = conditionBlocks.filter(b => b.result !== null)
-      if (tested.length === 0) {
+      if (aggregate.tested === 0) {
         el.className = 'aggregate idle'
-        el.textContent = conditionBlocks.length > 0 ? `${conditionBlocks.length} condition${conditionBlocks.length !== 1 ? 's' : ''} — not tested` : 'no conditions'
+        el.textContent = aggregate.total > 0
+          ? `${aggregate.total} condition${aggregate.total !== 1 ? 's' : ''} — not tested`
+          : 'no conditions'
+      } else if (aggregate.allPassed && aggregate.tested === aggregate.total) {
+        el.className = 'aggregate pass'
+        el.textContent = `All ${aggregate.total} passed`
+      } else if (aggregate.allPassed) {
+        el.className = 'aggregate pass'
+        el.textContent = `${aggregate.tested}/${aggregate.total} tested — all passed`
+      } else {
+        el.className = 'aggregate fail'
+        el.textContent = `${aggregate.failCount} failed of ${aggregate.tested} tested`
+      }
+    }
+
+    function renderHistory(history, total) {
+      const countEl = document.getElementById('history-count')
+      countEl.textContent = total > 0 ? `${total} total runs` : ''
+
+      if (!history || history.length === 0) {
+        document.getElementById('history-list').innerHTML =
+          '<div class="history-empty">No execution history found for this play</div>'
         return
       }
-      const allPassed = tested.every(b => b.result.passed)
-      const testedCount = tested.length
-      const total = conditionBlocks.length
-      if (allPassed && testedCount === total) {
-        el.className = 'aggregate pass'
-        el.textContent = `All ${total} passed`
-      } else if (allPassed) {
-        el.className = 'aggregate pass'
-        el.textContent = `${testedCount}/${total} tested — all passed`
-      } else {
-        const failCount = tested.filter(b => !b.result.passed).length
-        el.className = 'aggregate fail'
-        el.textContent = `${failCount} failed of ${testedCount} tested`
+
+      const html = history.map(entry => {
+        const time = entry.timestamp ? relativeTime(entry.timestamp) : 'unknown'
+        const absTime = entry.timestamp ? new Date(entry.timestamp).toLocaleString() : ''
+        const sizeKb = entry.sizeBytes ? `${(entry.sizeBytes / 1024).toFixed(1)}KB` : '-'
+
+        return `
+          <div class="history-entry" data-log-filename="${esc(entry.filename)}">
+            <span class="history-time" title="${absTime}">${time}</span>
+            <span class="history-meta">
+              <span>${entry.lineCount} lines</span>
+              <span>${sizeKb}</span>
+            </span>
+            <button class="history-view-btn">View log</button>
+          </div>
+        `
+      }).join('')
+
+      document.getElementById('history-list').innerHTML = html
+    }
+
+    async function fetchAndRenderHistory(slug) {
+      document.getElementById('history-panel').classList.add('active')
+      try {
+        const data = await api.fetchHistory(slug)
+        renderHistory(data.history, data.total)
+      } catch {
+        document.getElementById('history-list').innerHTML =
+          '<div class="history-empty">Failed to load history</div>'
       }
     }
 
-    function onConditionCodeChange(index) {
-      const textarea = document.getElementById(`cond-code-${index}`)
-      conditionBlocks[index].code = textarea.value
-      conditionBlocks[index].result = null
-      document.getElementById(`cond-result-${index}`).innerHTML = ''
-      document.getElementById(`cond-status-${index}`).textContent = ''
-      updateConditionsAggregate()
-      syncConditionsToBody()
-    }
+    async function viewLog(slug, filename) {
+      const modal = document.getElementById('log-modal')
+      const content = document.getElementById('log-modal-content')
+      const title = document.getElementById('log-modal-title')
 
-    function syncConditionsToBody() {
-      const textarea = document.getElementById('editor-textarea')
-      let body = textarea.value
-
-      const sectionPattern = /^(##\s+(?:Conditions|Only\s+When|Only\s+If|Run\s+Condition)\s*$)/im
-      const match = body.match(sectionPattern)
-      const sectionHeading = match ? match[1] : '## Conditions'
-
-      const newSection = conditionBlocks.length > 0
-        ? '\n\n' + conditionBlocks.map(b => '```ts\n' + b.code + '\n```').join('\n\n') + '\n'
-        : ''
-
-      if (match) {
-        const sectionStart = match.index
-        const rest = body.slice(sectionStart + match[0].length)
-        const nextH2 = rest.match(/^## /m)
-        const sectionEnd = nextH2 ? sectionStart + match[0].length + nextH2.index : body.length
-
-        body = body.slice(0, sectionStart) + sectionHeading + newSection + body.slice(sectionEnd)
-      } else if (conditionBlocks.length > 0) {
-        body = body.trimEnd() + '\n\n' + sectionHeading + newSection
-      }
-
-      textarea.value = body
-      updatePreview(body)
-      markDirty()
-    }
-
-    async function runCondition(index) {
-      const block = conditionBlocks[index]
-      const btn = document.getElementById(`cond-run-${index}`)
-      const statusEl = document.getElementById(`cond-status-${index}`)
-      const resultEl = document.getElementById(`cond-result-${index}`)
-
-      btn.disabled = true
-      btn.innerHTML = '<span class="condition-spinner"></span>'
-      statusEl.textContent = ''
-      resultEl.innerHTML = ''
+      modal.classList.add('active')
+      title.textContent = filename
+      content.textContent = 'Loading...'
 
       try {
-        const res = await fetch(`/api/plays/${encodeURIComponent(currentSlug)}/eval-condition`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code: block.code, index })
-        })
-
-        const data = await res.json()
-        block.result = data
-        resultEl.innerHTML = renderConditionResult(data)
-        statusEl.textContent = data.passed ? '\u2713' : '\u2717'
-        statusEl.style.color = data.passed ? 'var(--success)' : 'var(--error)'
+        const data = await api.fetchLog(slug, filename)
+        content.textContent = data.content
       } catch (e) {
-        block.result = { passed: false, error: e.message, durationMs: 0, logs: [] }
-        resultEl.innerHTML = renderConditionResult(block.result)
-        statusEl.textContent = '\u2717'
-        statusEl.style.color = 'var(--error)'
-      } finally {
-        btn.disabled = false
-        btn.textContent = 'Run'
-        updateConditionsAggregate()
+        content.textContent = `Error: ${e.message}`
       }
     }
 
-    async function checkAllConditions() {
+    function closeLogModal(event) {
+      if (event && event.target !== document.getElementById('log-modal')) return
+      document.getElementById('log-modal').classList.remove('active')
+    }
+
+    function buildCreatePreview() {
+      const title = document.getElementById('cr-title').value.trim()
+      const schedule = document.getElementById('cr-schedule').value
+      const agent = document.getElementById('cr-agent').value
+      const tagsRaw = document.getElementById('cr-tags').value
+      const body = document.getElementById('cr-body').value
+
+      const tags = tagsRaw.split(',').map(t => t.trim()).filter(Boolean)
+
+      let fm = `---\nagent: ${agent}\nschedule: ${schedule}\n`
+      if (tags.length) fm += `tags:\n${tags.map(t => `  - ${t}`).join('\n')}\n`
+      fm += '---'
+
+      const md = `${fm}\n\n# ${title || 'Untitled'}\n\n${body}`
+      document.getElementById('cr-preview-content').textContent = md
+
+      const slug = toKebabCase(title)
+      document.getElementById('cr-slug-preview').textContent = slug ? `slug: ${slug}` : ''
+      document.getElementById('cr-submit').disabled = !title
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Event Wiring: Feature Events → DOM
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    // --- AppController ---
+    app.on('view:changed', ({ view, slug }) => {
+      document.body.className = view === 'timeline' ? '' : `view-${view}`
+      document.getElementById('editor-view').classList.toggle('active', view === 'editor')
+      document.getElementById('create-view').classList.toggle('active', view === 'create')
+      document.getElementById('refresh-indicator').style.display = view === 'timeline' ? '' : 'none'
+      document.getElementById('new-play-btn').style.display = view === 'timeline' ? '' : 'none'
+    })
+
+    // --- PlayStore ---
+    store.on('schedules:loaded', () => {
+      populateScheduleDropdowns(store.scheduleMap)
+    })
+
+    store.on('plays:loaded', () => {
+      if (app.view === 'timeline') {
+        renderTimeline(store.getFilteredPlays(), store.plays, store.scheduleMap)
+      }
+    })
+
+    store.on('filters:changed', () => {
+      renderTimeline(store.getFilteredPlays(), store.plays, store.scheduleMap)
+    })
+
+    // --- PlayRunner ---
+    runner.on('play:started', ({ slug }) => {
+      if (editorMgr.state.get('currentSlug') === slug) {
+        document.getElementById('run-now-btn').disabled = true
+        document.getElementById('run-now-btn').textContent = 'Running...'
+      }
+      if (app.view === 'timeline') {
+        renderTimeline(store.getFilteredPlays(), store.plays, store.scheduleMap)
+      }
+    })
+
+    runner.on('play:completed', ({ slug }) => {
+      if (editorMgr.state.get('currentSlug') === slug) {
+        document.getElementById('run-now-btn').disabled = false
+        document.getElementById('run-now-btn').textContent = 'Run Now'
+        fetchAndRenderHistory(slug)
+      }
+      if (app.view === 'timeline') {
+        renderTimeline(store.getFilteredPlays(), store.plays, store.scheduleMap)
+      }
+    })
+
+    runner.on('play:error', () => {
+      document.getElementById('run-now-btn').disabled = false
+      document.getElementById('run-now-btn').textContent = 'Run Now'
+    })
+
+    // --- EditorManager ---
+    editorMgr.on('editor:opened', ({ slug, title, running }) => {
+      document.getElementById('editor-title').textContent = title || slug
+      document.getElementById('ed-schedule').value = editorMgr.state.get('schedule')
+      document.getElementById('ed-agent').value = editorMgr.state.get('agent')
+      renderEditorTags(editorMgr.tags)
+      document.getElementById('editor-textarea').value = editorMgr.body
+      document.getElementById('editor-preview').innerHTML = renderMarkdown(editorMgr.body)
+      document.getElementById('unsaved-dot').classList.remove('visible')
+      document.getElementById('save-status').textContent = ''
+
+      conditions.loadFromBody(editorMgr.body)
+      fetchAndRenderHistory(slug)
+
+      if (running) {
+        document.getElementById('run-now-btn').disabled = true
+        document.getElementById('run-now-btn').textContent = 'Running...'
+      } else {
+        document.getElementById('run-now-btn').disabled = false
+        document.getElementById('run-now-btn').textContent = 'Run Now'
+      }
+    })
+
+    editorMgr.on('editor:dirty', () => {
+      document.getElementById('unsaved-dot').classList.add('visible')
+      document.getElementById('save-status').textContent = 'unsaved changes'
+    })
+
+    editorMgr.on('editor:clean', () => {
+      document.getElementById('unsaved-dot').classList.remove('visible')
+      document.getElementById('save-status').textContent = ''
+    })
+
+    editorMgr.on('save:start', () => {
+      document.getElementById('save-btn').disabled = true
+      document.getElementById('save-btn').textContent = 'Saving...'
+    })
+
+    editorMgr.on('save:done', ({ success, error }) => {
+      document.getElementById('save-btn').disabled = false
+      document.getElementById('save-btn').textContent = 'Save'
+      if (success) {
+        document.getElementById('save-status').textContent = 'saved'
+        showToast('Play saved')
+      } else {
+        showToast(`Save failed: ${error || 'unknown error'}`, 'error')
+      }
+    })
+
+    editorMgr.on('tags:changed', () => {
+      renderEditorTags(editorMgr.tags)
+    })
+
+    // --- ConditionTester ---
+    conditions.on('conditions:loaded', ({ count }) => {
+      const panel = document.getElementById('conditions-panel')
+      panel.classList.toggle('active', count > 0)
+      renderConditionBlocksUI(conditions.blocks, editorMgr.state.get('currentSlug'))
+      updateConditionsAggregateUI(conditions.getAggregateStatus())
+    })
+
+    conditions.on('condition:evaluated', ({ index }) => {
+      const resultEl = document.getElementById(`cond-result-${index}`)
+      const statusEl = document.getElementById(`cond-status-${index}`)
+      if (resultEl) resultEl.innerHTML = renderConditionResultUI(conditions.blocks[index]?.result)
+      if (statusEl) {
+        const r = conditions.blocks[index]?.result
+        statusEl.textContent = r ? (r.passed ? '\u2713' : '\u2717') : ''
+        statusEl.style.color = r ? (r.passed ? 'var(--success)' : 'var(--error)') : ''
+      }
+      updateConditionsAggregateUI(conditions.getAggregateStatus())
+    })
+
+    conditions.on('condition:changed', ({ index }) => {
+      const slug = editorMgr.state.get('currentSlug')
+      const resultEl = document.getElementById(`cond-result-${index}`)
+      const statusEl = document.getElementById(`cond-status-${index}`)
+      if (resultEl) resultEl.innerHTML = ''
+      if (statusEl) statusEl.textContent = ''
+      updateConditionsAggregateUI(conditions.getAggregateStatus())
+
+      const newBody = conditions.syncToBody(editorMgr.body)
+      editorMgr.setBody(newBody)
+      document.getElementById('editor-textarea').value = newBody
+      document.getElementById('editor-preview').innerHTML = renderMarkdown(newBody)
+    })
+
+    conditions.on('condition:added', () => {
+      document.getElementById('conditions-panel').classList.add('active')
+      renderConditionBlocksUI(conditions.blocks, editorMgr.state.get('currentSlug'))
+      updateConditionsAggregateUI(conditions.getAggregateStatus())
+
+      const newBody = conditions.syncToBody(editorMgr.body)
+      editorMgr.setBody(newBody)
+      document.getElementById('editor-textarea').value = newBody
+      document.getElementById('editor-preview').innerHTML = renderMarkdown(newBody)
+
+      const lastIdx = conditions.blocks.length - 1
+      const textarea = document.getElementById(`cond-code-${lastIdx}`)
+      if (textarea) textarea.focus()
+    })
+
+    conditions.on('condition:removed', () => {
+      renderConditionBlocksUI(conditions.blocks, editorMgr.state.get('currentSlug'))
+      updateConditionsAggregateUI(conditions.getAggregateStatus())
+      if (conditions.blocks.length === 0) {
+        document.getElementById('conditions-panel').classList.remove('active')
+      }
+
+      const newBody = conditions.syncToBody(editorMgr.body)
+      editorMgr.setBody(newBody)
+      document.getElementById('editor-textarea').value = newBody
+      document.getElementById('editor-preview').innerHTML = renderMarkdown(newBody)
+    })
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // DOM Event Listeners → Feature Methods
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    // Header
+    document.getElementById('header-title').addEventListener('click', () => app.navigateTo('timeline'))
+    document.getElementById('new-play-btn').addEventListener('click', () => app.navigateTo('create'))
+
+    // Editor toolbar
+    document.getElementById('editor-back-btn').addEventListener('click', () => app.navigateTo('timeline'))
+    document.getElementById('save-btn').addEventListener('click', () => editorMgr.save())
+    document.getElementById('run-now-btn').addEventListener('click', () => {
+      const slug = editorMgr.state.get('currentSlug')
+      if (slug) runner.run(slug)
+    })
+
+    // Editor textarea
+    document.getElementById('editor-textarea').addEventListener('input', (e) => {
+      editorMgr.setBody(e.target.value)
+      document.getElementById('editor-preview').innerHTML = renderMarkdown(e.target.value)
+    })
+
+    // Editor controls
+    document.getElementById('ed-schedule').addEventListener('change', (e) => editorMgr.setSchedule(e.target.value))
+    document.getElementById('ed-agent').addEventListener('change', (e) => editorMgr.setAgent(e.target.value))
+
+    // Tags input
+    document.getElementById('ed-tags-input').addEventListener('keydown', (e) => {
+      const input = e.target
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault()
+        const val = input.value.trim().replace(/,/g, '')
+        if (val) editorMgr.addTag(val)
+        input.value = ''
+      }
+      if (e.key === 'Backspace' && !input.value && editorMgr.tags.length) {
+        editorMgr.removeTag(editorMgr.tags[editorMgr.tags.length - 1])
+      }
+    })
+
+    // Condition panel buttons
+    document.getElementById('check-all-btn').addEventListener('click', async () => {
       const btn = document.getElementById('check-all-btn')
       btn.disabled = true
       btn.innerHTML = '<span class="condition-spinner"></span> Checking...'
-
-      for (let i = 0; i < conditionBlocks.length; i++) {
-        await runCondition(i)
-      }
-
+      await conditions.checkAll(editorMgr.state.get('currentSlug'))
       btn.disabled = false
       btn.textContent = 'Check All'
-    }
+    })
 
-    function addConditionBlock() {
-      conditionBlocks.push({ code: '// New condition\n', result: null })
-      renderConditionBlocks()
-      syncConditionsToBody()
-      updateConditionsAggregate()
+    document.getElementById('add-condition-btn').addEventListener('click', () => {
+      conditions.addBlock()
+    })
 
-      document.getElementById('conditions-panel').classList.add('active')
+    // History panel
+    document.getElementById('refresh-history-btn').addEventListener('click', () => {
+      fetchAndRenderHistory(editorMgr.state.get('currentSlug'))
+    })
 
-      const lastIdx = conditionBlocks.length - 1
-      const textarea = document.getElementById(`cond-code-${lastIdx}`)
-      if (textarea) textarea.focus()
-    }
-
-    function removeConditionBlock(index) {
-      conditionBlocks.splice(index, 1)
-      renderConditionBlocks()
-      syncConditionsToBody()
-      updateConditionsAggregate()
-
-      if (conditionBlocks.length === 0) {
-        document.getElementById('conditions-panel').classList.remove('active')
+    // History entries and log modal (delegated)
+    document.getElementById('history-list').addEventListener('click', (e) => {
+      const entry = e.target.closest('.history-entry')
+      if (entry) {
+        viewLog(editorMgr.state.get('currentSlug'), entry.dataset.logFilename)
       }
-    }
+    })
 
-    // ─── Event Listeners ──────────────────────────────────
-    function setupListeners() {
-      const textarea = document.getElementById('editor-textarea')
-      textarea.addEventListener('input', () => {
-        updatePreview(textarea.value)
-        checkDirty()
-      })
+    document.getElementById('log-modal').addEventListener('click', closeLogModal)
+    document.querySelector('.log-modal-inner').addEventListener('click', (e) => e.stopPropagation())
+    document.getElementById('log-modal-close').addEventListener('click', () => {
+      document.getElementById('log-modal').classList.remove('active')
+    })
 
-      document.getElementById('ed-schedule').addEventListener('change', checkDirty)
-      document.getElementById('ed-agent').addEventListener('change', checkDirty)
+    // Timeline card clicks (delegated)
+    document.getElementById('main').addEventListener('click', (e) => {
+      const card = e.target.closest('.play-card')
+      if (card) app.navigateTo('editor', card.dataset.slug)
+    })
 
-      const tagsInput = document.getElementById('ed-tags-input')
-      tagsInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' || e.key === ',') {
-          e.preventDefault()
-          const val = tagsInput.value.trim().replace(/,/g, '')
-          if (val && !editorTags.includes(val)) {
-            editorTags.push(val)
-            renderEditorTags()
-            markDirty()
-          }
-          tagsInput.value = ''
-        }
-        if (e.key === 'Backspace' && !tagsInput.value && editorTags.length) {
-          editorTags.pop()
-          renderEditorTags()
-          markDirty()
-        }
-      })
+    // Filter controls
+    document.getElementById('filter-search').addEventListener('input', (e) => store.setFilter('filterSearch', e.target.value))
+    document.getElementById('filter-schedule').addEventListener('change', (e) => store.setFilter('filterSchedule', e.target.value))
+    document.getElementById('filter-agent').addEventListener('change', (e) => store.setFilter('filterAgent', e.target.value))
 
-      document.addEventListener('keydown', (e) => {
-        if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-          e.preventDefault()
-          if (currentView === 'editor') savePlay()
-        }
-        // Escape closes log modal
-        if (e.key === 'Escape') {
-          document.getElementById('log-modal').classList.remove('active')
-        }
-      })
-
-      // Create form live preview
-      const crFields = ['cr-title', 'cr-schedule', 'cr-agent', 'cr-tags', 'cr-body']
-      for (const id of crFields) {
-        document.getElementById(id).addEventListener('input', buildCreatePreview)
-        document.getElementById(id).addEventListener('change', buildCreatePreview)
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+        e.preventDefault()
+        if (app.view === 'editor') editorMgr.save()
       }
+      if (e.key === 'Escape') {
+        document.getElementById('log-modal').classList.remove('active')
+      }
+    })
 
-      // Filter controls — re-render on change
-      document.getElementById('filter-search').addEventListener('input', renderFilteredTimeline)
-      document.getElementById('filter-schedule').addEventListener('change', renderFilteredTimeline)
-      document.getElementById('filter-agent').addEventListener('change', renderFilteredTimeline)
+    // Create form
+    const crFields = ['cr-title', 'cr-schedule', 'cr-agent', 'cr-tags', 'cr-body']
+    for (const id of crFields) {
+      document.getElementById(id).addEventListener('input', buildCreatePreview)
+      document.getElementById(id).addEventListener('change', buildCreatePreview)
     }
 
-    // ─── Init ─────────────────────────────────────────────
-    async function init() {
-      setupListeners()
-      await fetchSchedules()
-      await fetchPlays()
-      startRefresh()
-      buildCreatePreview()
-    }
+    document.getElementById('cr-submit').addEventListener('click', async () => {
+      const title = document.getElementById('cr-title').value.trim()
+      if (!title) return
 
-    init()
+      const btn = document.getElementById('cr-submit')
+      btn.disabled = true
+      btn.textContent = 'Creating...'
+
+      try {
+        const data = await api.createPlay({
+          title,
+          schedule: document.getElementById('cr-schedule').value,
+          agent: document.getElementById('cr-agent').value,
+          tags: document.getElementById('cr-tags').value.split(',').map(t => t.trim()).filter(Boolean),
+          body: document.getElementById('cr-body').value,
+        })
+
+        showToast(`Play "${data.title}" created`)
+        document.getElementById('cr-title').value = ''
+        document.getElementById('cr-tags').value = ''
+        document.getElementById('cr-body').value = ''
+        document.getElementById('cr-slug-preview').textContent = ''
+        document.getElementById('cr-preview-content').textContent = ''
+
+        app.navigateTo('editor', data.slug)
+      } catch (e) {
+        showToast(`Create failed: ${e.message}`, 'error')
+      } finally {
+        btn.disabled = false
+        btn.textContent = 'Create Play'
+      }
+    })
+
+    document.getElementById('create-back-btn').addEventListener('click', () => app.navigateTo('timeline'))
+    document.getElementById('cr-cancel').addEventListener('click', () => app.navigateTo('timeline'))
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Debug access
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    window.app = app
+    window.luca = container
+
+    // ══════════════════════════════════════════════════════════════════════════════
+    // Boot
+    // ══════════════════════════════════════════════════════════════════════════════
+
+    buildCreatePreview()
+    app.start()
   </script>
 </body>
 </html>

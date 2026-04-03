@@ -19,7 +19,8 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
 
   await container.helpers.discoverAll()
 
-  const wm = container.feature('windowManager')
+  const wm = container.feature('windowManager') as WindowManager
+
   let actualPort: number | undefined
 
   const library = container.feature('workflowLibrary')
@@ -55,22 +56,32 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
       ui.print.cyan(`Starting workflow: ${info.title}`)
       if (info.description) ui.print.dim(info.description)
 
-      // Ensure the shared workflow service is running
-      const servicePort = 7700
+      // Check if our own luca main is running with a workflow service
+      const { readCurrentInstance } = await import('../features/instance-registry')
+      const currentInstance = readCurrentInstance()
       let serviceRunning = false
-      try {
-        const check = await fetch(`http://localhost:${servicePort}/api/workflows`)
-        serviceRunning = check.ok
-      } catch {}
 
-      if (!serviceRunning) {
-        console.log('[workflow] starting shared workflow service...')
-        const service = container.feature('workflowService')
-        await service.start({ port: servicePort })
-        console.log(`[workflow] service listening on http://localhost:${servicePort}`)
+      if (currentInstance?.ports?.workflow) {
+        try {
+          const check = await fetch(`http://localhost:${currentInstance.ports.workflow}/api/workflows`)
+          serviceRunning = check.ok
+        } catch {}
       }
 
-      actualPort = servicePort
+      if (serviceRunning) {
+        actualPort = currentInstance!.ports.workflow
+      } else {
+        // No local luca main — start in-process with a non-colliding port
+        console.log('[workflow] service not detected — starting in-process (tip: run `luca main` for persistent service)')
+        await container.helpers.discover('features')
+        const registry = container.feature('instanceRegistry')
+        registry.pruneStale()
+        const ports = await registry.allocatePorts()
+        const service = container.feature('workflowService', { port: ports.workflow })
+        await service.start()
+        actualPort = service.port!
+        console.log(`[workflow] service listening on http://localhost:${actualPort}`)
+      }
       const pageUrl = `http://localhost:${actualPort}/workflows/${target}/`
       const openInBrowser = () => container.feature('opener').open(pageUrl)
 
@@ -86,16 +97,26 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
           const launchedWindowId = String(launchedWindow?.result?.windowId || launchedWindow?.windowId || '').toLowerCase()
 
           if (launchedWindowId) {
-            console.log(`[workflow] tracking window ${launchedWindowId} for auto-cleanup`)
+            
+            const windowCount = await wm.wmListWindows().then((r: any) => r.count as number)
+            
+            if (windowCount === 1) {
+
+            } else if (windowCount < 4) {
+              await wm.wmArrangeWindows({ pattern: 'row', gap: 10 })
+            } else if (windowCount >= 4) {
+              await wm.wmArrangeWindows({ pattern: 'grid', gap: 10 })
+            }
+
             wm.on('windowClosed', (msg: any) => {
               const closedId = String(msg?.windowId || '').toLowerCase()
               if (closedId === launchedWindowId) {
-                console.log(`[workflow] window closed, shutting down server`)
                 process.exit(0)
               }
             })
           }
-        } catch {
+        } catch(e) {
+          console.error(e)
           console.log('[workflow] window manager failed or timed out, falling back to browser')
           await openInBrowser()
         }

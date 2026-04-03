@@ -310,6 +310,11 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         socketPath: windowManager.state.get('socketPath'),
         windowCount: windowManager.state.get('windowCount'),
       } : { listening: false, disabled: true },
+      workflowService: workflowService ? {
+        listening: workflowService.state.get('listening'),
+        port: workflowService.state.get('port'),
+        workflowCount: workflowService.state.get('workflowCount'),
+      } : { listening: false, disabled: true },
       instance: {
         id: instanceEntry.id,
         cwd: instanceEntry.cwd,
@@ -725,6 +730,21 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('windowManager', `failed to start: ${err?.message || err}`)
   }
 
+  // 5. Workflow Service
+  let workflowService: any = null
+
+  try {
+    const registryPorts = (options as any)._registryPorts
+    workflowService = container.feature('workflowService', {
+      ...(registryPorts?.workflow ? { port: registryPorts.workflow } : {}),
+    })
+    await workflowService.start()
+    log('workflowService', `listening on http://localhost:${workflowService.port}`)
+    recordEvent('workflowService', 'started', { port: workflowService.port })
+  } catch (err: any) {
+    log('workflowService', `failed to start: ${err?.message || err}`)
+  }
+
   // --- Status summary ---
   log('main', '')
   log('main', `luca main running (pid ${process.pid})`)
@@ -741,6 +761,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Builder: ${status.builder.buildsInProgress.length} building`)
     log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.handlerCount} handlers`)
     log('main', `WindowManager: ${status.windowManager.listening ? `listening` : 'off'}, client ${status.windowManager.clientConnected ? 'connected' : 'disconnected'}, ${status.windowManager.windowCount || 0} windows`)
+    log('main', `WorkflowService: ${status.workflowService.listening ? `listening on :${status.workflowService.port}` : 'off'}, ${status.workflowService.workflowCount || 0} workflows`)
     log('main', '')
   })
 
@@ -754,6 +775,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
     voiceService?.stop().catch(() => {})
     windowManager?.stop().catch(() => {})
+    workflowService?.stop().catch(() => {})
 
     wss.stop().catch(() => {})
 
