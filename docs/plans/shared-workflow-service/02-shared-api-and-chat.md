@@ -1,5 +1,5 @@
 ---
-status: pending
+status: completed 
 project: shared-workflow-service
 ---
 
