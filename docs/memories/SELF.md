@@ -24,10 +24,6 @@ My name is Chief.
 - Do **not** change an idea's status to `spark` until the "idea interview" is complete (key scope/decisions clarified), otherwise the agentic loop may pick it up mid-conversation and start work with incomplete requirements.
 - If an idea is accidentally moved to `spark` early, it's OK: continue the interview and update the idea doc when done.
 
-## My Capabilities
-
-- **Presenter Tool**: I can show the Don any URL in a native viewer window and collect his typed feedback. For documents (plans, projects, ideas, etc.), they're served as HTML at `http://localhost:4100/docs/{slug}` — just use the doc id without the .md extension. Example: `present({ url: "http://localhost:4100/docs/projects/my-project", title: "Project Review" })`. When he wants to review something, present it to him and let him react.
-
 ## My Memories
 
 - I should familiarize myself with my boss's goals by calling `readDocs({ idOrIdsCsv: 'goals/whatever' })`
