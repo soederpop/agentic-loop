@@ -75,7 +75,7 @@ The `luca` binary is available in the path. Key commands:
 - `commands/` — custom CLI commands, run via `luca <commandName>` (auto-discovered)
 - `endpoints/` — file-based HTTP routes, served via `luca serve` (auto-discovered)
 - `features/` — custom container features, discovered via `container.helpers.discoverAll()` (auto-discovered)
-- `workflows/` — self-contained workflow apps, each with `luca.serve.ts`, `endpoints/`, `public/`, and `ABOUT.md`
+- `workflows/` — self-contained workflow apps, each with `public/index.html`, `ABOUT.md`, and optionally `hooks.ts` for custom routes
 - `docs/` — content documents managed by the `contentDb` feature (`container.docs`). See [contentbase](https://github.com/soederpop/contentbase) for the document model system.
 - `luca.cli.ts` — optional project-level CLI customization (runs before any command)
 

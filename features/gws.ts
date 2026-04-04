@@ -45,6 +45,7 @@ export type GwsState = z.infer<typeof GwsStateSchema>
 
 export const GwsOptionsSchema = FeatureOptionsSchema.extend({
   configDir: z.string().optional().describe('Path to GWS CLI config directory. Defaults to ~/.config/gws'),
+  profile: z.string().optional().describe('Named credential profile to activate on creation'),
 })
 export type GwsOptions = z.infer<typeof GwsOptionsSchema>
 
@@ -204,7 +205,7 @@ export class Gws extends Feature<GwsState, GwsOptions> {
       ...super.initialState,
       binaryPath: null,
       available: false,
-      activeProfile: null,
+      activeProfile: this.options.profile || null,
     }
   }
 
@@ -476,7 +477,7 @@ export class Gws extends Feature<GwsState, GwsOptions> {
         const profileName = name.slice('gws-'.length)
         if (!profileName) continue
         const dir = `${configParent}/${name}`
-        if (this.fs.exists(`${dir}/profile.json`) || this.fs.exists(`${dir}/credentials.json`) || this.fs.exists(`${dir}/service-account.json`)) {
+        if (this.fs.exists(`${dir}/profile.json`) || this.fs.exists(`${dir}/credentials.json`) || this.fs.exists(`${dir}/service-account.json`) || this.fs.exists(`${dir}/client_secret.json`)) {
           profiles.push(profileName)
         }
       }

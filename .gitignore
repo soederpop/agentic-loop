@@ -12,6 +12,9 @@ tmp/
 .env.local
 secrets/
 
+# Your own config
+config.yml
+
 # Contentbase Embeddings
 .contentbase
 

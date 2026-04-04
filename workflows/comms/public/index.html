@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Communications Hub</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #151520;
+    --surface: #1c1c28;
+    --surface-2: #23232f;
+    --border: #2e2e42;
+    --text: #e0e0e8;
+    --text-dim: #8a8aa2;
+    --text-faint: #56566e;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #191924;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  body {
+    padding: 16px 20px 40px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  /* ── Header ──────────────────────────── */
+  .header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .header h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .header-meta {
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .header-meta .count {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .refresh-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 3px 10px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+  .refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .refresh-btn.spinning { opacity: 0.5; pointer-events: none; }
+
+  /* ── Tabs ──────────────────────────── */
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .tab-btn {
+    padding: 8px 16px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Channel Cards (Overview) ────── */
+  .channel-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+
+  .channel-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .channel-card:hover { border-color: #3a3a52; }
+
+  .channel-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .channel-card-header h3 {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .status-dot.ok { background: var(--success); box-shadow: 0 0 6px var(--success); }
+  .status-dot.warning { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+  .status-dot.missing { background: var(--error); box-shadow: 0 0 6px var(--error); }
+
+  .status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .status-row .label { min-width: 80px; }
+
+  /* ── Section / Card ──────────────── */
+  .section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .section h3 {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+
+  /* ── Forms ────────────────────────── */
+  .form-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .form-row label {
+    font-size: 12px;
+    color: var(--text-dim);
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  input[type="text"], input[type="number"], input[type="password"], textarea, select {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 4px;
+    flex: 1;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 60px; }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .toggle {
+    width: 36px;
+    height: 20px;
+    background: var(--border);
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    background: var(--text);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+  }
+  .toggle.on::after { transform: translateX(16px); }
+
+  .toggle-label {
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* ── Buttons ──────────────────────── */
+  .btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 6px 14px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn:disabled { opacity: 0.3; pointer-events: none; }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+  .btn.primary:hover { background: var(--accent-dim); }
+  .btn.danger { border-color: var(--error); color: var(--error); }
+  .btn.danger:hover { background: #ff003c15; }
+
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  /* ── Result box ───────────────────── */
+  .result-box {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 8px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 150px;
+    overflow-y: auto;
+  }
+  .result-box.ok { border-color: var(--success); color: var(--success); }
+  .result-box.err { border-color: var(--error); color: var(--error); }
+
+  /* ── Tags (trusted senders) ────── */
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+
+  .tag {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tag .remove {
+    cursor: pointer;
+    color: var(--text-faint);
+    font-size: 13px;
+    line-height: 1;
+  }
+  .tag .remove:hover { color: var(--error); }
+
+  /* ── Rules ────────────────────────── */
+  .rule-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .rule-row .rule-info { flex: 1; }
+  .rule-row .rule-name { font-weight: 600; font-size: 13px; }
+  .rule-row .rule-meta { font-size: 11px; color: var(--text-dim); }
+
+  .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-faint);
+    font-size: 12px;
+  }
+
+  /* ── Loading ──────────────────────── */
+  .loading {
+    text-align: center;
+    color: var(--text-dim);
+    padding: 40px 0;
+    font-size: 13px;
+  }
+  .loading::after {
+    content: '';
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    margin-left: 8px;
+    vertical-align: middle;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Communications Hub</h1>
+  <div class="header-meta">
+    <span id="readyCount"></span>
+    <button class="refresh-btn" id="refreshBtn">recheck</button>
+  </div>
+</div>
+
+<div class="tab-bar" id="tabBar">
+  <button class="tab-btn active" data-tab="overview">Overview</button>
+  <button class="tab-btn" data-tab="imsg">iMessage</button>
+  <button class="tab-btn" data-tab="telegram">Telegram</button>
+  <button class="tab-btn" data-tab="gws">Google Workspace</button>
+  <button class="tab-btn" data-tab="reactions">Reactions</button>
+</div>
+
+<!-- ═══════════════ OVERVIEW ═══════════════ -->
+<div id="tab-overview" class="tab-panel active">
+  <div class="channel-grid" id="overview-grid">
+    <div class="loading">Loading channels</div>
+  </div>
+</div>
+
+<!-- ═══════════════ iMESSAGE ═══════════════ -->
+<div id="tab-imsg" class="tab-panel">
+  <div class="section">
+    <h3>Installation</h3>
+    <div id="imsg-install-status" class="status-row"><span class="label">Status:</span> <span>Checking...</span></div>
+    <div class="btn-row">
+      <button class="btn" id="imsg-install-btn">Install via Homebrew</button>
+    </div>
+    <div id="imsg-install-result"></div>
+  </div>
+
+  <div class="section">
+    <h3>Configuration</h3>
+    <div class="toggle-row">
+      <div class="toggle" id="imsg-enabled"></div>
+      <span class="toggle-label">Enabled</span>
+    </div>
+    <div class="form-row">
+      <label>Trusted Senders</label>
+      <div style="flex:1">
+        <div class="tag-list" id="imsg-senders"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="imsg-sender-input" placeholder="Phone or email">
+          <button class="btn" id="imsg-add-sender-btn">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="imsg-save-btn">Save Config</button>
+    </div>
+    <div id="imsg-config-result"></div>
+  </div>
+
+  <div class="section">
+    <h3>Test</h3>
+    <div class="btn-row">
+      <button class="btn" id="imsg-test-btn">Test Connection</button>
+    </div>
+    <div id="imsg-test-result"></div>
+    <div style="margin-top:12px">
+      <div class="form-row">
+        <label>Recipient</label>
+        <input type="text" id="imsg-test-to" placeholder="Phone or email">
+      </div>
+      <div class="form-row">
+        <label>Message</label>
+        <input type="text" id="imsg-test-text" placeholder="Hello from Communications Hub!">
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="imsg-send-btn">Send Test Message</button>
+      </div>
+      <div id="imsg-send-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TELEGRAM ═══════════════ -->
+<div id="tab-telegram" class="tab-panel">
+  <div class="section">
+    <h3>Bot Token</h3>
+    <div id="telegram-token-status" class="status-row"><span class="label">Token:</span> <span>Checking...</span></div>
+    <div class="form-row">
+      <label>Bot Token</label>
+      <input type="password" id="telegram-token-input" placeholder="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11">
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="telegram-save-token-btn">Save Token</button>
+    </div>
+    <div id="telegram-token-result"></div>
+  </div>
+
+  <div class="section">
+    <h3>Configuration</h3>
+    <div class="toggle-row">
+      <div class="toggle" id="telegram-enabled"></div>
+      <span class="toggle-label">Enabled</span>
+    </div>
+    <div class="form-row">
+      <label>Mode</label>
+      <select id="telegram-mode">
+        <option value="polling">Polling</option>
+        <option value="webhook">Webhook</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Trusted Senders</label>
+      <div style="flex:1">
+        <div class="tag-list" id="telegram-senders"></div>
+        <div style="display:flex;gap:6px">
+          <input type="text" id="telegram-sender-input" placeholder="Telegram user ID or username">
+          <button class="btn" id="telegram-add-sender-btn">Add</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>Polling Timeout</label>
+      <input type="number" id="telegram-polling-timeout" value="1" style="width:80px;flex:none">
+    </div>
+    <div class="toggle-row">
+      <div class="toggle" id="telegram-autostart"></div>
+      <span class="toggle-label">Auto Start</span>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle" id="telegram-drop-pending"></div>
+      <span class="toggle-label">Drop Pending Updates</span>
+    </div>
+    <div id="telegram-webhook-fields" style="display:none">
+      <div class="form-row">
+        <label>Webhook URL</label>
+        <input type="text" id="telegram-webhook-url" placeholder="https://example.com/telegram/webhook">
+      </div>
+      <div class="form-row">
+        <label>Webhook Path</label>
+        <input type="text" id="telegram-webhook-path" value="/telegram/webhook">
+      </div>
+      <div class="form-row">
+        <label>Webhook Port</label>
+        <input type="number" id="telegram-webhook-port" value="8443" style="width:80px;flex:none">
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="telegram-save-btn">Save Config</button>
+    </div>
+    <div id="telegram-config-result"></div>
+  </div>
+
+  <div class="section">
+    <h3>Test</h3>
+    <div class="btn-row">
+      <button class="btn" id="telegram-test-btn">Test Bot (getMe)</button>
+    </div>
+    <div id="telegram-test-result"></div>
+    <div style="margin-top:12px">
+      <div class="form-row">
+        <label>Chat ID</label>
+        <input type="text" id="telegram-test-chatid" placeholder="123456789">
+      </div>
+      <div class="form-row">
+        <label>Message</label>
+        <input type="text" id="telegram-test-text" placeholder="Hello from Communications Hub!">
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="telegram-send-btn">Send Test Message</button>
+      </div>
+      <div id="telegram-send-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ GWS ═══════════════ -->
+<div id="tab-gws" class="tab-panel">
+  <div class="section">
+    <h3>Installation</h3>
+    <div id="gws-install-status" class="status-row"><span class="label">Status:</span> <span>Checking...</span></div>
+    <div class="btn-row">
+      <button class="btn" id="gws-install-btn">Install via npm</button>
+    </div>
+    <div id="gws-install-result"></div>
+  </div>
+
+  <div class="section">
+    <h3>Configuration</h3>
+    <div class="toggle-row">
+      <div class="toggle" id="gws-enabled"></div>
+      <span class="toggle-label">Enabled</span>
+    </div>
+    <div class="form-row">
+      <label>Profiles</label>
+      <div id="gws-profiles" style="flex:1;font-size:12px;color:var(--text-dim)">None detected</div>
+    </div>
+    <div class="form-row">
+      <label>Active Profile</label>
+      <div id="gws-active-profile" style="flex:1;font-size:12px;color:var(--text-dim)">None</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="gws-save-btn">Save Config</button>
+    </div>
+    <div id="gws-config-result"></div>
+  </div>
+
+  <div class="section">
+    <h3>Test</h3>
+    <div class="form-row">
+      <label>Profile</label>
+      <input type="text" id="gws-test-profile" placeholder="default">
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="gws-test-btn">Test Auth</button>
+    </div>
+    <div id="gws-test-result"></div>
+    <div style="margin-top:12px">
+      <div class="form-row">
+        <label>To</label>
+        <input type="text" id="gws-test-to" placeholder="someone@gmail.com">
+      </div>
+      <div class="form-row">
+        <label>Subject</label>
+        <input type="text" id="gws-test-subject" placeholder="Test from Comms Hub">
+      </div>
+      <div class="form-row">
+        <label>Body</label>
+        <textarea id="gws-test-body" placeholder="Hello from Communications Hub!"></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="gws-send-btn">Send Test Email</button>
+      </div>
+      <div id="gws-send-result"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ REACTIONS ═══════════════ -->
+<div id="tab-reactions" class="tab-panel">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-dim)">Reaction Rules</h3>
+    <button class="btn primary" id="new-rule-btn">+ New Rule</button>
+  </div>
+
+  <div id="rules-list"></div>
+
+  <div id="rule-form" class="section" style="display:none">
+    <h3 id="rule-form-title">New Rule</h3>
+    <input type="hidden" id="rule-edit-id">
+    <div class="form-row">
+      <label>Name</label>
+      <input type="text" id="rule-name" placeholder="e.g., Chief handles trusted iMessage">
+    </div>
+    <div class="form-row">
+      <label>Channel</label>
+      <select id="rule-channel">
+        <option value="imsg">iMessage</option>
+        <option value="telegram">Telegram</option>
+        <option value="gws">Google Workspace</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Assistant</label>
+      <select id="rule-assistant"></select>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle on" id="rule-enabled"></div>
+      <span class="toggle-label">Enabled</span>
+    </div>
+    <div class="form-row">
+      <label>Action Type</label>
+      <select id="rule-action-type">
+        <option value="auto-reply">Auto Reply</option>
+        <option value="notify">Notify</option>
+        <option value="log">Log Only</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>Prompt Template</label>
+      <textarea id="rule-prompt" placeholder="Message from {{sender}} on {{channel}}: {{text}}"></textarea>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle" id="rule-trusted-only"></div>
+      <span class="toggle-label">Trusted Senders Only</span>
+    </div>
+    <div class="form-row">
+      <label>Sender Match</label>
+      <input type="text" id="rule-sender-match" placeholder="Regex pattern (optional)">
+    </div>
+    <div class="form-row">
+      <label>Text Match</label>
+      <input type="text" id="rule-text-match" placeholder="Regex pattern (optional)">
+    </div>
+    <div class="form-row">
+      <label>Max Response</label>
+      <input type="number" id="rule-max-response" value="500" style="width:80px;flex:none">
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="rule-save-btn">Save Rule</button>
+      <button class="btn" id="rule-cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+// ── Luca Browser Container ───────────────────────────────────────────────────
+const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+function esc(s) {
+  if (typeof s !== 'string') s = String(s ?? '')
+  const d = document.createElement('div')
+  d.textContent = s
+  return d.innerHTML
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Feature: CommsApi — wraps all fetch() calls to backend endpoints
+// ═══════════════════════════════════════════════════════════════════════════════
+class CommsApi extends Feature {
+  static shortcut = 'features.commsApi'
+  static { Feature.register(this, 'commsApi') }
+
+  static stateSchema = {
+    loading: { type: 'boolean', default: false, describe: 'Whether an API call is in progress' },
+    lastError: { type: 'string', default: null, describe: 'Last API error message' },
+  }
+
+  static eventsSchema = {
+    'channels:fetched':   'Channel status data received',
+    'config:saved':       'Channel config saved',
+    'env:saved':          'Environment variable saved',
+    'install:done':       'Channel install completed',
+    'test:done':          'Channel test completed',
+    'send:done':          'Test send completed',
+    'rules:fetched':      'Reaction rules fetched',
+    'rule:saved':         'Reaction rule created or updated',
+    'rule:deleted':       'Reaction rule deleted',
+    'assistants:fetched': 'Assistants list fetched',
+    'error':              'API error occurred',
+  }
+
+  async _fetch(path, opts = {}) {
+    this.state.set('loading', true)
+    this.state.set('lastError', null)
+    try {
+      const res = await fetch(path, {
+        headers: { 'Content-Type': 'application/json' },
+        ...opts,
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+      })
+      return await res.json()
+    } catch (err) {
+      this.state.set('lastError', err.message)
+      this.emit('error', err)
+      return { ok: false, error: err.message }
+    } finally {
+      this.state.set('loading', false)
+    }
+  }
+
+  async fetchChannelStatus() {
+    const data = await this._fetch('/api/channels/status')
+    this.emit('channels:fetched', data)
+    return data
+  }
+
+  async saveChannelConfig(channel, config) {
+    const data = await this._fetch(`/api/config/channel/${channel}`, { method: 'PUT', body: config })
+    this.emit('config:saved', { channel, data })
+    return data
+  }
+
+  async saveEnv(key, value) {
+    const data = await this._fetch('/api/env', { method: 'POST', body: { key, value } })
+    this.emit('env:saved', { key, data })
+    return data
+  }
+
+  async install(channel) {
+    const data = await this._fetch(`/api/channels/${channel}/install`, { method: 'POST' })
+    this.emit('install:done', { channel, data })
+    return data
+  }
+
+  async testChannel(channel, body = {}) {
+    const data = await this._fetch(`/api/channels/${channel}/test`, { method: 'POST', body })
+    this.emit('test:done', { channel, data })
+    return data
+  }
+
+  async testSend(channel, body) {
+    const data = await this._fetch(`/api/channels/${channel}/test-send`, { method: 'POST', body })
+    this.emit('send:done', { channel, data })
+    return data
+  }
+
+  async fetchRules() {
+    const data = await this._fetch('/api/reaction-rules')
+    this.emit('rules:fetched', data)
+    return data
+  }
+
+  async createRule(rule) {
+    const data = await this._fetch('/api/reaction-rules', { method: 'POST', body: rule })
+    this.emit('rule:saved', data)
+    return data
+  }
+
+  async updateRule(id, rule) {
+    const data = await this._fetch(`/api/reaction-rules/${id}`, { method: 'PUT', body: rule })
+    this.emit('rule:saved', data)
+    return data
+  }
+
+  async deleteRule(id) {
+    const data = await this._fetch(`/api/reaction-rules/${id}`, { method: 'DELETE' })
+    this.emit('rule:deleted', data)
+    return data
+  }
+
+  async fetchAssistants() {
+    const data = await this._fetch('/api/assistants')
+    this.emit('assistants:fetched', data)
+    return data
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Feature: CommsStore — manages channel, rule, and assistant data
+// ═══════════════════════════════════════════════════════════════════════════════
+class CommsStore extends Feature {
+  static shortcut = 'features.commsStore'
+  static { Feature.register(this, 'commsStore') }
+
+  static stateSchema = {
+    channels: { type: 'object', default: null, describe: 'Channel status data keyed by channel name' },
+    rules: { type: 'array', default: [], describe: 'Reaction rules array' },
+    assistants: { type: 'array', default: [], describe: 'Available assistants' },
+    imsgSenders: { type: 'array', default: [], describe: 'iMessage trusted senders (local edit state)' },
+    telegramSenders: { type: 'array', default: [], describe: 'Telegram trusted senders (local edit state)' },
+    activeTab: { type: 'string', default: 'overview', describe: 'Currently active tab' },
+  }
+
+  static eventsSchema = {
+    'data:updated':  'Store data has been refreshed',
+    'tab:changed':   'Active tab changed',
+  }
+
+  /** Load fresh data from API responses into state */
+  loadChannels(data) {
+    this.state.set('channels', data.channels || null)
+    const imsg = data.channels?.imsg?.config?.trustedSenders || []
+    const tg = data.channels?.telegram?.config?.trustedSenders || []
+    this.state.set('imsgSenders', [...imsg])
+    this.state.set('telegramSenders', [...tg])
+    this.emit('data:updated')
+  }
+
+  loadRules(data) {
+    this.state.set('rules', data.rules || [])
+    this.emit('data:updated')
+  }
+
+  loadAssistants(data) {
+    this.state.set('assistants', data.assistants || [])
+    this.emit('data:updated')
+  }
+
+  setTab(tab) {
+    this.state.set('activeTab', tab)
+    this.emit('tab:changed', tab)
+  }
+
+  /** Compute overview readiness counts */
+  get readyCount() {
+    const ch = this.state.get('channels')
+    if (!ch) return { ready: 0, total: 3 }
+    let ready = 0
+    if (ch.imsg?.installed && ch.imsg?.configured) ready++
+    if (ch.telegram?.tokenSet && ch.telegram?.configured) ready++
+    if (ch.gws?.installed && ch.gws?.configured) ready++
+    return { ready, total: 3 }
+  }
+
+  /** Add a trusted sender to local state for a channel */
+  addSender(channel, value) {
+    const key = channel === 'imsg' ? 'imsgSenders' : 'telegramSenders'
+    const senders = [...this.state.get(key)]
+    if (value && !senders.includes(value)) {
+      senders.push(value)
+      this.state.set(key, senders)
+      this.emit('data:updated')
+    }
+  }
+
+  /** Remove a trusted sender from local state */
+  removeSender(channel, index) {
+    const key = channel === 'imsg' ? 'imsgSenders' : 'telegramSenders'
+    const senders = [...this.state.get(key)]
+    senders.splice(index, 1)
+    this.state.set(key, senders)
+    this.emit('data:updated')
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Feature: CommsApp — central orchestrator
+// ═══════════════════════════════════════════════════════════════════════════════
+class CommsApp extends Feature {
+  static shortcut = 'features.commsApp'
+  static { Feature.register(this, 'commsApp') }
+
+  static stateSchema = {
+    initialized: { type: 'boolean', default: false, describe: 'Whether initial load is complete' },
+    refreshing: { type: 'boolean', default: false, describe: 'Whether a refresh is in progress' },
+  }
+
+  static eventsSchema = {
+    'ready':         'App fully initialized with first data load',
+    'refresh:start': 'Refresh cycle started',
+    'refresh:end':   'Refresh cycle completed',
+  }
+
+  get api() { return this.container.feature('commsApi') }
+  get store() { return this.container.feature('commsStore') }
+
+  /** Full refresh — fetch channels, rules, assistants in parallel */
+  async refresh() {
+    this.state.set('refreshing', true)
+    this.emit('refresh:start')
+    try {
+      const [channelData, rulesData, assistantsData] = await Promise.all([
+        this.api.fetchChannelStatus(),
+        this.api.fetchRules(),
+        this.api.fetchAssistants(),
+      ])
+      this.store.loadChannels(channelData)
+      this.store.loadRules(rulesData)
+      this.store.loadAssistants(assistantsData)
+    } catch (err) {
+      console.error('[comms] refresh failed:', err)
+    } finally {
+      this.state.set('refreshing', false)
+      this.emit('refresh:end')
+    }
+  }
+
+  /** Boot the app */
+  async start() {
+    await this.refresh()
+    this.state.set('initialized', true)
+    this.emit('ready')
+  }
+
+  /** Return a snapshot for debugging / automation */
+  snapshot() {
+    const { ready, total } = this.store.readyCount
+    return {
+      initialized: this.state.get('initialized'),
+      refreshing: this.state.get('refreshing'),
+      ready,
+      total,
+      activeTab: this.store.state.get('activeTab'),
+      ruleCount: (this.store.state.get('rules') || []).length,
+      assistantCount: (this.store.state.get('assistants') || []).length,
+    }
+  }
+}
+
+// ── Get feature instances ────────────────────────────────────────────────────
+const app   = container.feature('commsApp')
+const store = container.feature('commsStore')
+const api   = container.feature('commsApi')
+
+window.app  = app
+window.luca = container
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Rendering
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function renderOverview() {
+  const ch = store.state.get('channels')
+  if (!ch) return
+  const grid = document.getElementById('overview-grid')
+
+  function card(label, key, data) {
+    const installed = key === 'telegram' ? true : data.installed
+    const configured = key === 'telegram' ? (data.tokenSet && data.configured) : data.configured
+    const running = data.running
+    return `
+      <div class="channel-card" data-nav="${key}">
+        <div class="channel-card-header">
+          <div class="status-dot ${configured ? 'ok' : installed ? 'warning' : 'missing'}"></div>
+          <h3>${label}</h3>
+        </div>
+        <div class="status-row"><span class="label">Installed</span>
+          <span style="color:${installed ? 'var(--success)' : 'var(--error)'}">${installed ? 'Yes' : 'No'}</span></div>
+        <div class="status-row"><span class="label">Configured</span>
+          <span style="color:${configured ? 'var(--success)' : 'var(--error)'}">${configured ? 'Yes' : 'No'}</span></div>
+        <div class="status-row"><span class="label">Running</span>
+          <span style="color:${running ? 'var(--success)' : 'var(--text-faint)'}">${running ? 'Yes' : 'No'}</span></div>
+      </div>`
+  }
+
+  grid.innerHTML = card('iMessage', 'imsg', ch.imsg) +
+                   card('Telegram', 'telegram', ch.telegram) +
+                   card('Google Workspace', 'gws', ch.gws)
+}
+
+function renderImsg() {
+  const ch = store.state.get('channels')?.imsg
+  if (!ch) return
+  document.getElementById('imsg-install-status').innerHTML =
+    `<span class="label">Status:</span> <div class="status-dot ${ch.installed ? 'ok' : 'missing'}"></div> ${ch.installed ? 'Installed' + (ch.binaryPath ? ' at ' + esc(ch.binaryPath) : '') : 'Not installed'}`
+  const toggle = document.getElementById('imsg-enabled')
+  toggle.classList.toggle('on', ch.config.enabled)
+  renderSenders('imsg')
+}
+
+function renderTelegram() {
+  const ch = store.state.get('channels')?.telegram
+  if (!ch) return
+  document.getElementById('telegram-token-status').innerHTML =
+    `<span class="label">Token:</span> <div class="status-dot ${ch.tokenSet ? 'ok' : 'missing'}"></div> ${ch.tokenSet ? 'Set' : 'Not set'}`
+  document.getElementById('telegram-enabled').classList.toggle('on', ch.config.enabled)
+  document.getElementById('telegram-mode').value = ch.config.mode || 'polling'
+  document.getElementById('telegram-polling-timeout').value = ch.config.pollingTimeout ?? 1
+  document.getElementById('telegram-autostart').classList.toggle('on', ch.config.autoStart)
+  document.getElementById('telegram-drop-pending').classList.toggle('on', ch.config.dropPendingUpdates)
+  document.getElementById('telegram-webhook-fields').style.display = ch.config.mode === 'webhook' ? 'block' : 'none'
+  if (ch.config.mode === 'webhook') {
+    document.getElementById('telegram-webhook-url').value = ch.config.webhookUrl || ''
+    document.getElementById('telegram-webhook-path').value = ch.config.webhookPath || '/telegram/webhook'
+    document.getElementById('telegram-webhook-port').value = ch.config.webhookPort || 8443
+  }
+  renderSenders('telegram')
+}
+
+function renderGws() {
+  const ch = store.state.get('channels')?.gws
+  if (!ch) return
+  document.getElementById('gws-install-status').innerHTML =
+    `<span class="label">Status:</span> <div class="status-dot ${ch.installed ? 'ok' : 'missing'}"></div> ${ch.installed ? 'Installed' + (ch.binaryPath ? ' at ' + esc(ch.binaryPath) : '') : 'Not installed'}`
+  document.getElementById('gws-enabled').classList.toggle('on', ch.config.enabled)
+  const profiles = ch.profiles || []
+  document.getElementById('gws-profiles').textContent = profiles.length ? profiles.join(', ') : 'None detected'
+  document.getElementById('gws-active-profile').textContent = ch.activeProfile || 'None'
+}
+
+function renderSenders(channel) {
+  const key = channel === 'imsg' ? 'imsgSenders' : 'telegramSenders'
+  const senders = store.state.get(key) || []
+  const el = document.getElementById(`${channel}-senders`)
+  el.innerHTML = senders.map((s, i) =>
+    `<div class="tag">${esc(s)}<span class="remove" data-channel="${channel}" data-index="${i}">&times;</span></div>`
+  ).join('')
+}
+
+function renderRules() {
+  const rules = store.state.get('rules') || []
+  const el = document.getElementById('rules-list')
+  if (!rules.length) {
+    el.innerHTML = '<div class="empty-state">No reaction rules configured yet</div>'
+    return
+  }
+  el.innerHTML = rules.map(rule => `
+    <div class="rule-row">
+      <div class="toggle ${rule.enabled ? 'on' : ''}" data-rule-toggle="${rule.id}"></div>
+      <div class="rule-info">
+        <div class="rule-name">${esc(rule.name)}</div>
+        <div class="rule-meta">${esc(rule.channel)} &rarr; ${esc(rule.assistant)} &middot; ${esc(rule.action?.type || 'auto-reply')}</div>
+      </div>
+      <button class="btn" data-rule-edit="${rule.id}">Edit</button>
+      <button class="btn danger" data-rule-delete="${rule.id}">Delete</button>
+    </div>
+  `).join('')
+}
+
+function renderAssistantSelect() {
+  const assistants = store.state.get('assistants') || []
+  const sel = document.getElementById('rule-assistant')
+  sel.innerHTML = assistants.length
+    ? assistants.map(a => `<option value="${esc(a.name)}">${esc(a.name)}</option>`).join('')
+    : '<option value="">No assistants found</option>'
+}
+
+function renderSummary() {
+  const { ready, total } = store.readyCount
+  document.getElementById('readyCount').innerHTML =
+    `<span class="count">${ready}</span> of <span class="count">${total}</span> channels ready`
+}
+
+function renderAll() {
+  renderSummary()
+  renderOverview()
+  renderImsg()
+  renderTelegram()
+  renderGws()
+  renderRules()
+  renderAssistantSelect()
+}
+
+function showResult(elId, data) {
+  const el = document.getElementById(elId)
+  if (!el) return
+  const ok = data.ok || data.success
+  const msg = data.error || data.details || data.message || (ok ? 'Done' : JSON.stringify(data, null, 2))
+  el.innerHTML = `<div class="result-box ${ok ? 'ok' : 'err'}">${esc(msg)}</div>`
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Event Bindings
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Re-render whenever the store updates
+store.on('data:updated', renderAll)
+
+// Tab navigation
+store.on('tab:changed', (tab) => {
+  document.querySelectorAll('.tab-btn').forEach(t => t.classList.toggle('active', t.dataset.tab === tab))
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab))
+})
+
+document.getElementById('tabBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn')
+  if (btn) store.setTab(btn.dataset.tab)
+})
+
+// Clicking a channel card navigates to that channel's tab
+document.getElementById('overview-grid').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-nav]')
+  if (card) store.setTab(card.dataset.nav)
+})
+
+// Refresh button
+const refreshBtn = document.getElementById('refreshBtn')
+app.on('refresh:start', () => { refreshBtn.classList.add('spinning'); refreshBtn.textContent = 'checking...' })
+app.on('refresh:end', () => { refreshBtn.classList.remove('spinning'); refreshBtn.textContent = 'recheck' })
+refreshBtn.addEventListener('click', () => app.refresh())
+
+// Toggle clicks (delegate on body to catch toggles rendered dynamically)
+document.body.addEventListener('click', (e) => {
+  // Simple toggle elements (non-dynamic)
+  const toggle = e.target.closest('.toggle')
+  if (toggle && !toggle.dataset.ruleToggle) {
+    // Only handle toggles that are generic config toggles (id-based)
+    const id = toggle.id
+    if (id && ['imsg-enabled', 'telegram-enabled', 'telegram-autostart', 'telegram-drop-pending',
+               'gws-enabled', 'rule-enabled', 'rule-trusted-only'].includes(id)) {
+      toggle.classList.toggle('on')
+    }
+  }
+})
+
+// Trusted sender tag removal (delegated)
+document.body.addEventListener('click', (e) => {
+  const remove = e.target.closest('.tag .remove')
+  if (remove) {
+    store.removeSender(remove.dataset.channel, parseInt(remove.dataset.index))
+  }
+})
+
+// Telegram mode toggle for webhook fields
+document.getElementById('telegram-mode').addEventListener('change', (e) => {
+  document.getElementById('telegram-webhook-fields').style.display = e.target.value === 'webhook' ? 'block' : 'none'
+})
+
+// Token input focus/blur reveal
+document.getElementById('telegram-token-input').addEventListener('focus', function() { this.type = 'text' })
+document.getElementById('telegram-token-input').addEventListener('blur', function() { this.type = 'password' })
+
+// ── iMessage actions ─────────────────────────────────────────────────────────
+document.getElementById('imsg-install-btn').addEventListener('click', async () => {
+  const data = await api.install('imsg')
+  showResult('imsg-install-result', data)
+  if (data.ok) await app.refresh()
+})
+
+document.getElementById('imsg-add-sender-btn').addEventListener('click', () => {
+  const input = document.getElementById('imsg-sender-input')
+  store.addSender('imsg', input.value.trim())
+  input.value = ''
+})
+
+document.getElementById('imsg-save-btn').addEventListener('click', async () => {
+  const enabled = document.getElementById('imsg-enabled').classList.contains('on')
+  const data = await api.saveChannelConfig('imsg', { enabled, trustedSenders: store.state.get('imsgSenders') })
+  showResult('imsg-config-result', data)
+})
+
+document.getElementById('imsg-test-btn').addEventListener('click', async () => {
+  const data = await api.testChannel('imsg')
+  showResult('imsg-test-result', data)
+})
+
+document.getElementById('imsg-send-btn').addEventListener('click', async () => {
+  const data = await api.testSend('imsg', {
+    to: document.getElementById('imsg-test-to').value.trim(),
+    text: document.getElementById('imsg-test-text').value.trim() || 'Hello from Communications Hub!',
+  })
+  showResult('imsg-send-result', data)
+})
+
+// ── Telegram actions ─────────────────────────────────────────────────────────
+document.getElementById('telegram-save-token-btn').addEventListener('click', async () => {
+  const token = document.getElementById('telegram-token-input').value.trim()
+  if (!token) return
+  const data = await api.saveEnv('TELEGRAM_BOT_TOKEN', token)
+  showResult('telegram-token-result', data)
+  if (data.ok) await app.refresh()
+})
+
+document.getElementById('telegram-add-sender-btn').addEventListener('click', () => {
+  const input = document.getElementById('telegram-sender-input')
+  store.addSender('telegram', input.value.trim())
+  input.value = ''
+})
+
+document.getElementById('telegram-save-btn').addEventListener('click', async () => {
+  const enabled = document.getElementById('telegram-enabled').classList.contains('on')
+  const mode = document.getElementById('telegram-mode').value
+  const config = {
+    enabled, mode,
+    pollingTimeout: parseInt(document.getElementById('telegram-polling-timeout').value) || 1,
+    autoStart: document.getElementById('telegram-autostart').classList.contains('on'),
+    dropPendingUpdates: document.getElementById('telegram-drop-pending').classList.contains('on'),
+    trustedSenders: store.state.get('telegramSenders'),
+  }
+  if (mode === 'webhook') {
+    config.webhookUrl = document.getElementById('telegram-webhook-url').value
+    config.webhookPath = document.getElementById('telegram-webhook-path').value
+    config.webhookPort = parseInt(document.getElementById('telegram-webhook-port').value) || 8443
+  }
+  const data = await api.saveChannelConfig('telegram', config)
+  showResult('telegram-config-result', data)
+})
+
+document.getElementById('telegram-test-btn').addEventListener('click', async () => {
+  const data = await api.testChannel('telegram')
+  showResult('telegram-test-result', data)
+})
+
+document.getElementById('telegram-send-btn').addEventListener('click', async () => {
+  const data = await api.testSend('telegram', {
+    chatId: document.getElementById('telegram-test-chatid').value.trim(),
+    text: document.getElementById('telegram-test-text').value.trim() || 'Hello from Communications Hub!',
+  })
+  showResult('telegram-send-result', data)
+})
+
+// ── GWS actions ──────────────────────────────────────────────────────────────
+document.getElementById('gws-install-btn').addEventListener('click', async () => {
+  const data = await api.install('gws')
+  showResult('gws-install-result', data)
+  if (data.ok) await app.refresh()
+})
+
+document.getElementById('gws-save-btn').addEventListener('click', async () => {
+  const enabled = document.getElementById('gws-enabled').classList.contains('on')
+  const data = await api.saveChannelConfig('gws', { enabled })
+  showResult('gws-config-result', data)
+})
+
+document.getElementById('gws-test-btn').addEventListener('click', async () => {
+  const profile = document.getElementById('gws-test-profile').value.trim()
+  const data = await api.testChannel('gws', profile ? { profile } : {})
+  showResult('gws-test-result', data)
+})
+
+document.getElementById('gws-send-btn').addEventListener('click', async () => {
+  const data = await api.testSend('gws', {
+    to: document.getElementById('gws-test-to').value.trim(),
+    subject: document.getElementById('gws-test-subject').value.trim() || 'Test from Comms Hub',
+    body: document.getElementById('gws-test-body').value.trim() || 'Hello from Communications Hub!',
+    profile: document.getElementById('gws-test-profile').value.trim() || undefined,
+  })
+  showResult('gws-send-result', data)
+})
+
+// ── Reaction rules actions ───────────────────────────────────────────────────
+function showRuleForm(rule) {
+  const form = document.getElementById('rule-form')
+  form.style.display = 'block'
+  document.getElementById('rule-form-title').textContent = rule ? 'Edit Rule' : 'New Rule'
+  document.getElementById('rule-edit-id').value = rule?.id || ''
+  document.getElementById('rule-name').value = rule?.name || ''
+  document.getElementById('rule-channel').value = rule?.channel || 'imsg'
+  if (rule?.assistant) document.getElementById('rule-assistant').value = rule.assistant
+  document.getElementById('rule-enabled').classList.toggle('on', rule ? rule.enabled !== false : true)
+  document.getElementById('rule-action-type').value = rule?.action?.type || 'auto-reply'
+  document.getElementById('rule-prompt').value = rule?.action?.promptTemplate || 'Message from {{sender}} on {{channel}}: {{text}}'
+  document.getElementById('rule-trusted-only').classList.toggle('on', rule?.filters?.trustedSendersOnly || false)
+  document.getElementById('rule-sender-match').value = rule?.filters?.senderMatch || ''
+  document.getElementById('rule-text-match').value = rule?.filters?.textMatch || ''
+  document.getElementById('rule-max-response').value = rule?.action?.maxResponseLength || 500
+}
+
+document.getElementById('new-rule-btn').addEventListener('click', () => showRuleForm(null))
+document.getElementById('rule-cancel-btn').addEventListener('click', () => {
+  document.getElementById('rule-form').style.display = 'none'
+})
+
+document.getElementById('rule-save-btn').addEventListener('click', async () => {
+  const editId = document.getElementById('rule-edit-id').value
+  const rule = {
+    name: document.getElementById('rule-name').value.trim(),
+    channel: document.getElementById('rule-channel').value,
+    assistant: document.getElementById('rule-assistant').value,
+    enabled: document.getElementById('rule-enabled').classList.contains('on'),
+    filters: {
+      trustedSendersOnly: document.getElementById('rule-trusted-only').classList.contains('on'),
+      senderMatch: document.getElementById('rule-sender-match').value.trim(),
+      textMatch: document.getElementById('rule-text-match').value.trim(),
+    },
+    action: {
+      type: document.getElementById('rule-action-type').value,
+      promptTemplate: document.getElementById('rule-prompt').value.trim(),
+      maxResponseLength: parseInt(document.getElementById('rule-max-response').value) || 500,
+    },
+  }
+
+  if (editId) {
+    await api.updateRule(editId, rule)
+  } else {
+    await api.createRule(rule)
+  }
+  document.getElementById('rule-form').style.display = 'none'
+  await app.refresh()
+})
+
+// Delegated clicks for rule rows (toggle, edit, delete)
+document.getElementById('rules-list').addEventListener('click', async (e) => {
+  const toggleEl = e.target.closest('[data-rule-toggle]')
+  if (toggleEl) {
+    const id = toggleEl.dataset.ruleToggle
+    const rule = (store.state.get('rules') || []).find(r => r.id === id)
+    if (rule) {
+      await api.updateRule(id, { enabled: !rule.enabled })
+      await app.refresh()
+    }
+    return
+  }
+
+  const editBtn = e.target.closest('[data-rule-edit]')
+  if (editBtn) {
+    const rule = (store.state.get('rules') || []).find(r => r.id === editBtn.dataset.ruleEdit)
+    if (rule) showRuleForm(rule)
+    return
+  }
+
+  const deleteBtn = e.target.closest('[data-rule-delete]')
+  if (deleteBtn) {
+    if (!confirm('Delete this rule?')) return
+    await api.deleteRule(deleteBtn.dataset.ruleDelete)
+    await app.refresh()
+  }
+})
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+await app.start()
+</script>
+</body>
+</html>
