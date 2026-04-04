@@ -18,7 +18,7 @@ The GWS feature has a `checkCapabilities` or equivalent method that detects if i
 
 It should be easy to customize the Agentic Loop and add your own features.
 
-## Goals
+## Success Criteria 
 
 Self Explanatory
 

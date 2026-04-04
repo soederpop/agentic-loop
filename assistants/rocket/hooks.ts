@@ -17,8 +17,4 @@ export function created() {
 }
 
 export function started() {
-	assistant.intercept('afterToolCall', async function autoOrganizeWindows(ctx, next) {
-		console.log('got a tool call', ctx)
-		await next()
-	})
 }

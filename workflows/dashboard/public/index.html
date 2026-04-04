@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>LUCA MAIN</title>
+<title>Agentic Loop Dashboard</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -259,24 +259,6 @@
   .content-name { font-weight: 600; }
   .content-count { color: var(--text-faint); }
 
-  /* ── Event Log Panel ─────────────────── */
-  .evt-row {
-    font-size: 11px;
-    padding: 1px 0;
-    display: flex;
-    gap: 8px;
-    white-space: nowrap;
-  }
-
-  .evt-time { color: var(--text-faint); flex-shrink: 0; width: 60px; }
-  .evt-key { flex-shrink: 0; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
-  .evt-detail { color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; }
-
-  .evt-key.ok { color: var(--success); }
-  .evt-key.err { color: var(--error); }
-  .evt-key.warn { color: var(--warning); }
-  .evt-key.neutral { color: var(--text-dim); }
-
   /* ── Log Stream Panel ────────────────── */
   .log-row {
     font-size: 12px;
@@ -381,7 +363,7 @@
 <!-- ── Header ──────────────────────────────────────────────────── -->
 <div class="header">
   <div class="header-top">
-    <h1>LUCA MAIN</h1>
+    <h1>Agentic Loop Dashboard</h1>
     <span class="paused-tag" id="pausedTag">PAUSED</span>
     <div class="header-meta">
       <span id="uptimeLabel"></span>
@@ -414,10 +396,6 @@
       <div class="panel-body" id="contentBody"></div>
     </div>
 
-    <div class="panel grow">
-      <div class="panel-title">Event Log</div>
-      <div class="panel-body" id="eventsBody"></div>
-    </div>
   </div>
 
   <div class="col-right">
@@ -432,7 +410,7 @@
 <div class="overlay" id="overlay">
   <div class="overlay-card">
     <h2>Disconnected</h2>
-    <p>Lost connection to luca main</p>
+    <p>Lost connection to the agentic loop</p>
     <p class="retry-info">Reconnecting in <span class="countdown" id="countdown">3</span>s</p>
   </div>
 </div>
@@ -851,7 +829,6 @@ const $wsIndicator = document.getElementById('wsIndicator')
 const $statsBody = document.getElementById('statsBody')
 const $tasksBody = document.getElementById('tasksBody')
 const $contentBody = document.getElementById('contentBody')
-const $eventsBody = document.getElementById('eventsBody')
 const $logsBody = document.getElementById('logsBody')
 const $overlay = document.getElementById('overlay')
 const $countdown = document.getElementById('countdown')
@@ -893,7 +870,6 @@ app.on('render', () => {
   renderStats(status)
   renderTasks(status)
   renderContent(status)
-  renderEvents()
   renderLogs()
 })
 
@@ -1013,31 +989,6 @@ function renderContent(status) {
   })
   html += '</div>'
   $contentBody.innerHTML = html
-}
-
-function renderEvents() {
-  const body = $eventsBody
-  const atBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 40
-
-  const visible = store.events.slice(-200)
-  let html = ''
-  for (const evt of visible) {
-    const time = new Date(evt.ts).toISOString().slice(11, 19)
-    const key = `${evt.source}:${evt.event}`
-    const evtClass = store.classifyEvent(evt)
-
-    let detail = ''
-    if (evt.data?.taskId) detail = evt.data.taskId
-    else if (evt.data?.reason) detail = evt.data.reason
-    else if (evt.event === 'tick' && evt.data) {
-      const d = evt.data
-      detail = d.dueIds?.length ? `${d.dueOneOff}oo ${d.dueScheduled}s ${d.inProgress}ip` : `${d.totalTasks}t ok`
-    }
-
-    html += `<div class="evt-row fade-in"><span class="evt-time">${time}</span><span class="evt-key ${evtClass}">${esc(key)}</span><span class="evt-detail">${esc(detail)}</span></div>`
-  }
-  body.innerHTML = html
-  if (atBottom) body.scrollTop = body.scrollHeight
 }
 
 function renderLogs() {

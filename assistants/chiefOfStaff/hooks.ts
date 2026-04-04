@@ -6,7 +6,10 @@ declare global {
 
 export function started() {
 	const { schemas, handlers } = (assistant.container as any).selectors.toTools(assistant.container)
-	assistant.use({ schemas, handlers })
+	assistant
+		.use({ schemas, handlers })
+		.use(container.docs)
+		.use(container.feature('memory', { namespace: 'chiefOfStaff' }))
 }
 
 export async function formatSystemPrompt(prompt: string) {

@@ -103,7 +103,7 @@ export default async function workflow(options: z.infer<typeof argsSchema>, cont
             if (windowCount === 1) {
 
             } else if (windowCount < 4) {
-              await wm.wmArrangeWindows({ pattern: 'row', gap: 10 })
+              // await wm.wmArrangeWindows({ pattern: 'row', gap: 10 })
             } else if (windowCount >= 4) {
               await wm.wmArrangeWindows({ pattern: 'grid', gap: 10 })
             }
