@@ -17,3 +17,11 @@ The GWS feature has a `checkCapabilities` or equivalent method that detects if i
 ## Should be easy to customize
 
 It should be easy to customize the Agentic Loop and add your own features.
+
+## Goals
+
+Self Explanatory
+
+## Motivation
+
+People struggling w/ my shit causes me pain

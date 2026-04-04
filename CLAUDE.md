@@ -81,21 +81,30 @@ The `luca` binary is available in the path. Key commands:
 
 ### Developing Workflow Services
 
-Workflows live in `workflows/<name>/` and can be launched for development with `luca serve` directly:
+All workflows are served by the **WorkflowService** feature (`features/workflow-service.ts`) — a single Express + WebSocket server on port 7700 that discovers all workflow folders and serves them.
 
-```shell
-luca serve \
-  --setup workflows/<name>/luca.serve.ts \
-  --endpoints-dir workflows/<name>/endpoints \
-  --staticDir workflows/<name>/public \
-  --port 7700 \
-  --no-open \
-  --force
+A workflow folder contains:
+- `public/index.html` — single-file frontend (required)
+- `ABOUT.md` — purpose, triggers, when NOT to use (required)
+- `hooks.ts` — custom API routes via `onSetup()` (optional, only if the shared API isn't enough)
+
+The shared API provides endpoints for goals, ideas, projects, plans, status, vision, assistants, and config — most simple workflows need nothing more.
+
+For custom routes, export `onSetup` from `hooks.ts`:
+
+```ts
+import type { WorkflowHooksSetupContext } from '../../features/workflow-service'
+
+export async function onSetup({ app, docs, container, chatService, broadcast, wss }: WorkflowHooksSetupContext) {
+  app.get('/api/workflows/my-workflow/data', async (_req, res) => { ... })
+}
 ```
 
-This gives you a dev server you can iterate on without the window manager lifecycle that `luca workflow <name>` adds. The `--force` flag claims the port even if occupied, `--no-open` prevents auto-launching a browser.
+Namespace custom routes under `/api/workflows/<name>/` to avoid conflicts.
 
-To run a workflow with full window management and auto-cleanup, use `luca workflow <name>` instead.
+The frontend loads the Luca browser container from esm.sh and builds UI as composable Features (ApiClient → Store → App orchestrator pattern). See [Creating Assistant Workflows](./docs/guides/creating-assistant-workflows.md) for the full guide.
+
+To run the WorkflowService for development: `luca workflow` or start `luca main`. Workflows are accessible at `http://localhost:7700/workflows/<name>/`.
 
 ### Markdown is Runnable with Luca
 

@@ -1,3 +1,7 @@
+---
+status: draft
+---
+
 # Comms Workflow — Implementation Plan
 
 ## Context
