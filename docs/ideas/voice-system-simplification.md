@@ -5,106 +5,167 @@ tags:
   - simplification
   - infrastructure
   - onboarding
-status: exploring
+status: promoted
 ---
 
-# Voice System Simplification
+# Voice Input Mode Switching
 
-Replace the rustpotter-based wakeword detection system with the new `scripts/dictate-loop` — a continuous speech detection and transcription loop that uses only `sox` and `mlx_whisper`. This eliminates the most fragile dependency in the voice stack (rustpotter + trained .rpw model files) and reduces the voice system from three moving parts to two.
+Keep both voice input methods — wakeword (rustpotter) and continuous (dictate-loop) — and make it easy to switch between them. Each has real advantages depending on the user's situation and preferences.
 
-## The Problem
+## Why Keep Both
 
-The current voice system requires three components to work together:
+**Wakeword mode (rustpotter):**
+- The transcription loop isn't always on — mic is only active after a wake word is detected
+- Better for privacy-conscious users — no constant mic sampling
+- No flashing mic light in the menu bar (the continuous polling of sox is visible and can feel aggressive)
+- Acoustic model detection means zero transcription cost while idle
 
-1. **Rustpotter** (wakeword detection) — a Rust binary installed via Cargo, plus per-phrase `.rpw` model files that must be trained interactively by recording 5 voice samples per wake word
-2. **Whisper MLX** (speech-to-text) — Apple Silicon optimized transcription
-3. **ElevenLabs** (text-to-speech) — API-based voice output
+**Continuous mode (dictate-loop):**
+- No rustpotter installation required
+- No interactive wake word training (no recording 5 samples per phrase)
+- More flexible trigger detection — any phrase pattern in the transcript, not just trained acoustic models
+- Lower onboarding friction — just needs sox + mlx_whisper, both easy to install
+- Better for users who don't mind the always-on mic and want the simplest setup
 
-Rustpotter is the weakest link:
+## Current State
 
-- **Installation friction**: requires Rust/Cargo toolchain, or hunting down a pre-built binary (version 3.0.2 specifically). The troubleshooting log already documents that building from source caused issues and we had to switch to pre-built binaries.
-- **Training friction**: each wake word requires an interactive recording session (`setup-wakeword.sh`) where you speak the phrase 5 times. You need at least two models (chief-of-staff + general commands). This is the most user-hostile part of onboarding.
-- **Detection quality**: the soft detection confirmation logic in `voice-listener.ts` (sliding window, dual thresholds at 0.35 and 0.45) exists because rustpotter's raw detections aren't reliable enough to act on directly.
-- **Maintenance surface**: rustpotter touches `install.sh`, `setup.sh`, `voice/wakeword/setup-wakeword.sh`, `features/voice-listener.ts`, `features/voice-service.ts`, `commands/voice.ts`, `workflows/setup/hooks.ts`, and multiple docs — a lot of code serving one function.
+Right now the system is hardcoded to wakeword mode. The `dictate-loop` script exists and the voice-listener already has a `listen()` method that parses its output, but there's no way to use it as the primary input source. If rustpotter isn't installed or models aren't trained, voice input is simply unavailable.
 
-## The New Approach
+## The Plan
 
-`scripts/dictate-loop` already does continuous listening without rustpotter:
+### 1. Add `inputMode` to VoiceListener
 
-1. **Listen** — samples the mic in 0.5s chunks via `sox`, checking peak amplitude against a threshold (0.02)
-2. **Record** — when speech is detected, records until 1.5s of silence
-3. **Transcribe** — sends the WAV to `mlx_whisper`, outputs transcript wrapped in delimiter markers
+Add an `inputMode` option: `"wakeword" | "continuous"` (default: `"wakeword"` if rustpotter is available, otherwise `"continuous"` if STT is available).
 
-The voice-listener feature can parse transcripts for command keywords instead of waiting for wakeword detections. This is actually more flexible — instead of training a model for "yo chief", the system can respond to any phrase pattern in the transcript. The `voice-router` already handles intent matching from transcribed text, so the wakeword layer was always just a gate before the real routing logic.
+The state schema already tracks `wakeWordAvailable` and `sttAvailable` separately — the mode just decides which path to take.
 
-### What Changes
+### 2. Add `startContinuousListening()` to VoiceListener
 
-**`features/voice-listener.ts`** — Remove `waitForTriggerWord()` and all rustpotter process management. Replace with a mode that spawns `scripts/dictate-loop`, parses the `---START_TRANSCRIPT---` / `---END_TRANSCRIPT---` delimited output, and feeds transcripts directly to the voice router. The trigger word detection becomes a string match on the transcript (e.g., transcript starts with "hey chief" or "yo chief") rather than an acoustic model.
+New method that spawns `scripts/dictate-loop`, parses the `---START_TRANSCRIPT---` / `---END_TRANSCRIPT---` delimited output, and checks each transcript for trigger phrases. When a trigger phrase is found at the start of a transcript, emit `triggerWord` with the matched phrase — same event the wakeword path emits. The rest of the transcript (after the trigger phrase) can be passed along as the initial command text, skipping the separate `listen()` step.
 
-**`features/voice-service.ts`** — Remove rustpotter capability checks. The only requirements become `sox` and `mlx_whisper`. Simplify the `start()` flow since there's no wakeword/STT split — it's all one pipeline now.
+Trigger phrases to match (configurable, but sensible defaults): "hey chief", "yo chief", "hey friday", etc. These are already the wake word names — reuse them.
 
-**`commands/voice.ts`** — Remove rustpotter and `.rpw` model checks from `--check`. Update help text.
+### 3. Update VoiceService.start()
 
-**`scripts/install.sh`** — Remove step 7 (rustpotter via Cargo). Remove Rust/Cargo as a prerequisite entirely if nothing else needs it.
+Instead of only wiring up `waitForTriggerWord()` when wakeword is available, check the input mode and call either:
+- `listener.waitForTriggerWord()` for wakeword mode
+- `listener.startContinuousListening()` for continuous mode
 
-**`setup.sh`** — Remove rustpotter troubleshooting notes from the Claude Code prompt. Remove the interactive wakeword training walkthrough. Voice setup becomes: confirm `sox` and `mlx_whisper` are installed, done.
+The rest of the service (router, TTS chats, handler dispatch) stays exactly the same — both modes produce the same `triggerWord` event.
 
-**`voice/wakeword/setup-wakeword.sh`** — Delete entirely.
+### 4. CLI flag for mode selection
 
-**`voice/wakeword/`** — Can be removed (models/ and samples/ are already gitignored).
+Add `--voice-mode wakeword|continuous` to `luca main`. Falls back to auto-detection: wakeword if rustpotter is available, continuous if only STT is available, disabled if neither.
 
-**`workflows/setup/hooks.ts`** — Remove `checkRustpotter()` and `checkWakeWordModels()` from capability checks. Remove `/api/wake-words` endpoint.
+### 5. Sentinel file kill-switch
 
-**Documentation** — Update `voice/README.md`, `README.md`, onboarding docs, and any plans/ideas that reference rustpotter or wakeword training.
+A simple file-based circuit breaker: if `~/.agentic-loop/voice-disabled` exists, the voice listener treats itself as disabled — continuous mode stops processing transcripts, wakeword mode ignores detections. The listener checks for this file on each cycle (before acting on a transcript or detection), so dropping or removing the file takes effect immediately without restarting anything.
 
-**`.gitignore`** — Remove `voice/wakeword/models/*.rpw` and `voice/wakeword/samples/*.wav` entries.
+This is intentionally low-tech. You can disable voice from another terminal, a script, a cron job, a voice command, or even a Shortcuts automation — anything that can `touch` or `rm` a file. No IPC, no sockets, no state sync.
 
-### What Stays the Same
+The file can optionally contain a reason (e.g., "in a meeting") that gets logged when the listener skips input, but its mere presence is what matters.
 
-- `scripts/dictate` (single-shot recording) — still useful as a standalone tool
-- `scripts/dictate-loop` — becomes the engine for continuous voice listening
-- Voice router and all voice command handlers — unchanged, they already work on transcribed text
+### 6. Live mode switching (no restart)
+
+The voice mode (`wakeword | continuous | off`) must be changeable while `luca main` is running. The mode is a piece of voice-service state, and changing it triggers a clean transition:
+
+1. Stop the current listener (kill rustpotter processes or dictate-loop subprocess)
+2. Update the mode state
+3. Start the new listener (or do nothing for `off`)
+
+This should be triggerable from multiple surfaces:
+- **Voice command**: "switch to wakeword mode", "turn off voice", "go continuous"
+- **Main loop keyboard shortcut**: a key combo that cycles through modes
+- **API endpoint**: `POST /api/voice/mode` with `{ mode: "wakeword" | "continuous" | "off" }` — useful for the workflow UIs and external tooling
+- **CLI**: `luca main --set voice-mode continuous` (sends to running instance via socket)
+
+The `off` mode is important — it's distinct from the sentinel file. The sentinel is a hard external kill-switch (for automation, emergencies, "mute while in a meeting"). The `off` mode is the user's intentional choice within the app. Both disable voice input, but the sentinel overrides everything regardless of mode.
+
+### 7. Update capability checks
+
+Capability check logic already distinguishes wakeword vs STT availability. The change is that missing wakeword capabilities no longer means "voice unavailable" — it means "wakeword mode unavailable, continuous mode may still work."
+
+Update the startup summary in voice-service to reflect which modes are available:
+```
+Wake word mode: available / UNAVAILABLE (reason)
+Continuous mode: available / UNAVAILABLE (reason)
+Active mode:     wakeword
+```
+
+## What Changes
+
+**`features/voice-listener.ts`** — Add `inputMode` state (`wakeword | continuous | off`), `startContinuousListening()` method, trigger phrase matching, sentinel file check on each cycle. Keep all existing wakeword/rustpotter code as-is.
+
+**`features/voice-service.ts`** — Branch on input mode in `start()`. Add `setMode(mode)` method that cleanly transitions between modes at runtime. Update capability summary logging. Update `stop()` to handle either listener mode.
+
+**`commands/main.ts`** — Accept `--voice-mode` flag. Wire up keyboard shortcut for mode cycling. Pass mode changes to voice service.
+
+**`commands/voice.ts`** — Update `--check` to show both modes' availability.
+
+**`endpoints/` (or voice-service socket)** — Expose mode switching via API for workflow UIs and external tooling.
+
+## What Stays the Same
+
+- All rustpotter code, models, training scripts — untouched
+- `scripts/dictate` (single-shot) — still used by `listen()` after wakeword triggers
+- `scripts/dictate-loop` — becomes the engine for continuous mode
+- Voice router and all voice command handlers — unchanged
 - ElevenLabs TTS — unrelated to input detection
-- The `yo` command for voice simulation — still useful for testing without a mic
+- The `yo` command for voice simulation — still useful for testing
 
-## Architecture Before and After
+## Architecture
 
-**Before (3 components, rustpotter gating):**
 ```
-Microphone
-  → rustpotter (wakeword .rpw models)
-    → [trigger detected]
-      → sox + mlx_whisper (record + transcribe)
-        → voice-router (intent matching)
-          → handler
-```
-
-**After (2 components, continuous transcription):**
-```
-Microphone
-  → dictate-loop (sox + mlx_whisper, continuous)
-    → transcript text
-      → voice-router (keyword + intent matching)
-        → handler
+                    ┌─────────────────────────────┐
+                    │        VoiceService          │
+                    │ (mode: wakeword|continuous|off)│
+                    └──────────────┬──────────────┘
+                                   │
+              ┌────────────────────┼────────────────────┐
+              │                                         │
+   ┌──────────▼──────────┐              ┌───────────────▼───────────┐
+   │   Wakeword Mode     │              │    Continuous Mode        │
+   │                      │              │                           │
+   │  rustpotter (.rpw)   │              │  dictate-loop (sox +      │
+   │  → triggerWord event │              │  mlx_whisper)             │
+   │  → listen() for cmd  │              │  → parse transcript       │
+   │                      │              │  → match trigger phrase    │
+   └──────────┬──────────┘              │  → triggerWord event       │
+              │                          └───────────────┬───────────┘
+              │                                          │
+              └──────────────────┬───────────────────────┘
+                                 │
+                    ┌────────────▼────────────┐
+                    │     Voice Router        │
+                    │  (same for both modes)  │
+                    └─────────────────────────┘
 ```
 
 ## Dependencies
 
-- `sox` (already required)
-- `mlx_whisper` (already required)
+- Wakeword mode: rustpotter binary + .rpw model files + sox + mlx_whisper
+- Continuous mode: sox + mlx_whisper
 - No new dependencies
+
+## Cleanup: Rustpotter Installation
+
+`scripts/install.sh` (lines 59-77) still installs the full Rust/Cargo toolchain and builds rustpotter from source via `cargo install rustpotter-cli`. This is slow, fragile, and pulls in a heavy dependency chain for a single binary. Replace with a pre-built binary download for the target OS/arch. The setup script troubleshooting notes already document that building from source caused issues — we shouldn't be doing it at all.
 
 ## Scope
 
-- Remove rustpotter from install, setup, capability checks, and voice-listener
-- Rewire voice-listener to use dictate-loop as its input source
-- Update all docs that reference rustpotter or wakeword training
-- Run `cnotes validate --setDefaultMeta` and `cnotes summary` after doc changes
+- Add input mode concept (`wakeword | continuous | off`) to voice-listener and voice-service
+- Add `--voice-mode` flag to main command
+- Sentinel file kill-switch (`~/.agentic-loop/voice-disabled`)
+- Live mode switching via voice command, keyboard shortcut, API, and CLI
+- Auto-detect best available mode as fallback
+- Update capability check output
+- Keep all existing rustpotter code intact
 
 ## Success Criteria
 
-- `luca voice` works without rustpotter installed and without any .rpw model files
-- `scripts/install.sh` and `setup.sh` no longer mention rustpotter or Cargo (for this purpose)
-- Onboarding no longer requires interactive wakeword training
-- Voice command detection works at least as reliably as the rustpotter-based system
-- The voice-listener feature is simpler — fewer lines, fewer states, fewer processes to manage
+- `luca main --voice-mode continuous` works without rustpotter installed
+- `luca main --voice-mode wakeword` works exactly as it does today
+- `luca main` auto-selects the best available mode
+- Mode can be switched at runtime without restarting the process
+- `touch ~/.agentic-loop/voice-disabled` immediately silences voice input; `rm` re-enables it
+- `luca voice --check` shows availability of both modes and current active mode
