@@ -409,6 +409,21 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       let hooksSource = ''
       try { hooksSource = ((await fs.readFileAsync(container.paths.join(folder, 'hooks.ts'), 'utf8')) as any).toString('utf-8') } catch {}
       Object.assign(designerState, { assistantName: name, systemPrompt, tools, toolsImports, hooksSource })
+
+      // Auto-instantiate the assistant so it's available in the REPL and chat immediately
+      if (assistant) { try { assistant.removeAllListeners() } catch {} }
+      await assistantsManager.discover()
+      try {
+        const inst = container.feature('assistant', {
+          folder,
+          model: designerState.model,
+          maxTokens: designerState.maxTokens,
+          local: designerState.provider === 'lm-studio',
+        } as any)
+        await inst.start()
+        assistant = inst
+      } catch {}
+
       res.json({ ok: true, assistantName: name, systemPrompt, tools, toolsImports, hooksSource, rawToolsSource })
     } catch (err: any) {
       res.status(500).json({ error: err.message })

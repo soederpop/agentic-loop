@@ -1,6 +1,6 @@
 export function created(assistant) {
 	assistant.use(
-		container.feature('skillsLibrary'),
+		container.feature('skillsLibrary')
 	)
 }
 
