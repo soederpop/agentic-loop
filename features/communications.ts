@@ -1,9 +1,14 @@
-/** 
- * CURRENT STATUS:
- * 
- * Just writing this as a stub / placeholder for when we eventually implement this into the Agentic loop
-*
-*/
+/**
+ * Communications feature.
+ *
+ * Centralizes inbound message monitoring across supported channels and emits
+ * normalized events the rest of the system can react to.
+ *
+ * Current implementation supports:
+ * - iMessage via the `imsg` feature
+ * - Telegram via the `telegram` feature
+ * - Gmail polling and validation via the `gws` feature
+ */
 import { z } from 'zod'
 import { FeatureStateSchema, FeatureOptionsSchema } from '@soederpop/luca'
 import { Feature } from '@soederpop/luca'
@@ -32,9 +37,12 @@ export const CommunicationsOptionsSchema = FeatureOptionsSchema.extend({})
 export type CommunicationsOptions = z.infer<typeof CommunicationsOptionsSchema>
 
 /**
- * The Communications Feature is a centralized hub that monitors multiple channels
- * for incoming messages, and reacts when they arrive.  The communications feature can
- * also be used to send messages back over those same channels. Supported channels are imessage, telegram, and gmail for now 
+ * Central hub for channel activation, inbound message monitoring, and message event
+ * forwarding across supported communications providers.
+ *
+ * This feature wires channel-specific integrations into a single event surface.
+ * It currently starts watchers for iMessage and Telegram, and polls Gmail through
+ * the Google Workspace feature with optional trusted-sender filtering.
  *
  * @extends Feature
  */
