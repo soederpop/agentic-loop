@@ -386,8 +386,6 @@ export class Gws extends Feature<GwsState, GwsOptions> {
     const env = this.buildEnv(options?.profile)
     const commandStr = `gws ${args.join(' ')}`
     
-    console.log('gws exec', { args, env })
-
     const result = await this.proc.spawnAndCapture('gws', args, {
       env: { ...process.env, ...env },
     })
@@ -423,8 +421,6 @@ export class Gws extends Feature<GwsState, GwsOptions> {
 
     const env = this.buildEnv(options?.profile)
     const commandStr = `gws ${args.join(' ')}`
-
-    console.log('gws helper', { args, env })
 
     const result = await this.proc.spawnAndCapture('gws', args, {
       env: { ...process.env, ...env },
@@ -699,8 +695,6 @@ export class Gws extends Feature<GwsState, GwsOptions> {
       trustScore: number
     }> => {
       const headers = await this.gmail.getHeaders(opts)
-
-      console.log('headers', headers)
 
       const authRaw = headers['authentication-results'] || ''
 

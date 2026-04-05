@@ -561,7 +561,7 @@
     </div>
     <div class="form-row">
       <label>Active Profile</label>
-      <div id="gws-active-profile" style="flex:1;font-size:12px;color:var(--text-dim)">None</div>
+      <select id="gws-active-profile"><option value="">None</option></select>
     </div>
     <div class="btn-row">
       <button class="btn primary" id="gws-save-btn">Save Config</button>
@@ -1011,7 +1011,10 @@ function renderGws() {
   document.getElementById('gws-enabled').classList.toggle('on', ch.config.enabled)
   const profiles = ch.profiles || []
   document.getElementById('gws-profiles').textContent = profiles.length ? profiles.join(', ') : 'None detected'
-  document.getElementById('gws-active-profile').textContent = ch.activeProfile || 'None'
+  const profileSelect = document.getElementById('gws-active-profile')
+  profileSelect.innerHTML = '<option value="">None</option>' + profiles.map(p =>
+    `<option value="${esc(p)}" ${ch.activeProfile === p ? 'selected' : ''}>${esc(p)}</option>`
+  ).join('')
 }
 
 function renderSenders(channel) {
@@ -1220,6 +1223,18 @@ document.getElementById('gws-install-btn').addEventListener('click', async () =>
   const data = await api.install('gws')
   showResult('gws-install-result', data)
   if (data.ok) await app.refresh()
+})
+
+document.getElementById('gws-active-profile').addEventListener('change', async (e) => {
+  const profile = e.target.value || null
+  const res = await fetch('/api/channels/gws/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile }),
+  })
+  const data = await res.json()
+  if (data.error) showResult('gws-config-result', data)
+  else await app.refresh()
 })
 
 document.getElementById('gws-save-btn').addEventListener('click', async () => {

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 import type { TaskEntry } from '../features/task-scheduler'
+import { startCommsService } from './comms-service'
 
 export const argsSchema = CommandOptionsSchema.extend({
   port: z.number().default(0).describe('WebSocket port (0 = auto-allocate from instance registry)'),
@@ -17,6 +18,7 @@ export const argsSchema = CommandOptionsSchema.extend({
   concurrencyOneOff: z.number().default(4).describe('Max concurrent one-off tasks'),
   concurrencyScheduled: z.number().default(2).describe('Max concurrent scheduled tasks'),
   voiceService: z.boolean().default(true).describe('Enable voice service (use --no-voice-service to disable)'),
+  commsService: z.boolean().default(true).describe('Enable communications service (use --no-comms-service to disable)'),
 })
 
 type MainOptions = z.infer<typeof argsSchema>
@@ -263,6 +265,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     scheduler.stop()
     builder.stopWatcher()
     if (voiceService) voiceService.stop().catch(() => {})
+    if (commsService) commsService.pause()
     log('main', 'All subsystems paused. Process alive, WebSocket still listening.')
     recordEvent('main', 'paused')
   }
@@ -278,6 +281,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         log('voice', `failed to resume: ${err?.message || err}`)
       }
     }
+    if (commsService) commsService.unpause()
     log('main', 'All subsystems resumed.')
     recordEvent('main', 'resumed')
   }
@@ -315,6 +319,11 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         port: workflowService.state.get('port'),
         workflowCount: workflowService.state.get('workflowCount'),
       } : { listening: false, disabled: true },
+      comms: commsService ? {
+        started: commsService.isStarted,
+        paused: commsService.isPaused,
+        channels: commsService.activeChannels,
+      } : { started: false, disabled: true },
       instance: {
         id: instanceEntry.id,
         cwd: instanceEntry.cwd,
@@ -373,6 +382,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       builder,
       voiceService,
       windowManager,
+      commsService,
       log,
       events,
       getStatusSnapshot,
@@ -745,6 +755,32 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('workflowService', `failed to start: ${err?.message || err}`)
   }
 
+  // 6. Communications Service
+  let commsService: any = null
+
+  if (options.commsService) {
+    try {
+      const yaml = container.feature('yaml')
+      const commsFs = container.feature('fs')
+      const configPath = container.paths.resolve('config.yml')
+      const config = yaml.parse(commsFs.readFileSync(configPath, 'utf-8').toString('utf-8'))
+      const commsConfig = config.communications || {}
+
+      commsService = await startCommsService(container, {
+        imsg: commsConfig.imsg?.enabled,
+        telegram: commsConfig.telegram?.enabled,
+        gmail: commsConfig.gws?.enabled,
+      }, {
+        log,
+        recordEvent,
+      })
+    } catch (err: any) {
+      log('comms', `failed to start: ${err?.message || err}`)
+    }
+  } else {
+    log('comms', 'disabled via --no-comms-service')
+  }
+
   // --- Status summary ---
   log('main', '')
   log('main', `luca main running (pid ${process.pid})`)
@@ -762,6 +798,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.handlerCount} handlers`)
     log('main', `WindowManager: ${status.windowManager.listening ? `listening` : 'off'}, client ${status.windowManager.clientConnected ? 'connected' : 'disconnected'}, ${status.windowManager.windowCount || 0} windows`)
     log('main', `WorkflowService: ${status.workflowService.listening ? `listening on :${status.workflowService.port}` : 'off'}, ${status.workflowService.workflowCount || 0} workflows`)
+    log('main', `Comms: ${status.comms.started ? `running [${status.comms.channels?.join(', ') || 'no channels'}]` : status.comms.disabled ? 'disabled' : 'stopped'}${status.comms.paused ? ' (paused)' : ''}`)
     log('main', '')
   })
 
@@ -776,6 +813,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     voiceService?.stop().catch(() => {})
     windowManager?.stop().catch(() => {})
     workflowService?.stop().catch(() => {})
+    if (commsService?.isStarted) commsService.pause()
 
     wss.stop().catch(() => {})
 
@@ -994,6 +1032,13 @@ async function runClient(container: any, options: MainOptions, ui: any) {
         ? chalk.green('●') + ' voice ' + (status.voice.clientConnected ? chalk.green('connected') : chalk.gray('waiting'))
         : chalk.yellow('●') + ' voice',
       wmIndicator,
+      status.comms?.started
+        ? (status.comms.paused
+          ? chalk.yellow('●') + ' comms ' + chalk.gray('paused')
+          : chalk.green('●') + ' comms ' + chalk.gray(status.comms.channels?.join(', ') || ''))
+        : status.comms?.disabled
+          ? chalk.gray('●') + ' comms ' + chalk.gray('disabled')
+          : chalk.red('●') + ' comms',
     ]
     output.push(' ' + indicators.join(chalk.gray('  │  ')))
 

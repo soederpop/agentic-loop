@@ -137,9 +137,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       // Give handlers access to TTS via speakPhrase
       router.chat = voiceAssistantChat
 
-      this.emit('info', 'Preloading context for chief chat')
-      await chiefChat.ask('Read your readme, memories, todos, my goals, and be ready to answer questions.')
-      this.emit('info', 'Context preloaded for chief chat')
       chiefChat.unmute()
     } else {
       this.emit('info', 'TTS/LLM unavailable — voice output disabled')

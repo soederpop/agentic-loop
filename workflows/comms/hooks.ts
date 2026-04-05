@@ -103,6 +103,12 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
         gwsActiveProfile = gws.state.get('activeProfile') || null
         gwsAvailable = gws.state.get('available') || false
       } catch {}
+      // Check if gmail channel is active in the communications feature
+      let gwsRunning = false
+      try {
+        const comms = container.feature('communications')
+        gwsRunning = (comms.activeChannels || []).includes('gmail')
+      } catch {}
 
       res.json({
         channels: {
@@ -141,7 +147,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
           gws: {
             installed: gwsBin.found,
             configured: gwsAvailable || gwsProfiles.length > 0,
-            running: gwsAvailable,
+            running: gwsRunning,
             binaryPath: gwsBin.path || null,
             profiles: gwsProfiles,
             activeProfile: gwsActiveProfile,
@@ -243,6 +249,23 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       fs.writeFile(envPath, envContent)
       process.env[key] = value
       res.json({ ok: true, key })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── GWS Active Profile ─────────────────────────────────────────────────────
+
+  app.put('/api/channels/gws/profile', async (req: any, res: any) => {
+    try {
+      const { profile } = req.body || {}
+      const gws = container.feature('gws')
+      if (!profile) {
+        gws.clearProfile()
+      } else {
+        gws.useProfile(profile)
+      }
+      res.json({ ok: true, activeProfile: gws.currentProfile })
     } catch (err: any) {
       res.status(500).json({ error: err.message })
     }

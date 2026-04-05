@@ -88,36 +88,38 @@ export class Communications extends Feature<CommunicationsState, CommunicationsO
   
   _imessageHandler: any = null
   _telegramHandler: any = null
-  _gmailHandler: any = null
-  
+  _gmailPollTimer: any = null
+  _gmailSeenIds: Set<string> = new Set()
+  _gmailOptions: { profile?: string; pollIntervalMs?: number; trustedSenders?: string[] } = {}
+
   async start() {
     if (this.isStarted) {
       return this
     }
-    
+
     const comms = this
-    
+
     this.on('message:received', (channel: Channel, payload: any) => {
       this.emit('message', { channel, payload })
     })
-    
+
     for(const channel of this.activeChannels) {
       if (channel === 'imsg') {
         this._imessageHandler = async function imessageHandler(message: any) {
-          comms.emit('message:received', 'imsg', message)     
+          comms.emit('message:received', 'imsg', message)
         }
 
         this.imessage.on('message', this._imessageHandler)
         this.imessage.watch()
       } else if (channel === 'telegram') {
         this._telegramHandler = async function telegramHandler(message: any) {
-          comms.emit('message:received', 'telegram', message)     
+          comms.emit('message:received', 'telegram', message)
         }
 
         this.telegramBot.handle('message:text', this._telegramHandler)
         this.telegramBot.start()
       } else if (channel === 'gmail') {
-        // TODO: Figure out how to use the GWS feature to watch for new messages
+        await this._startGmailPolling()
       }
     }
 
@@ -125,24 +127,111 @@ export class Communications extends Feature<CommunicationsState, CommunicationsO
     this.emit('started')
     return this
   }
+
+  /**
+   * Polls gmail for unread inbox messages on an interval.
+   * On first run, seeds the seen-set so only new arrivals trigger events.
+   */
+  private async _startGmailPolling() {
+    const gws = this.container.feature('gws')
+    const profile = this._gmailOptions.profile || null
+    const interval = this._gmailOptions.pollIntervalMs || 30_000 
+    const trustedSenders = this._gmailOptions.trustedSenders || []
+
+    if (profile) gws.useProfile(profile)
+
+    // Build a query that only matches trusted senders
+    const baseQuery = 'in:inbox is:unread'
+    const senderQuery = trustedSenders.length > 0
+      ? `${baseQuery} {${trustedSenders.map(s => `from:${s}`).join(' ')}}`
+      : baseQuery
+
+    // Seed: mark everything currently unread as "already seen"
+    try {
+      const existing = await gws.gmail.search({ query: senderQuery, maxResults: 50 })
+      const messages = existing?.messages || []
+      for (const msg of messages) {
+        this._gmailSeenIds.add(msg.id)
+      }
+      this.emit('log', `gmail: seeded ${this._gmailSeenIds.size} existing unread message(s), polling every ${interval / 1000}s (trusted senders: ${trustedSenders.length || 'all'})`)
+    } catch (err: any) {
+      this.emit('log', `gmail: seed failed — ${err.message}`)
+    }
+
+    const poll = async () => {
+      if (this.isPaused) return
+      try {
+        const result = await gws.gmail.search({ query: senderQuery, maxResults: 20 })
+        const messages = result?.messages || []
+
+        for (const msg of messages) {
+          if (this._gmailSeenIds.has(msg.id)) continue
+          this._gmailSeenIds.add(msg.id)
+
+          // Validate authenticity before reading
+          try {
+            const validation = await gws.gmail.validate({ id: msg.id })
+            if (validation.trustScore < 50) {
+              this.emit('log', `gmail: REJECTED message ${msg.id} from ${validation.from?.address} — trust score ${validation.trustScore} (flags: ${validation.flags.join(', ')})`)
+              continue
+            }
+            if (validation.trustScore < 75) {
+              this.emit('log', `gmail: WARNING — message ${msg.id} from ${validation.from?.address} has trust score ${validation.trustScore} (flags: ${validation.flags.join(', ')})`)
+            }
+
+            const full = await gws.gmail.readMessage({ id: msg.id, markAsRead: true })
+            this.emit('message:received', 'gws', {
+              id: msg.id,
+              threadId: msg.threadId,
+              from: full.from,
+              to: full.to,
+              subject: full.subject,
+              body: full.body?.text || full.snippet || '',
+              text: full.body?.text || full.snippet || '',
+              snippet: full.snippet,
+              date: full.date,
+              labels: full.labels,
+              validation,
+            })
+          } catch (readErr: any) {
+            this.emit('log', `gmail: failed to read/validate message ${msg.id} — ${readErr.message}`)
+          }
+        }
+      } catch (err: any) {
+        this.emit('log', `gmail: poll error — ${err.message}`)
+      }
+    }
+
+    // First poll immediately, then on interval
+    await poll()
+    this._gmailPollTimer = setInterval(poll, interval)
+  }
   
   activateChannel(channelName: Channel, options: any) {
     const { uniq } = this.container.utils.lodash
-    
+
     if (this.isStarted) {
-      throw new Error('Communications service is alreadystarted')
+      throw new Error('Communications service is already started')
     }
-    
+
     if (this.activeChannels.includes(channelName)) {
       return this
     }
-    
+
+    if (channelName === 'gmail' && options) {
+      this._gmailOptions = {
+        profile: options.profile,
+        pollIntervalMs: options.pollIntervalMs,
+        trustedSenders: options.trustedSenders,
+      }
+    }
+
     this.state.set('activeChannels', uniq([
       ...this.activeChannels,
       channelName
     ]).sort())
-    
-    return this  
+
+    return this
   }
 }
 
