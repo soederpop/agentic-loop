@@ -437,6 +437,15 @@
     align-self: flex-start;
   }
 
+  .rocket-msg.ignored {
+    background: transparent;
+    color: var(--text-muted, #666);
+    align-self: flex-end;
+    opacity: 0.5;
+    font-style: italic;
+    border: 1px dashed var(--text-muted, #555);
+  }
+
   .rocket-msg.streaming::after {
     content: '\25CF';
     animation: blink 0.8s infinite;
@@ -1433,6 +1442,7 @@ function connectRocketVoice() {
           if (isRocketUtterance(transcript)) {
             sendToRocket(transcript)
           } else {
+            addRocketMsg('ignored', transcript)
             $rocketStatus.textContent = 'not for rocket'
             setTimeout(() => { $rocketStatus.textContent = '' }, 2000)
           }

@@ -158,8 +158,7 @@ export async function askCodingAssistant(options: z.infer<typeof schemas.askCodi
 	const { question } = options
 	
 	if (!codingAssistant) {
-		await container.feature('assistantsManager').discover()
-		codingAssistant = container.feature('assistantsManager').create('codingAssistant')
+		codingAssistant = await assistant.subagent('lucaCoder')
 	}
 
 	return codingAssistant.ask(question)
