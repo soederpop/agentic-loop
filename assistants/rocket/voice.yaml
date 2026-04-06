@@ -8,6 +8,7 @@ voiceSettings:
   useSpeakerBoost: true
 aliases:
   - rocket
+  - yo rocket
 phrases:
   generic-ack:
     - Got it
@@ -22,3 +23,5 @@ phrases:
     - Thinking...
 provider: elevenlabs
 modelId: eleven_v3
+wakeWordThreshold: 0.43
+wakeWordModel: yo_rocket.rpw
