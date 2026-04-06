@@ -657,6 +657,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       const { code } = req.body || {}
       if (!code) return res.status(400).json({ error: 'Missing code' })
       replContext.state = designerState
+      replContext.assistant = assistant
       try {
         const result = await vm.run(code, replContext)
         res.json({ ok: true, output: result === undefined ? 'undefined' : JSON.stringify(result, null, 2) })
