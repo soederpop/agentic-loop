@@ -2,6 +2,8 @@ import { z } from 'zod'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 
+export const description = 'Voice service — wake word detection, STT, and assistant voice chat'
+
 export const argsSchema = CommandOptionsSchema.extend({
 	check: z.boolean().default(false).describe('Check voice capability status without starting the service'),
 	generateSounds: z.union([z.boolean(), z.string()]).default(false)
@@ -63,7 +65,6 @@ type AssistantConfigResult = { voice: string; groups: Record<string, string[]>; 
 
 function buildResult(assistant: any, cfg: Record<string, any>): AssistantConfigResult {
 	const outputDir = assistant.paths.resolve('generated')
-	console.log(`  [path:L60] buildResult outputDir=${outputDir} (folder=${assistant.folder || assistant.resolvedFolder})`)
 	return {
 		voice: cfg.voiceId || cfg.customVoiceId || '',
 		groups: cfg.phrases || {},
@@ -112,7 +113,6 @@ async function generateForAssistant(
 	const provider = options.provider || 'elevenlabs'
 	const format = options.format || (provider === 'elevenlabs' ? 'mp3' : 'wav')
 	const outputDir = options.outputDir ? container.paths.resolve(options.outputDir) : cfg.outputDir
-	console.log(`  [path:L105] outputDir=${outputDir} (from cfg.outputDir=${cfg.outputDir})`)
 
 	const groups: Record<string, PhraseListConfig['phrases']> = {}
 	for (const [tag, items] of Object.entries(cfg.groups)) {
@@ -164,10 +164,9 @@ async function generateForAssistant(
 		const textPart = slugify(phrase.text).slice(0, 48)
 		const fileName = `${String(i + 1).padStart(2, '0')}-${slugify(phrase.id)}${textPart ? `-${textPart}` : ''}.${format}`
 		const finalPath = `${outputDir}/${fileName}`
-		console.log(`  [path:L145] finalPath=${finalPath}`)
 
 		if (await diskCache.has(cacheKey)) {
-			console.log(`  ${i + 1}/${phrases.length}: cached → ${finalPath}`)
+			console.log(`  ${i + 1}/${phrases.length}: cached -> ${finalPath}`)
 			const audio = await diskCache.get(cacheKey)
 			await fs.writeFileAsync(finalPath, audio)
 		} else {
@@ -176,7 +175,6 @@ async function generateForAssistant(
 			await diskCache.set(cacheKey, audio)
 		}
 
-
 		try {
 			await container.proc.exec(`afplay "${finalPath}"`)
 			console.log(`  ${i + 1}/${phrases.length}: ${finalPath}`)
@@ -184,12 +182,11 @@ async function generateForAssistant(
 		} catch(error) {
 			console.error('Error playing', finalPath, error)
 		}
-
 	}
 
 	const manifestPath = `${outputDir}/manifest.json`
 	await fs.writeFileAsync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
-	console.log(`[generate-sounds] ${assistantName}: done. ${manifest.length} files → ${manifestPath}`)
+	console.log(`[generate-sounds] ${assistantName}: done. ${manifest.length} files -> ${manifestPath}`)
 }
 
 async function generateSounds(options: VoiceCommandOptions, context: ContainerContext): Promise<void> {
@@ -211,7 +208,6 @@ async function generateSounds(options: VoiceCommandOptions, context: ContainerCo
 		throw new Error('No voice assistants found. Each assistant needs a voice.yaml with phrases.')
 	}
 
-	// Filter to a specific assistant if named, otherwise generate for all
 	const targets = targetName
 		? all.filter(a => {
 			const normalized = targetName.toLowerCase().trim()
@@ -232,71 +228,53 @@ async function generateSounds(options: VoiceCommandOptions, context: ContainerCo
 
 	for (const entry of targets) {
 		const cfg = buildResult(entry.assistant, entry.voiceConfig)
-		console.log('config', cfg)
 		await generateForAssistant(container, entry.name, cfg, options)
 	}
 
 	console.log(`\n[generate-sounds] all done.`)
 }
 
-async function voice(options: z.infer<typeof argsSchema>, context: ContainerContext) {
-	if (options.generateSounds) {
-		await generateSounds(options, context)
-		return
-	}
+// ── Voice Service (reusable) ─────────────────────────────────────────────────
 
-	const { container } = context
-	const proc = container.feature('proc')
+export interface VoiceServiceHooks {
+	log?: (source: string, message: string) => void
+	recordEvent?: (source: string, event: string, data?: any) => void
+}
 
-	if (options.check) {
-		const listener = container.feature('voiceListener' as any) as any
-		const chat = container.feature('voiceChat', { assistant: 'chiefOfStaff' }) as any
-
-		const [listenerCaps, chatCaps] = await Promise.all([
-			listener.checkCapabilities(),
-			chat.checkCapabilities(),
-		])
-
-		const mark = (ok: boolean) => ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m'
-
-		console.log('')
-		console.log('  Voice Capability Check')
-		console.log('  ──────────────────────')
-		console.log(`  ${mark(listener.state.get('wakeWordAvailable'))} Wake word   rustpotter + .rpw models`)
-		console.log(`  ${mark(listener.state.get('sttAvailable'))}  STT         sox + mlx_whisper`)
-		console.log(`  ${mark(chatCaps.available)}  TTS/LLM     ELEVENLABS_API_KEY + voice.yaml`)
-		console.log('')
-
-		const allMissing = [...listenerCaps.missing, ...chatCaps.missing]
-		if (allMissing.length) {
-			console.log('  Missing:')
-			for (const m of allMissing) {
-				console.log(`    - ${m}`)
-			}
-			console.log('')
-		} else {
-			console.log('  All capabilities available.')
-			console.log('')
-		}
-
-		return
-	}
-
-	const lock = proc.establishLock('tmp/luca-voice.pid')
+/**
+ * Starts the voice service with wake word detection, STT, and assistant routing.
+ *
+ * Returns the VoiceService feature instance for pause/resume/status integration.
+ * Can be called from the standalone `luca voice` command or from `luca main`.
+ */
+export async function startVoiceService(
+	container: any,
+	hooks: VoiceServiceHooks = {},
+) {
+	const log = hooks.log ?? ((source: string, msg: string) => console.log(`[${source}] ${msg}`))
+	const recordEvent = hooks.recordEvent ?? (() => {})
 
 	const voiceService = container.feature('voiceService')
 
 	voiceService.on('client:connected', () => {
-		console.log('[voice] native app connected')
+		log('voice', 'native app connected')
+		recordEvent('voice', 'client:connected')
 	})
 	voiceService.on('client:disconnected', () => {
-		console.log('[voice] native app disconnected')
+		log('voice', 'native app disconnected')
+		recordEvent('voice', 'client:disconnected')
 	})
 	voiceService.on('command', (d: any) => {
-		console.log(`[voice] command: "${d.text}" (source: ${d.source})`)
+		log('voice', `command: "${d.text}" (source: ${d.source})`)
+		recordEvent('voice', 'command', d)
 	})
 	voiceService.on('command:error', (d: any) => {
-		console.log(`[voice] command error: ${d.error}`)
+		log('voice', `command error: ${d.error}`)
+		recordEvent('voice', 'command:error', d)
+	})
+	voiceService.on('info', (d: any) => {
+		log('voice', `${d}`)
+		recordEvent('voice', 'info', d)
 	})
 
 	await voiceService.start()
@@ -308,14 +286,75 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 	if (st.get('ttsAvailable')) modes.push('TTS/LLM')
 
 	if (modes.length === 0) {
-		console.log('[voice] started in degraded mode — no voice capabilities available')
+		log('voice', 'started in degraded mode — no voice capabilities available')
 		const missing = (st.get('capabilityMissing') as string[]) ?? []
-		if (missing.length) console.log(`[voice] missing: ${missing.join(', ')}`)
+		if (missing.length) log('voice', `missing: ${missing.join(', ')}`)
 	} else {
-		console.log(`[voice] listening — active: ${modes.join(', ')} | ${voiceService.voiceAssistants.length} assistants`)
+		log('voice', `listening — active: ${modes.join(', ')} | ${voiceService.voiceAssistants.length} assistants`)
 	}
 
-	// Keep process alive, but let Ctrl+C kill it cleanly
+	return voiceService
+}
+
+// ── Capability Check ─────────────────────────────────────────────────────────
+
+async function checkCapabilities(container: any): Promise<void> {
+	const listener = container.feature('voiceListener' as any) as any
+	const chat = container.feature('voiceChat', { assistant: 'chiefOfStaff' }) as any
+
+	const [listenerCaps, chatCaps] = await Promise.all([
+		listener.checkCapabilities(),
+		chat.checkCapabilities(),
+	])
+
+	const mark = (ok: boolean) => ok ? '\x1b[32m+\x1b[0m' : '\x1b[31m-\x1b[0m'
+
+	console.log('')
+	console.log('  Voice Capability Check')
+	console.log('  ──────────────────────')
+	console.log(`  ${mark(listener.state.get('wakeWordAvailable'))} Wake word   rustpotter + .rpw models`)
+	console.log(`  ${mark(listener.state.get('sttAvailable'))}  STT         sox + mlx_whisper`)
+	console.log(`  ${mark(chatCaps.available)}  TTS/LLM     ELEVENLABS_API_KEY + voice.yaml`)
+	console.log('')
+
+	const allMissing = [...listenerCaps.missing, ...chatCaps.missing]
+	if (allMissing.length) {
+		console.log('  Missing:')
+		for (const m of allMissing) {
+			console.log(`    - ${m}`)
+		}
+		console.log('')
+	} else {
+		console.log('  All capabilities available.')
+		console.log('')
+	}
+}
+
+// ── CLI Command ──────────────────────────────────────────────────────────────
+
+/**
+ * CLI command — thin wrapper around startVoiceService for standalone use.
+ * Also handles --check and --generateSounds subcommands.
+ */
+export default async function voice(options: z.infer<typeof argsSchema>, context: ContainerContext) {
+	const { container } = context
+
+	if (options.generateSounds) {
+		await generateSounds(options, context)
+		return
+	}
+
+	if (options.check) {
+		await checkCapabilities(container)
+		return
+	}
+
+	// Standalone voice service
+	const proc = container.feature('proc')
+	const lock = proc.establishLock('tmp/luca-voice.pid')
+
+	const voiceService = await startVoiceService(container)
+
 	const shutdown = async () => {
 		console.log('\n[voice] shutting down...')
 		await voiceService.stop()
@@ -325,10 +364,4 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 	process.on('SIGINT', shutdown)
 	process.on('SIGTERM', shutdown)
 	await new Promise(() => {})
-}
-
-export default {
-	description: 'Voice service and TTS sound generator for voice-enabled assistants',
-	argsSchema,
-	handler: voice,
 }

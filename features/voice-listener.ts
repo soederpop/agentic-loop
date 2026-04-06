@@ -268,6 +268,32 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 	return this.container.paths.resolve('voice', 'wakeword', 'models')
   }
 
+  /**
+   * Scan voice-enabled assistants' voice.yaml for wakeWordModel + wakeWordThreshold.
+   * Returns a Map of model filename → threshold.
+   */
+  loadModelThresholds(): Map<string, number> {
+    const thresholds = new Map<string, number>()
+    try {
+      const manager = this.container.feature('assistantsManager' as any) as any
+      const fs = this.container.feature('fs')
+      const yaml = this.container.feature('yaml')
+
+      for (const entry of (manager.list?.() || [])) {
+        if (!entry.hasVoice) continue
+        try {
+          const voicePath = this.container.paths.resolve(entry.folder, 'voice.yaml')
+          if (!fs.exists(voicePath)) continue
+          const config = yaml.parse(fs.readFile(voicePath))
+          if (config?.wakeWordModel && config?.wakeWordThreshold != null) {
+            thresholds.set(config.wakeWordModel, config.wakeWordThreshold)
+          }
+        } catch {}
+      }
+    } catch {}
+    return thresholds
+  }
+
   async waitForTriggerWord() {
 	  console.log('Waiting for trigger word')
 
@@ -288,16 +314,21 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 
 	const fs = this.container.feature('fs')
 	const entries = await fs.readdir(this.modelsDir)
-	const modelPaths = entries
-		.filter((e: string) => e.endsWith('.rpw'))
-		.map((e: string) => `${this.modelsDir}/${e}`)
+	const modelFiles = entries.filter((e: string) => e.endsWith('.rpw'))
+
+	// Build a map of model filename → threshold from assistant voice.yaml configs
+	const modelThresholds = this.loadModelThresholds()
+
+	const modelPaths = modelFiles.map((e: string) => `${this.modelsDir}/${e}`)
 
 	const listener = this
 	const pids: number[] = []
 	let exited = 0
 
 	for (const modelPath of modelPaths) {
-		const args = ['spot', '-t', '0.35', '-m', '5', '-e', '-d', '-g', '--band-pass', modelPath]
+		const modelFilename = modelPath.split('/').pop()!
+		const threshold = modelThresholds.get(modelFilename) || 0.35
+		const args = ['spot', '-t', String(threshold), '-m', '5', '-e', '-d', '-g', '--band-pass', modelPath]
 
 		this.container.proc.spawnAndCapture(
 			bin,

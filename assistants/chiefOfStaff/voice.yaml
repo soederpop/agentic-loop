@@ -1,17 +1,19 @@
-voiceId: ulEiUT06p4S3sHtsvn4T 
-conversationModePrefix: "[coach voice]"
+voiceId: ulEiUT06p4S3sHtsvn4T
+conversationModePrefix: '[coach voice]'
 voiceSettings:
   stability: 0.35
   similarityBoost: 0.8
-  style: 0.6
+  style: 0.85
   speed: 1.05
   useSpeakerBoost: true
 aliases:
   - chief
 phrases:
   greeting:
-    - "Hello"
-    - "Top of the morning"
+    - Hello
+    - Top of the morning
   thinking:
-    - "Let me think about that"
-    - "Thinking..."
+    - Let me think about that
+    - Thinking...
+provider: elevenlabs
+modelId: eleven_v3

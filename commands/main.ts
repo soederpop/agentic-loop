@@ -625,46 +625,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   let voiceService: any = null
 
   if (options.voiceService) {
-    voiceService = container.feature('voiceService')
-    voiceService.getStatusSnapshot = getStatusSnapshot
-
-    let voiceConnectedOnce = false
-    voiceService.on('client:connected', () => {
-      if (!voiceConnectedOnce) {
-        log('voice', 'native app connected')
-        voiceConnectedOnce = true
-      }
-      recordEvent('voice', 'client:connected')
-    })
-    voiceService.on('client:disconnected', () => {
-      log('voice', 'native app disconnected')
-      voiceConnectedOnce = false
-      recordEvent('voice', 'client:disconnected')
-    })
-    voiceService.on('command', (d: any) => {
-      log('voice', `command: "${d.text}" (source: ${d.source})`)
-      recordEvent('voice', 'command', d)
-    })
-
-    voiceService.on('command:error', (d: any) => {
-      log('voice', `command error: ${d.error}`)
-      recordEvent('voice', 'command:error', d)
-    })
-    
-    voiceService.on('info', (d: any) => {
-      log('voice', `info: ${d}`)
-      recordEvent('voice', 'info', d)
-    })
-
     try {
-      await voiceService.start()
-      const vst = voiceService.state
-      const modes: string[] = []
-      if (vst.get('wakeWordAvailable')) modes.push('wake-word')
-      if (vst.get('sttAvailable')) modes.push('STT')
-      if (vst.get('ttsAvailable')) modes.push('TTS/LLM')
-      const label = modes.length ? modes.join(', ') : 'degraded (no voice capabilities)'
-      log('voice', `started [${label}] | ${voiceService.voiceAssistants.length} assistants`)
+      const { startVoiceService } = await import('./voice')
+      voiceService = await startVoiceService(container, { log, recordEvent })
+      voiceService.getStatusSnapshot = getStatusSnapshot
     } catch (err: any) {
       log('voice', `failed to start: ${err?.message || err}`)
     }

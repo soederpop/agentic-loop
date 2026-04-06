@@ -1,5 +1,5 @@
-voiceId: dQPqBteUcYgtnV6VykDF 
-conversationModePrefix: "[thick italian accent]"
+voiceId: dQPqBteUcYgtnV6VykDF
+conversationModePrefix: '[thick italian accent]'
 voiceSettings:
   stability: 0.35
   similarityBoost: 0.8
@@ -7,16 +7,18 @@ voiceSettings:
   speed: 1.05
   useSpeakerBoost: true
 aliases:
-  - Friday
+  - rocket
 phrases:
   generic-ack:
-    - "Got it"
+    - Got it
   generic-finish:
-    - "Done"
+    - Done
   greeting:
-    - "Hello"
+    - Hello
   farewell:
-    - "Check you later"
+    - Check you later
   thinking:
-    - "Hold up, let me cook..."
-    - "Thinking..."
+    - Hold up, let me cook...
+    - Thinking...
+provider: elevenlabs
+modelId: eleven_v3
