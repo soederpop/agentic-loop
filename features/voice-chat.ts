@@ -19,11 +19,19 @@ type PhraseManifestEntry = {
 const EXIT_PHRASES = /\b(peace\s*out|later|bye|goodbye|see\s*ya|i'm\s*out|deuces|aight\s*bet|that's\s*all|shut\s*up)\b/i
 
 type VoiceConfig = {
-	voiceId: string
+	provider?: 'elevenlabs' | 'voicebox'
+	voiceId?: string
 	modelId?: string
 	voiceSettings?: any
 	conversationModePrefix?: string
 	maxChunkLength?: number
+	voicebox?: {
+		profileId: string
+		engine?: string
+		modelSize?: string
+		language?: string
+		instruct?: string | null
+	}
 }
 
 export const VoiceChatOptionsSchema = FeatureOptionsSchema.extend({
@@ -226,12 +234,6 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 
 		const missing: string[] = []
 
-		// ElevenLabs API key
-		if (!process.env.ELEVENLABS_API_KEY) {
-			missing.push('ELEVENLABS_API_KEY env var')
-		}
-
-		// voice.yaml with a voiceId for this assistant
 		let hasVoiceConfig = false
 		try {
 			const fs = this.container.feature('fs')
@@ -239,7 +241,25 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			if (fs.exists(voiceConfigPath)) {
 				const yaml = this.container.feature('yaml')
 				const cfg = yaml.parse(String(fs.readFile(voiceConfigPath)))
-				hasVoiceConfig = !!cfg?.voiceId
+				const provider = cfg?.provider || 'elevenlabs'
+
+				if (provider === 'voicebox') {
+					hasVoiceConfig = !!cfg?.voicebox?.profileId
+					if (hasVoiceConfig) {
+						// Check VoiceBox reachability
+						try {
+							const vb = this.container.client('voicebox') as any
+							await vb.connect()
+						} catch {
+							missing.push('VoiceBox.sh not reachable')
+						}
+					}
+				} else {
+					hasVoiceConfig = !!cfg?.voiceId
+					if (!process.env.ELEVENLABS_API_KEY) {
+						missing.push('ELEVENLABS_API_KEY env var')
+					}
+				}
 			}
 		} catch {}
 		if (!hasVoiceConfig) missing.push(`voice.yaml for ${this.options.assistant}`)
@@ -272,20 +292,31 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 	
 	createSpeechStreamer() {
 		const config = this.voiceConfig
-		
+		const provider = config.provider || 'elevenlabs'
+
 		const options: any = {
 			container: this.container as AGIContainer & NodeContainer,
-			voiceId: config.voiceId,
-			modelId: config.modelId || "eleven_v3",
-			voiceSettings: config.voiceSettings,
-			conversationModePrefix: config.conversationModePrefix,
+			provider,
 			maxChunkLength: config.maxChunkLength || 250,
-			debug: false //true
+			debug: false,
 		}
-		
-		const speechStreamer = new SpeechStreamer(options)
 
-		return speechStreamer
+		if (provider === 'voicebox') {
+			options.voicebox = {
+				profileId: config.voicebox!.profileId,
+				engine: config.voicebox?.engine || 'qwen',
+				modelSize: config.voicebox?.modelSize || '1.7B',
+				language: config.voicebox?.language || 'en',
+				instruct: config.voicebox?.instruct,
+			}
+		} else {
+			options.voiceId = config.voiceId
+			options.modelId = config.modelId || 'eleven_v3'
+			options.voiceSettings = config.voiceSettings
+			options.conversationModePrefix = config.conversationModePrefix
+		}
+
+		return new SpeechStreamer(options)
 	}
 
 	/** Loads the phrase manifest JSON from the assistant's generated folder and indexes by tag. */

@@ -19,9 +19,7 @@ During this loop, a feature called [The Task Scheduler](../../features/task-sche
 ## Agentic Loop Subsystems
 
 - The `luca main` process also spawns a few other services that make the full system work.
-- The [Voice Service](../../features/voice-service.ts) listens for wake words and routes them to either the [Chief of Staff](../../assistants/chiefOfStaff/) or the [Voice Assistant](../../assistants/voice-assistant/)
-
-- The [Voice Router](../../features/voice-router.ts) takes commands sent to the voice assistant (through voice based wake words) or through the `luca yo` command and attempts to handle them with the [Voice Command Handlers](./creating-new-voice-command-handlers.md)
+- The [Voice Service](../../features/voice-service.ts) listens for wake words and routes them to voice-enabled assistants based on their `voice.yaml` aliases
 
 - The [Presenter](../../features/presenter.ts) gives assistants the ability to display web pages, or terminal processes to you
 

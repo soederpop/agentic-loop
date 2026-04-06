@@ -47,12 +47,6 @@ export default async function getStarted(options: z.infer<typeof argsSchema>, co
   console.log(`  ${appBuilt ? ok : no} Native App Launcher   ${appBuilt ? dim('built') : dim('not built — run apps/presenter-windows/scripts/build-app.sh')}`)
 
   // Voice capabilities
-  let handlerCount = 0
-  try {
-    const fileManager = container.feature('fileManager') as any
-    await fileManager.start()
-    handlerCount = fileManager.match('commands/voice/handlers/**/*.ts').length
-  } catch {}
 
   const assistants = (() => {
     try {
@@ -62,7 +56,6 @@ export default async function getStarted(options: z.infer<typeof argsSchema>, co
     } catch { return [] }
   })()
 
-  console.log(`  ${handlerCount > 0 ? ok : no} Voice Handlers         ${dim(`${handlerCount} handler(s) discovered`)}`)
   console.log(`  ${assistants.length > 0 ? ok : no} Voice Assistants       ${dim(`${assistants.length} assistant(s) with voice config`)}`)
 
   // API keys

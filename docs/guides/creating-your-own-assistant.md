@@ -57,7 +57,6 @@ Keep your responses focused and factual. When you don't know something, say so.
 Tips from the existing assistants:
 
 - **chiefOfStaff** uses CORE.md to define an entire workflow — how to handle ideas, projects, and plans. It references its tools by name and tells the model when to call them.
-- **voice-assistant** uses CORE.md to enforce strict output rules (no markdown, short responses) because its output goes to text-to-speech.
 
 The system prompt is the single most important file. Spend time on it. Everything the assistant does well (or poorly) traces back to how clearly you defined its role here.
 
@@ -331,12 +330,6 @@ const assistant = manager.create('myAssistant', { historyMode: 'daily' })
 - **hooks.ts**: Minimal — just a `created` hook placeholder.
 - **voice.yaml**: English narrator voice, aliases include "chief".
 - **docs/**: Symlinked to the project's `docs/` folder.
-
-### voice-assistant (Friday) — The Voice-First Assistant
-
-- **CORE.md**: Strict rules for voice output — no markdown, no code, 3 sentences max. Explains the voice routing system so the model knows when and why it's being called.
-- **tools.ts**: 2 tools — `listCommands` and `runCommand`. Minimal surface area, focused on routing voice commands to the right handler.
-- **voice.yaml**: Irish accent voice, phrases for greeting/farewell/thinking.
 
 ## Quick Start Checklist
 

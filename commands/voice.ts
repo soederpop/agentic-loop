@@ -4,14 +4,11 @@ import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 
 export const argsSchema = CommandOptionsSchema.extend({
 	check: z.boolean().default(false).describe('Check voice capability status without starting the service'),
-	train: z.boolean().default(false).describe('Launch the voice command training studio'),
-	port: z.number().default(4377).describe('Port for the training web server'),
-	open: z.boolean().default(true).describe('Open the training app in a browser'),
 	generateSounds: z.union([z.boolean(), z.string()]).default(false)
 		.describe('Generate TTS audio for voice assistants. Pass true for all, or an assistant name.'),
 	resetCache: z.boolean().default(false).describe('Clear the TTS disk cache before generating sounds'),
 	voice: z.string().optional().describe('Override the voiceId from voice.yaml'),
-	provider: z.enum(['elevenlabs', 'chatterbox']).optional().describe('TTS provider (default: elevenlabs)'),
+	provider: z.enum(['elevenlabs', 'chatterbox', 'voicebox']).optional().describe('TTS provider (default: elevenlabs)'),
 	format: z.enum(['wav', 'flac', 'ogg', 'mp3']).optional().describe('Output format for generated sounds'),
 	outputDir: z.string().optional().describe('Output directory override'),
 })
@@ -143,6 +140,16 @@ async function generateForAssistant(
 			const generatedPath = await tts.synthesize(text, { voice, format: format as any })
 			return fs.readFile(generatedPath, { encoding: null })
 		}
+		if (provider === 'voicebox') {
+			const vb = container.client('voicebox') as any
+			if (!vb.state.get('connected')) await vb.connect()
+			return vb.synthesize(text, {
+				profileId: voice,
+				engine: cfg.engine || 'qwen',
+				modelSize: cfg.modelSize || '1.7B',
+				language: cfg.language || 'en',
+			})
+		}
 		const el = container.client('elevenlabs')
 		if (!el.state.get('connected')) await el.connect()
 		return el.synthesize(text, {
@@ -243,7 +250,7 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 
 	if (options.check) {
 		const listener = container.feature('voiceListener' as any) as any
-		const chat = container.feature('voiceChat', { assistant: 'voice-assistant' }) as any
+		const chat = container.feature('voiceChat', { assistant: 'chiefOfStaff' }) as any
 
 		const [listenerCaps, chatCaps] = await Promise.all([
 			listener.checkCapabilities(),
@@ -272,20 +279,6 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 			console.log('')
 		}
 
-		return
-	}
-
-	if (options.train) {
-		await container.helpers.discover('features')
-		const router = container.feature('voiceRouter' as any, { enable: true }) as any
-		await router.loadHandlers()
-		const { startVoiceTrainingStudio } = await import(`${import.meta.dir}/voice/train/server.ts`)
-		await startVoiceTrainingStudio({
-			container,
-			router,
-			port: options.port,
-			open: options.open,
-		})
 		return
 	}
 
@@ -319,7 +312,7 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 		const missing = (st.get('capabilityMissing') as string[]) ?? []
 		if (missing.length) console.log(`[voice] missing: ${missing.join(', ')}`)
 	} else {
-		console.log(`[voice] listening — active: ${modes.join(', ')} | ${voiceService.manifest.length} handlers`)
+		console.log(`[voice] listening — active: ${modes.join(', ')} | ${voiceService.voiceAssistants.length} assistants`)
 	}
 
 	// Keep process alive, but let Ctrl+C kill it cleanly
@@ -335,7 +328,7 @@ async function voice(options: z.infer<typeof argsSchema>, context: ContainerCont
 }
 
 export default {
-	description: 'Voice command router and TTS sound generator for the native launcher app',
+	description: 'Voice service and TTS sound generator for voice-enabled assistants',
 	argsSchema,
 	handler: voice,
 }

@@ -635,6 +635,11 @@
     <p>Customize voice settings, test phrases, and preview in real time</p>
   </div>
   <div class="assistant-picker">
+    <label>Provider</label>
+    <select id="provider-select">
+      <option value="elevenlabs">ElevenLabs</option>
+      <option value="voicebox">VoiceBox.sh</option>
+    </select>
     <label>Assistant</label>
     <select id="assistant-select">
       <option value="">Loading...</option>
@@ -726,6 +731,36 @@
       }
       return await res.blob()
     }
+
+    /** Check if VoiceBox.sh is reachable */
+    async checkVoiceboxHealth() {
+      try {
+        const res = await fetch(`${this.base}/api/voicebox/health`)
+        const data = await res.json()
+        return data.ok === true
+      } catch { return false }
+    }
+
+    /** Fetch all VoiceBox voice profiles */
+    async fetchVoiceboxProfiles() {
+      const res = await fetch(`${this.base}/api/voicebox/profiles`)
+      const data = await res.json()
+      return data.profiles || []
+    }
+
+    /** Synthesize text via VoiceBox, returns a Blob */
+    async synthesizeVoicebox({ text, profileId, engine, modelSize, language, instruct }) {
+      const res = await fetch(`${this.base}/api/voicebox/synthesize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, profileId, engine, modelSize, language, instruct }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: 'Synthesis failed' }))
+        throw new Error(err.error || `HTTP ${res.status}`)
+      }
+      return await res.blob()
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════
@@ -741,6 +776,9 @@
       currentConfig:    { type: 'object',  default: null,  describe: 'Deep clone of the selected assistant voiceConfig, edited in place' },
       dirty:            { type: 'boolean', default: false,  describe: 'True when config has unsaved changes' },
       loading:          { type: 'boolean', default: false,  describe: 'True while fetching assistants' },
+      provider:         { type: 'string',  default: 'elevenlabs', describe: 'Active TTS provider (elevenlabs or voicebox)' },
+      voiceboxOnline:   { type: 'boolean', default: false,  describe: 'Whether VoiceBox.sh is reachable' },
+      voiceboxProfiles: { type: 'array',   default: [],    describe: 'Cached VoiceBox profiles list' },
     }
 
     static eventsSchema = {
@@ -759,7 +797,8 @@
     async loadAssistants() {
       this.state.set('loading', true)
       try {
-        const assistants = await this.api.fetchAssistants()
+        const all = await this.api.fetchAssistants()
+        const assistants = all.filter(a => a.hasVoice && a.voiceConfig)
         this.state.set('assistants', assistants)
         this.state.set('loading', false)
         this.emit('assistants:loaded', assistants)
@@ -778,9 +817,21 @@
       if (!a) return null
       this.state.set('currentAssistant', a)
       this.state.set('currentConfig', structuredClone(a.voiceConfig))
+      this.state.set('provider', a.voiceConfig?.provider || 'elevenlabs')
       this.state.set('dirty', false)
       this.emit('assistant:selected', a)
       return a
+    }
+
+    /** Switch the active TTS provider */
+    setProvider(provider) {
+      this.state.set('provider', provider)
+      const config = this.state.get('currentConfig')
+      if (config) {
+        config.provider = provider
+        this.state.set('dirty', true)
+        this.emit('config:changed', config)
+      }
     }
 
     /** Update the working config and mark dirty */
@@ -795,18 +846,42 @@
       const config = this.state.get('currentConfig')
       if (!config) return
 
-      config.voiceId = document.getElementById('setting-voiceId').value.trim()
-      config.modelId = document.getElementById('setting-modelId').value
-      config.conversationModePrefix = document.getElementById('setting-prefix').value.trim() || undefined
-      config.aliases = document.getElementById('setting-aliases').value
-        .split(',').map(s => s.trim()).filter(Boolean)
+      const provider = this.state.get('provider')
+      config.provider = provider
 
-      config.voiceSettings = {
-        stability: parseFloat(document.getElementById('slider-stability').value),
-        similarityBoost: parseFloat(document.getElementById('slider-similarityBoost').value),
-        style: parseFloat(document.getElementById('slider-style').value),
-        speed: parseFloat(document.getElementById('slider-speed').value),
-        useSpeakerBoost: document.getElementById('toggle-speakerBoost').checked,
+      // Read aliases (shared between providers)
+      const aliasEl = document.getElementById('setting-aliases')
+      if (aliasEl) {
+        config.aliases = aliasEl.value.split(',').map(s => s.trim()).filter(Boolean)
+      }
+
+      if (provider === 'voicebox') {
+        // VoiceBox-specific fields
+        const profileEl = document.getElementById('setting-vb-profile')
+        const engineEl = document.getElementById('setting-vb-engine')
+        const modelSizeEl = document.getElementById('setting-vb-modelSize')
+        const languageEl = document.getElementById('setting-vb-language')
+        const instructEl = document.getElementById('setting-vb-instruct')
+
+        if (!config.voicebox) config.voicebox = {}
+        if (profileEl) config.voicebox.profileId = profileEl.value
+        if (engineEl) config.voicebox.engine = engineEl.value
+        if (modelSizeEl) config.voicebox.modelSize = modelSizeEl.value
+        if (languageEl) config.voicebox.language = languageEl.value.trim() || 'en'
+        if (instructEl) config.voicebox.instruct = instructEl.value.trim() || null
+      } else {
+        // ElevenLabs-specific fields
+        config.voiceId = document.getElementById('setting-voiceId').value.trim()
+        config.modelId = document.getElementById('setting-modelId').value
+        config.conversationModePrefix = document.getElementById('setting-prefix').value.trim() || undefined
+
+        config.voiceSettings = {
+          stability: parseFloat(document.getElementById('slider-stability').value),
+          similarityBoost: parseFloat(document.getElementById('slider-similarityBoost').value),
+          style: parseFloat(document.getElementById('slider-style').value),
+          speed: parseFloat(document.getElementById('slider-speed').value),
+          useSpeakerBoost: document.getElementById('toggle-speakerBoost').checked,
+        }
       }
 
       this.state.set('dirty', true)
@@ -917,8 +992,17 @@
 
     /** Synthesize text with the given voice config and play it */
     async synthesizeAndPlay(text, voiceConfig, triggerBtn) {
-      if (!text || !voiceConfig.voiceId) {
-        this.emit('play:error', new Error('Need text and a voice ID to synthesize'))
+      const provider = voiceConfig.provider || 'elevenlabs'
+      if (provider === 'elevenlabs' && !voiceConfig.voiceId) {
+        this.emit('play:error', new Error('Need a voice ID to synthesize with ElevenLabs'))
+        return
+      }
+      if (provider === 'voicebox' && !voiceConfig.voicebox?.profileId) {
+        this.emit('play:error', new Error('Need a VoiceBox profile to synthesize'))
+        return
+      }
+      if (!text) {
+        this.emit('play:error', new Error('Need text to synthesize'))
         return
       }
 
@@ -934,13 +1018,26 @@
       this.state.set('synthesizing', true)
 
       try {
-        const blob = await this.api.synthesize({
-          text,
-          voiceId: voiceConfig.voiceId,
-          modelId: voiceConfig.modelId || 'eleven_v3',
-          voiceSettings: voiceConfig.voiceSettings,
-          conversationModePrefix: voiceConfig.conversationModePrefix,
-        })
+        let blob
+        if (provider === 'voicebox') {
+          const vb = voiceConfig.voicebox || {}
+          blob = await this.api.synthesizeVoicebox({
+            text,
+            profileId: vb.profileId,
+            engine: vb.engine || 'qwen',
+            modelSize: vb.modelSize || '1.7B',
+            language: vb.language || 'en',
+            instruct: vb.instruct || undefined,
+          })
+        } else {
+          blob = await this.api.synthesize({
+            text,
+            voiceId: voiceConfig.voiceId,
+            modelId: voiceConfig.modelId || 'eleven_v3',
+            voiceSettings: voiceConfig.voiceSettings,
+            conversationModePrefix: voiceConfig.conversationModePrefix,
+          })
+        }
 
         this.state.set('synthesizing', false)
 
@@ -1038,11 +1135,39 @@
     get phrasesPanel()  { return document.getElementById('phrases-panel') }
     get statusEl()      { return document.getElementById('status') }
 
-    /** Boot the app: load assistants, select the first one, bind UI */
+    /** Boot the app: load assistants, check VoiceBox, select the first one, bind UI */
     async start() {
       try {
-        const assistants = await this.store.loadAssistants()
+        // Load assistants and check VoiceBox health in parallel
+        const [assistants, vbOnline] = await Promise.all([
+          this.store.loadAssistants(),
+          this.api.checkVoiceboxHealth(),
+        ])
 
+        this.store.state.set('voiceboxOnline', vbOnline)
+
+        // Load VoiceBox profiles if online
+        if (vbOnline) {
+          try {
+            const profiles = await this.api.fetchVoiceboxProfiles()
+            this.store.state.set('voiceboxProfiles', profiles)
+          } catch {}
+        }
+
+        // Provider toggle
+        this.providerEl = document.getElementById('provider-select')
+        const vbOption = this.providerEl.querySelector('option[value="voicebox"]')
+        if (!vbOnline && vbOption) {
+          vbOption.textContent = 'VoiceBox.sh (offline)'
+          vbOption.disabled = true
+        }
+        this.providerEl.addEventListener('change', () => {
+          this.store.setProvider(this.providerEl.value)
+          this.renderSettings()
+          this.store.syncFromUI()
+        })
+
+        // Populate assistant dropdown
         this.selectEl.innerHTML = ''
         if (!assistants.length) {
           this.selectEl.innerHTML = '<option value="">No voice assistants found</option>'
@@ -1070,6 +1195,10 @@
     selectAssistant(name) {
       const a = this.store.selectAssistant(name)
       if (!a) return null
+      // Sync provider dropdown with the assistant's config
+      if (this.providerEl) {
+        this.providerEl.value = this.store.state.get('provider')
+      }
       this.renderSettings()
       this.renderPhrases()
       this.setStatus('')
@@ -1139,9 +1268,22 @@
     // ── Render Settings Panel ──
     renderSettings() {
       const cfg = this.store.state.get('currentConfig')
-      const vs = cfg.voiceSettings || {}
+      const provider = this.store.state.get('provider')
       const store = this.store
 
+      if (provider === 'voicebox') {
+        this._renderVoiceboxSettings(cfg, store)
+      } else {
+        this._renderElevenlabsSettings(cfg, store)
+      }
+
+      // Common: save button + aliases
+      document.getElementById('setting-aliases')?.addEventListener('input', () => store.syncFromUI())
+      document.getElementById('save-btn').addEventListener('click', () => this.saveConfig())
+    }
+
+    _renderElevenlabsSettings(cfg, store) {
+      const vs = cfg.voiceSettings || {}
       const sliders = [
         { key: 'stability', label: 'Stability', desc: 'How consistent the voice sounds across generations', min: 0, max: 1, step: 0.01, default: 0.5 },
         { key: 'similarityBoost', label: 'Similarity Boost', desc: 'How close to the original trained voice', min: 0, max: 1, step: 0.01, default: 0.75 },
@@ -1205,7 +1347,6 @@
         </div>
       `
 
-      // Wire up sliders
       for (const s of sliders) {
         const slider = document.getElementById(`slider-${s.key}`)
         const valEl = document.getElementById(`val-${s.key}`)
@@ -1215,13 +1356,68 @@
         })
       }
 
-      // Wire up text fields and selects
-      for (const id of ['setting-voiceId', 'setting-prefix', 'setting-aliases']) {
+      for (const id of ['setting-voiceId', 'setting-prefix']) {
         document.getElementById(id).addEventListener('input', () => store.syncFromUI())
       }
       document.getElementById('setting-modelId').addEventListener('change', () => store.syncFromUI())
       document.getElementById('toggle-speakerBoost').addEventListener('change', () => store.syncFromUI())
-      document.getElementById('save-btn').addEventListener('click', () => this.saveConfig())
+    }
+
+    _renderVoiceboxSettings(cfg, store) {
+      const vb = cfg.voicebox || {}
+      const profiles = store.state.get('voiceboxProfiles') || []
+
+      this.settingsPanel.innerHTML = `
+        <div class="setting-group">
+          <div class="setting-group-title">VoiceBox.sh — Local TTS</div>
+          <div class="field">
+            <label>Voice Profile</label>
+            <select id="setting-vb-profile">
+              ${profiles.length === 0 ? '<option value="">No profiles found</option>' : ''}
+              ${profiles.map(p => `<option value="${esc(p.id)}" ${vb.profileId === p.id ? 'selected' : ''}>${esc(p.name)} (${p.sample_count} samples)</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Engine</label>
+            <select id="setting-vb-engine">
+              <option value="qwen" ${(vb.engine || 'qwen') === 'qwen' ? 'selected' : ''}>Qwen3-TTS (1.7B/0.6B)</option>
+              <option value="chatterbox" ${vb.engine === 'chatterbox' ? 'selected' : ''}>Chatterbox</option>
+              <option value="chatterbox_turbo" ${vb.engine === 'chatterbox_turbo' ? 'selected' : ''}>Chatterbox Turbo</option>
+              <option value="luxtts" ${vb.engine === 'luxtts' ? 'selected' : ''}>LuxTTS</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Model Size</label>
+            <select id="setting-vb-modelSize">
+              <option value="1.7B" ${(vb.modelSize || '1.7B') === '1.7B' ? 'selected' : ''}>1.7B (higher quality)</option>
+              <option value="0.6B" ${vb.modelSize === '0.6B' ? 'selected' : ''}>0.6B (faster)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Language</label>
+            <input type="text" id="setting-vb-language" value="${esc(vb.language || 'en')}" placeholder="en, zh, ja, ko, de, fr..." />
+          </div>
+          <div class="field">
+            <label>Instruct</label>
+            <textarea id="setting-vb-instruct" rows="2" placeholder="Optional voice instruction (e.g. speak slowly and calmly)">${esc(vb.instruct || '')}</textarea>
+          </div>
+          <div class="field">
+            <label>Aliases</label>
+            <input type="text" id="setting-aliases" value="${esc((cfg.aliases || []).join(', '))}" placeholder="Wake words, comma separated" />
+          </div>
+        </div>
+
+        <div class="test-actions">
+          <button class="btn btn-save" id="save-btn" disabled>Save to voice.yaml</button>
+        </div>
+      `
+
+      for (const id of ['setting-vb-profile', 'setting-vb-engine', 'setting-vb-modelSize']) {
+        document.getElementById(id)?.addEventListener('change', () => store.syncFromUI())
+      }
+      for (const id of ['setting-vb-language', 'setting-vb-instruct']) {
+        document.getElementById(id)?.addEventListener('input', () => store.syncFromUI())
+      }
     }
 
     // ── Render Phrases Panel ──

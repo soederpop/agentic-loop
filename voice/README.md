@@ -2,7 +2,7 @@
 
 The voice system is driven by three components:
 
-1) A Wakeword system based on `rustpotter` -- purely offline, trained models, "Hey Siri" like experience.  There is a [setup-wakeword.sh](./setup-wakeword.sh) script you can use to train a model.  You will need one for the `chiefOfStaff` assistant, where you can free form chat by saying e.g. `Hey Chief` , waiting for them to tell you to speak.  You will need one for the `voice-assistant` who, while capable of free form chat, is designed to kick off processes within the portfolio.
+1) A Wakeword system based on `rustpotter` -- purely offline, trained models, "Hey Siri" like experience.  There is a [setup-wakeword.sh](./setup-wakeword.sh) script you can use to train a model.  Each voice-enabled assistant can define wake word aliases in its `voice.yaml`. The VoiceService maps detected wake words to the matching assistant automatically.
 
 2) Whisper MLX for transcription
 

@@ -304,7 +304,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       },
       voice: voiceService ? {
         running: voiceService.state.get('running'),
-        handlerCount: voiceService.state.get('handlerCount'),
+        assistantCount: voiceService.state.get('assistantCount'),
         socketPath: voiceService.state.get('socketPath'),
         clientConnected: voiceService.state.get('clientConnected'),
       } : { running: false, disabled: true },
@@ -426,7 +426,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         respond({ ok: true, paused: false })
         break
       case 'voice-route':
-        handleVoiceRoute(payload, ws, respond)
+        handleVoiceRoute(payload, respond)
         break
       case 'eval':
         handleEval(payload, ws, respond)
@@ -436,7 +436,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     }
   }
 
-  async function handleVoiceRoute(payload: any, ws: any, respond: (data: any) => void) {
+  async function handleVoiceRoute(payload: any, respond: (data: any) => void) {
     if (!voiceService) {
       respond({ error: 'voice service not running' })
       return
@@ -448,64 +448,16 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       return
     }
 
-    const isChief = target === 'chief' || target === 'chiefofstaff'
-
-    log('voice', `yo relay: "${text}" (target: ${target || 'friday'})`)
+    log('voice', `yo relay: "${text}" (target: ${target || 'default'})`)
 
     try {
-      if (isChief) {
-        const chiefChat = voiceService.chiefChat
-        const caps = await chiefChat.checkCapabilities()
-
-        if (!caps.available) {
-          // Fall through to router
-          const routeResult = await voiceRouteThrough(text)
-          respond({ ok: true, ...routeResult })
-          return
-        }
-
-        await chiefChat.start()
-        const response = await chiefChat.ask(text)
-        respond({ ok: true, response, source: 'chief' })
-      } else {
-        const routeResult = await voiceRouteThrough(text)
-        respond({ ok: true, ...routeResult })
-      }
+      // Simulate a wake word trigger to route through the alias map
+      const wakeword = target || 'default'
+      await voiceService.handleTriggerWord(wakeword)
+      respond({ ok: true, source: target || 'voice-service' })
     } catch (err: any) {
       respond({ error: err?.message || String(err) })
     }
-  }
-
-  async function voiceRouteThrough(text: string) {
-    const router = voiceService!.router
-
-    let resultData: any = null
-    const result = await router.route({
-      id: `yo-relay-${Date.now()}`,
-      source: 'yo-relay',
-      text,
-      payload: { text, source: 'yo-relay' },
-      isFinished: false,
-      ack: () => true,
-      progress: () => true,
-      finish: (data: any) => { resultData = data; return true },
-      fail: (data: any) => { resultData = { error: data?.error }; return true },
-    })
-
-    if (!result.matched) {
-      const voiceAssistantChat = voiceService!.voiceAssistantChat
-      const caps = await voiceAssistantChat.checkCapabilities()
-
-      if (!caps.available) {
-        return { matched: false, response: null, source: 'none', error: `Voice assistant unavailable: ${caps.missing.join(', ')}` }
-      }
-
-      await voiceAssistantChat.start()
-      const response = await voiceAssistantChat.ask(text)
-      return { matched: false, response, source: 'voice-assistant' }
-    }
-
-    return { matched: true, result: resultData, source: 'handler' }
   }
 
   async function handleEval(payload: any, ws: any, respond: (data: any) => void) {
@@ -712,7 +664,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       if (vst.get('sttAvailable')) modes.push('STT')
       if (vst.get('ttsAvailable')) modes.push('TTS/LLM')
       const label = modes.length ? modes.join(', ') : 'degraded (no voice capabilities)'
-      log('voice', `started [${label}] | ${voiceService.manifest.length} handlers`)
+      log('voice', `started [${label}] | ${voiceService.voiceAssistants.length} assistants`)
     } catch (err: any) {
       log('voice', `failed to start: ${err?.message || err}`)
     }
@@ -795,7 +747,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Uptime: ${Math.round(status.uptime)}s`)
     log('main', `Scheduler: ${status.scheduler.taskCount} tasks, ${status.scheduler.inProgress.length} in progress`)
     log('main', `Builder: ${status.builder.buildsInProgress.length} building`)
-    log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.handlerCount} handlers`)
+    log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.assistantCount || 0} assistants`)
     log('main', `WindowManager: ${status.windowManager.listening ? `listening` : 'off'}, client ${status.windowManager.clientConnected ? 'connected' : 'disconnected'}, ${status.windowManager.windowCount || 0} windows`)
     log('main', `WorkflowService: ${status.workflowService.listening ? `listening on :${status.workflowService.port}` : 'off'}, ${status.workflowService.workflowCount || 0} workflows`)
     log('main', `Comms: ${status.comms.started ? `running [${status.comms.channels?.join(', ') || 'no channels'}]` : status.comms.disabled ? 'disabled' : 'stopped'}${status.comms.paused ? ' (paused)' : ''}`)

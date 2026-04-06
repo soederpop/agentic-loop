@@ -184,7 +184,6 @@ Run `luca scaffold` with no arguments for full usage and examples.
 ## Extending the Agentic Loop
 
 - See the guide [Extending the Agentic Loop](./docs/guides/extending-the-agentic-loop.md)
-- See the guide [Creating New Voice Command Handlers](./docs/guides/creating-new-voice-command-handlers.md) — you may be asked to create new voice handlers. They go in `commands/voice/handlers/` and are auto-discovered. Read the guide for the full pattern.
 
 ## Git Strategy
 

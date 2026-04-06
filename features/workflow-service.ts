@@ -683,7 +683,14 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
         const list = assistantsManager.list?.() || []
         const assistants = list.map((e: any) => {
           const shortName = (e.name || '').replace(/^assistants\//, '')
-          return { id: shortName, name: shortName }
+          const entry: any = { id: shortName, name: shortName, hasVoice: !!e.hasVoice }
+          if (e.hasVoice) {
+            try {
+              const inst = container.feature('assistant', { folder: e.folder } as any) as any
+              if (inst.voiceConfig) entry.voiceConfig = inst.voiceConfig
+            } catch {}
+          }
+          return entry
         })
         res.json({ assistants, default: 'chiefOfStaff' })
       } catch {

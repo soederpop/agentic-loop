@@ -61,14 +61,13 @@ luca serve
 
 ## Howto Guides
 - [Extending the Agentic Loop](./docs/guides/extending-the-agentic-loop.md)
-- [Writing Voice Command Handlers](./docs/guides/creating-new-voice-command-handlers.md)
-- [Non-Voice Workflows](./docs/guides/non-voice-workflows.md) 
+- [Non-Voice Workflows](./docs/guides/non-voice-workflows.md)
 
-## Native OSX App and Voice Command System
+## Native OSX App and Voice System
 
-This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.  You can write your own voice comand handlers to spawn terminal processes.
+This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.
 
-The [Voice Command Handlers](./commands/voice/handlers) are modules which match command utterances picked up by the `luca main` voice system and route them to handler functions, which you can write to trigger certain commands in the system.
+Wake words are mapped to voice-enabled assistants via their `voice.yaml` aliases. When a wake word is detected, VoiceService routes speech to the matching assistant's VoiceChat instance.
 
 ### Voice Setup
 
@@ -78,12 +77,7 @@ Running the following will tell you if your system supports it:
 luca voice --check
 ```
 
-Voice mode requires **two wake words** — you'll record samples of your voice for each:
-
-1. **"yo chief"** or **"hey chief"** — activates the **Chief of Staff** assistant (must contain the word "chief")
-2. **Your choice** (e.g. "hey friday") — activates the general **voice command router**
-
-Run the guided setup (requires `rustpotter` in your PATH):
+Each voice-enabled assistant can have wake word aliases in its `voice.yaml`. Record samples and build wake word models with:
 
 ```shell
 ./voice/wakeword/setup-wakeword.sh
@@ -94,16 +88,6 @@ This walks you through recording 5 samples of each wake word and builds the dete
 ```shell
 ./voice/wakeword/setup-wakeword.sh "yo chief"
 ```
-
-### Testing Voice
-
-Run the following to test if the voice system works:
-
-```shell
-luca TEST-VOICE-MODE
-```
-
-The `luca train --voice` command will open up a web app to help you iterate on voice command handlers.
 
 
 ## Project Commands

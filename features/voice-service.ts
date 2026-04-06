@@ -1,8 +1,7 @@
 import { z } from 'zod'
 import { FeatureStateSchema, FeatureOptionsSchema } from '@soederpop/luca'
 import { Feature, features } from '@soederpop/luca'
-import type { ContainerContext, WindowManager } from '@soederpop/luca'
-import type { VoiceRouter } from './voice-router'
+import type { WindowManager } from '@soederpop/luca'
 import type { VoiceListener } from './voice-listener'
 import type VoiceChat from './voice-chat'
 
@@ -14,20 +13,27 @@ declare module '@soederpop/luca' {
 
 export const VoiceServiceStateSchema = FeatureStateSchema.extend({
   running: z.boolean().default(false),
-  handlerCount: z.number().default(0),
   socketPath: z.string().default(''),
   wakeWordAvailable: z.boolean().default(false),
   sttAvailable: z.boolean().default(false),
   ttsAvailable: z.boolean().default(false),
   capabilityMissing: z.array(z.string()).default([]),
+  assistantCount: z.number().default(0),
 })
 export type VoiceServiceState = z.infer<typeof VoiceServiceStateSchema>
 
 export const VoiceServiceOptionsSchema = FeatureOptionsSchema.extend({})
 export type VoiceServiceOptions = z.infer<typeof VoiceServiceOptionsSchema>
 
+type VoiceAssistantEntry = {
+  assistantName: string
+  aliases: string[]
+  chat: VoiceChat | null
+}
+
 /**
- * Orchestrates the voice subsystem: VoiceRouter, launcher listener, and window manager.
+ * Orchestrates the voice subsystem: wake word detection, STT, and assistant routing.
+ * Maps wake words to assistants via voice.yaml aliases discovered through assistantsManager.
  */
 export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions> {
   static override shortcut = 'features.voiceService' as const
@@ -35,52 +41,31 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
   static override optionsSchema = VoiceServiceOptionsSchema
 
   static {
-	  Feature.register(this, 'voiceService')
+    Feature.register(this, 'voiceService')
   }
 
-  /** Returns the VoiceRouter instance, or null if the service has not started. */
-  get router() {
-	  return this.container.feature('voiceRouter' as any) as unknown as VoiceRouter
-  }
+  /** Map of lowercase alias → assistant entry for wake word routing */
+  private _aliasMap = new Map<string, VoiceAssistantEntry>()
+
+  /** All voice-enabled assistant entries */
+  private _entries: VoiceAssistantEntry[] = []
 
   get listener() {
     return this.container.feature('voiceListener' as any, {
-      debug: !!this.container.argv.debug 
+      debug: !!this.container.argv.debug
     }) as unknown as VoiceListener
   }
 
-   get voiceAssistantChat() {
-    return this.container.feature('voiceChat', {
-      assistant: 'voice-assistant',
-      playPhrases: true,
-      prependPrompt: VOICE_INSTRUCTIONS_PRE,
-      appendPrompt: VOICE_INSTRUCTIONS_POST,
-      maxTokens: 500,
-      historyMode: 'daily' 
-    }) as unknown as VoiceChat
-  }
- 
-  get chiefChat() {
-    return this.container.feature('voiceChat', {
-      assistant: 'chiefOfStaff',
-      playPhrases: true,
-      prependPrompt: VOICE_INSTRUCTIONS_PRE,
-      appendPrompt: VOICE_INSTRUCTIONS_POST,
-      maxTokens: 500 ,
-      historyMode: 'daily'
-    }) as unknown as VoiceChat
-  }
-
   get windowManager() {
-	  return this.container.feature('windowManager' as any) as unknown as WindowManager
+    return this.container.feature('windowManager' as any) as unknown as WindowManager
   }
 
-  /** Returns the router's command handler manifest, or an empty array if not started. */
-  get manifest(): any[] {
-    return this.router.manifest
+  /** Returns the list of voice-enabled assistant names and their aliases. */
+  get voiceAssistants(): Array<{ name: string; aliases: string[] }> {
+    return this._entries.map(e => ({ name: e.assistantName, aliases: e.aliases }))
   }
 
-  /** Boots the voice subsystem: discovers features, loads the router and listener, and wires up event forwarding. */
+  /** Boots the voice subsystem: discovers voice-enabled assistants, checks capabilities, starts listener. */
   async start() {
     if (this.state.get('running')) return this
 
@@ -93,56 +78,46 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     this.state.set('starting', true)
     this.emit('info', 'Voice service starting')
 
-    const { listener, router, chiefChat, voiceAssistantChat } = this
+    const { listener } = this
 
-    // 1. Check all capabilities before booting anything
-    const [listenerCaps, chatCaps] = await Promise.all([
-      listener.checkCapabilities(),
-      voiceAssistantChat.checkCapabilities(),
-    ])
+    // 1. Discover voice-enabled assistants and build alias map
+    await this.discoverVoiceAssistants()
 
-    const allMissing = [...listenerCaps.missing, ...chatCaps.missing]
+    // 2. Check capabilities
+    const listenerCaps = await listener.checkCapabilities()
+
+    // Pick the first voice-enabled assistant to check TTS capabilities
+    const firstEntry = this._entries[0]
+    let ttsAvailable = false
+    if (firstEntry) {
+      const chat = this.getOrCreateChat(firstEntry)
+      const chatCaps = await chat.checkCapabilities()
+      ttsAvailable = chatCaps.available
+
+      this.state.setState({
+        ttsAvailable,
+        capabilityMissing: [...listenerCaps.missing, ...chatCaps.missing],
+      })
+    } else {
+      this.state.setState({
+        ttsAvailable: false,
+        capabilityMissing: [...listenerCaps.missing, 'no voice-enabled assistants found'],
+      })
+    }
 
     this.state.setState({
       wakeWordAvailable: listener.state.get('wakeWordAvailable') as boolean,
       sttAvailable: listener.state.get('sttAvailable') as boolean,
-      ttsAvailable: chatCaps.available,
-      capabilityMissing: allMissing,
     })
 
-    // 2. Log a clear startup summary
+    // 3. Log startup summary
     this.emit('info', '── Voice capability check ──')
-    this.emit('info', `  Wake word: ${listener.state.get('wakeWordAvailable') ? 'available' : `UNAVAILABLE (${listenerCaps.missing.filter(m => m.includes('rustpotter') || m.includes('.rpw')).join(', ') || 'unknown'})`}`)
-    this.emit('info', `  STT:       ${listener.state.get('sttAvailable') ? 'available' : `UNAVAILABLE (${listenerCaps.missing.filter(m => m.includes('sox') || m.includes('mlx_whisper')).join(', ') || 'unknown'})`}`)
-    this.emit('info', `  TTS/LLM:   ${chatCaps.available ? 'available' : `UNAVAILABLE (${chatCaps.missing.join(', ')})`}`)
+    this.emit('info', `  Wake word: ${listener.state.get('wakeWordAvailable') ? 'available' : 'UNAVAILABLE'}`)
+    this.emit('info', `  STT:       ${listener.state.get('sttAvailable') ? 'available' : 'UNAVAILABLE'}`)
+    this.emit('info', `  TTS/LLM:   ${ttsAvailable ? 'available' : 'UNAVAILABLE'}`)
+    this.emit('info', `  Assistants: ${this._entries.map(e => `${e.assistantName} [${e.aliases.join(', ')}]`).join(', ') || 'none'}`)
 
-    // 3. Always start the router (no external deps)
-    await router.start().catch((err: any) => {
-      this.emit('error', err)
-      throw err
-    })
-
-    // 4. Boot TTS chats only if available
-    if (chatCaps.available) {
-      chiefChat.mute()
-
-      await Promise.all([
-        chiefChat.start(),
-        voiceAssistantChat.start(),
-      ]).catch((err: any) => {
-        this.emit('error', err)
-        this.emit('info', `TTS chat startup failed: ${err.message}`)
-      })
-
-      // Give handlers access to TTS via speakPhrase
-      router.chat = voiceAssistantChat
-
-      chiefChat.unmute()
-    } else {
-      this.emit('info', 'TTS/LLM unavailable — voice output disabled')
-    }
-
-    // 5. Wire up wake word listener only if available
+    // 4. Wire up wake word listener
     if (listener.state.get('wakeWordAvailable')) {
       listener.on('triggerWord', (wakeword: string) => {
         this.emit('info', `Trigger word: ${wakeword}`)
@@ -159,129 +134,151 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     return this
   }
 
-  /** Tears down the voice subsystem: disables the listener, clears references, and resets state. */
+  /** Tears down the voice subsystem. */
   async stop() {
     if (!this.state.get('running')) return this
 
     this.listener.stopWaitingForTriggerWord()
 
     this.state.set('running', false)
-    this.state.set('handlerCount', 0)
 
     return this
   }
 
-  async handleTriggerWord(wakeword: string) {
-    const { listener, router } = this
+  /** Discovers all assistants with voice.yaml and builds the wake word alias map. */
+  private async discoverVoiceAssistants() {
+    const am = this.container.feature('assistantsManager' as any) as any
+    await am.discover()
 
-    // Guard: STT must be available to transcribe voice input
+    const fs = this.container.feature('fs')
+    const yaml = this.container.feature('yaml')
+
+    const voiceAssistants = am.list().filter((a: any) => a.hasVoice)
+
+    this._entries = []
+    this._aliasMap = new Map()
+
+    for (const entry of voiceAssistants) {
+      const configPath = this.container.paths.resolve(entry.folder, 'voice.yaml')
+      let aliases: string[] = []
+
+      try {
+        const raw = yaml.parse(fs.readFile(configPath))
+        aliases = Array.isArray(raw?.aliases) ? raw.aliases.map((a: string) => a.toLowerCase().trim()) : []
+      } catch (err: any) {
+        this.emit('info', `Failed to parse voice.yaml for ${entry.name}: ${err.message}`)
+      }
+
+      const voiceEntry: VoiceAssistantEntry = {
+        assistantName: entry.name,
+        aliases,
+        chat: null,
+      }
+
+      this._entries.push(voiceEntry)
+
+      // Register the assistant name itself as an alias
+      this._aliasMap.set(entry.name.toLowerCase(), voiceEntry)
+
+      // Register each explicit alias
+      for (const alias of aliases) {
+        this._aliasMap.set(alias, voiceEntry)
+      }
+    }
+
+    this.state.set('assistantCount', this._entries.length)
+    this.emit('info', `Discovered ${this._entries.length} voice-enabled assistant(s)`)
+  }
+
+  /** Creates or returns the VoiceChat instance for an assistant entry. */
+  private getOrCreateChat(entry: VoiceAssistantEntry): VoiceChat {
+    if (entry.chat) return entry.chat
+
+    entry.chat = this.container.feature('voiceChat', {
+      assistant: entry.assistantName,
+      playPhrases: true,
+      prependPrompt: VOICE_INSTRUCTIONS_PRE,
+      appendPrompt: VOICE_INSTRUCTIONS_POST,
+      maxTokens: 500,
+      historyMode: 'daily',
+    }) as unknown as VoiceChat
+
+    return entry.chat
+  }
+
+  /** Resolves a wake word to a voice assistant entry by matching against aliases. */
+  private resolveWakeWord(wakeword: string): VoiceAssistantEntry | null {
+    const normalized = wakeword.toLowerCase().replace(/_/g, ' ').trim()
+
+    // Direct match
+    if (this._aliasMap.has(normalized)) return this._aliasMap.get(normalized)!
+
+    // Strip common wake word prefixes (e.g. "hey_friday" → "friday", "ok_chief" → "chief")
+    const stripped = normalized.replace(/^(hey|ok|hi|yo)\s+/, '')
+    if (this._aliasMap.has(stripped)) return this._aliasMap.get(stripped)!
+
+    // Partial match: check if any alias is contained in the wake word or vice versa
+    for (const [alias, entry] of this._aliasMap) {
+      if (normalized.includes(alias) || alias.includes(normalized)) return entry
+    }
+
+    return null
+  }
+
+  /** Handles a wake word trigger: resolves the assistant, records speech, routes to the assistant's chat. */
+  async handleTriggerWord(wakeword: string) {
+    const { listener } = this
+
+    // Guard: STT must be available
     if (!listener.state.get('sttAvailable')) {
       this.emit('info', 'Triggered but STT unavailable — cannot transcribe')
-      if (this.state.get('ttsAvailable')) router.playPhrase('error')
+      return
+    }
+
+    const entry = this.resolveWakeWord(wakeword)
+
+    if (!entry) {
+      this.emit('info', `No voice assistant matched wake word: ${wakeword}`)
+      listener.unlock()
       return
     }
 
     listener.lock()
 
-    this.emit('info', `Handling trigger word: ${wakeword}`)
-    
-    if (wakeword.toLowerCase().includes('chief')) {
-      this.container.ui.print.red('MIC IS HOT')
+    this.emit('info', `Wake word "${wakeword}" → assistant "${entry.assistantName}"`)
+    this.container.ui.print.red('MIC IS HOT')
 
-      const text = await this.listener.listen({ silenceTimeout: 7000 }).then(r => r.trim())
-      
-      if (text?.length > 0) {
-        await this.handleChiefCommand(text)
-      } else {
-        console.log('Got no text')
-      }
-      
+    const text = await listener.listen({ silenceTimeout: 7000 }).then((r: string) => r.trim())
+
+    if (!text?.length) {
+      this.emit('info', 'Got no text')
       listener.unlock()
       return
-    }    
-    
-    this.container.ui.print.red('Mic is HOT')
-
-    const commandUtterance = await listener.listen()
-    const text = commandUtterance.trim()
+    }
 
     this.emit('info', `User said: ${text}`)
 
-    // All other wakewords route through the voice router
-    const result = await router.route({
-      id: `demo-${Date.now()}`,
-      source: 'demo',
-      text,
-      payload: { text, source: 'voice-service', wakeword },
-      isFinished: false,
-      ack: (data) => { return true },
-      progress: (data) => { return true },
-      finish: (data) => {
-        if (data?.result?.action === "unknown") {
-          this.emit('info', 'Unknown command')
-        }
-        listener.unlock()
-        return true
-      },
-      fail: (data) => {
-        this.emit('info', `Command failed: ${data?.error}`)
-        listener.unlock()
-        return true
-      },
-    })
-    
-    if (!result.matched) {
-      this.emit('info', `No handler matched for: ${text}`)
-      await this.askVoiceAssistant(text)
+    const chat = this.getOrCreateChat(entry)
+
+    if (!chat.isStarted) {
+      this.emit('info', `Starting ${entry.assistantName} voice chat`)
+      await chat.start()
     }
+
+    this.emit('info', `Asking ${entry.assistantName}: ${text}`)
+    await chat.ask(text)
+    this.emit('info', `${entry.assistantName} finished speaking`)
 
     listener.unlock()
   }
-
-  async handleChiefCommand(text: string) {
-    const { listener } = this
-    // chief-specific handling goes here
-    listener.lock()
-
-    if (!this.chiefChat.isStarted) {
-      this.emit('info', 'Starting Assistant Chief Of Staff')
-      await this.chiefChat.start()
-    }
-
-    this.emit('info', `Asking Assistant Chief Of Staff: ${text}`)
-    await this.chiefChat.ask(text)
-    this.emit('info', 'Assistant Chief Of Staff finished speaking')
-    listener.unlock()
-  }
-  
-  async askVoiceAssistant(text: string): Promise<string> {
-    const { listener } = this
-    
-    if (!this.voiceAssistantChat.isStarted) {
-      this.emit('info', 'Starting Assistant Voice Assistant')
-      await this.voiceAssistantChat.start()
-    }
-    
-    listener.lock()
-
-    this.emit('info', `Asking Assistant Voice Assistant: ${text}`)
-    const response = await this.voiceAssistantChat.ask(text)
-    this.emit('info', 'Assistant Voice Assistant finished speaking, checking for followup')
-    
-    listener.unlock()
-   
-    return response
-  }
-  
-
 }
 
-export default VoiceService 
+export default VoiceService
 
 export const VOICE_INSTRUCTIONS_PRE = `
 VERY IMPORTANT: DO NOT RESPOND IN MARKDOWN. EVERYTHING YOU SAY WILL BE PIPED THROUGH TO ELEVENLABS ELEVEN_V3 Model.
 BE BRIEF.  ONE to THREE SENTENCES MAX.  DON'T OVERLY ENCOURAGE FOLLOW UP QUESTIONS, I WILL ALWAYS FOLLOW UP IF I WANT TO.
-DO NOT USE MARKDOWN, EMOJIS, OR ANYTHING THAT CAN'T BE TURNED INTO SPEECH. 
+DO NOT USE MARKDOWN, EMOJIS, OR ANYTHING THAT CAN'T BE TURNED INTO SPEECH.
 
 YOU CAN USE [emotion] TAGS to [direct] THE DELIVERY OF YOUR RESPONSE.
 
@@ -290,6 +287,6 @@ AVOID LONG STREAMS OF TOOL CALLS WITHOUT A BREAK TO EXPLAIN WHAT YOU ARE DOING A
 
 export const VOICE_INSTRUCTIONS_POST = `
 REMEMBER: NO MARKDOWN.  ONE TO THREE SENTENCES MAX.  SHOW CHARACTER AND PERSONALITY THROUGH [emotion] and [direction] TAGS TO GET THE PRECISE DELIVERY YOU INTEND.
-  
+
 AVOID LONG STREAMS OF TOOL CALLS WITHOUT A BREAK TO EXPLAIN WHAT YOU ARE DOING AND WHY.
 `

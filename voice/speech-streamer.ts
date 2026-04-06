@@ -9,31 +9,48 @@ type VoiceSettings = {
 	useSpeakerBoost?: boolean
 }
 
+type VoiceBoxOptions = {
+	profileId: string
+	engine?: string
+	modelSize?: string
+	language?: string
+	instruct?: string | null
+}
+
 type SpeechStreamerOptions = {
 	container: AGIContainer & NodeContainer
+	provider?: 'elevenlabs' | 'voicebox'
+	// ElevenLabs options
 	voiceId?: string
 	modelId?: string
 	voiceSettings?: VoiceSettings
 	conversationModePrefix?: string
+	// VoiceBox options
+	voicebox?: VoiceBoxOptions
+	// Shared
 	maxChunkLength?: number
 	debug?: boolean
 }
 
 /**
  * Buffers streaming LLM text, splits on sentence-ending punctuation,
- * caps chunks at a max length, synthesizes each chunk via ElevenLabs,
- * and plays them sequentially so one finishes before the next starts.
+ * caps chunks at a max length, synthesizes each chunk via ElevenLabs
+ * or VoiceBox, and plays them sequentially so one finishes before
+ * the next starts.
  *
  * Audio tags like [laughs] or [dramatic tone] are treated as atomic
  * tokens and excluded from the spoken-length budget so they don't
- * cause premature chunk splits.
+ * cause premature chunk splits. When using VoiceBox, tags are stripped
+ * entirely since they are not supported.
  */
 export class SpeechStreamer {
 	private container: AGIContainer & NodeContainer
-	readonly voiceId: string
+	readonly provider: 'elevenlabs' | 'voicebox'
+	readonly voiceId: string | undefined
 	readonly modelId: string | undefined
 	readonly voiceSettings: VoiceSettings | undefined
 	readonly conversationModePrefix: string | undefined
+	readonly voicebox: VoiceBoxOptions | undefined
 	private maxChunkLength: number
 	private debug: boolean
 	private buffer = ''
@@ -45,15 +62,23 @@ export class SpeechStreamer {
 
 	constructor(options: SpeechStreamerOptions) {
 		this.container = options.container
-		this.voiceId = options.voiceId
+		this.provider = options.provider || 'elevenlabs'
 
-		if (!this.voiceId) {
-			throw new Error(`You must supply a voiceId`)
+		if (this.provider === 'elevenlabs') {
+			this.voiceId = options.voiceId
+			if (!this.voiceId) {
+				throw new Error(`You must supply a voiceId for ElevenLabs`)
+			}
+			this.modelId = options.modelId || "eleven_v3"
+			this.voiceSettings = options.voiceSettings
+			this.conversationModePrefix = options.conversationModePrefix
+		} else {
+			this.voicebox = options.voicebox
+			if (!this.voicebox?.profileId) {
+				throw new Error(`You must supply voicebox.profileId for VoiceBox`)
+			}
 		}
 
-		this.modelId = options.modelId || "eleven_v3"
-		this.voiceSettings = options.voiceSettings
-		this.conversationModePrefix = options.conversationModePrefix
 		this.maxChunkLength = options.maxChunkLength || 150
 		this.debug = options.debug || false
 	}
@@ -95,6 +120,11 @@ export class SpeechStreamer {
 			// Collapse multiple blank lines
 			.replace(/\n{3,}/g, '\n\n')
 			.trim()
+	}
+
+	/** Strip ElevenLabs-specific [tags] that VoiceBox would speak literally. */
+	private stripTags(text: string): string {
+		return text.replace(/\[[^\]]*\]/g, '').replace(/\s{2,}/g, ' ').trim()
 	}
 
 	/**
@@ -272,6 +302,13 @@ export class SpeechStreamer {
 
 	/** Synthesize text to an audio file, returns the path or null on failure. */
 	private async synthesize(text: string): Promise<{ path: string; text: string } | null> {
+		if (this.provider === 'voicebox') {
+			return this.synthesizeVoicebox(text)
+		}
+		return this.synthesizeElevenlabs(text)
+	}
+
+	private async synthesizeElevenlabs(text: string): Promise<{ path: string; text: string } | null> {
 		try {
 			const el = this.container.client('elevenlabs')
 			if (!el.state.get('connected')) {
@@ -281,23 +318,43 @@ export class SpeechStreamer {
 			const prefixed = this.conversationModePrefix ? `${this.conversationModePrefix} ${text}` : text
 			const idx = this.chunkIndex++
 
-			if (this.debug) {
-				//console.log(`[speech:debug] chunk #${idx} original: "${text}"`)
-				//console.log(`[speech:debug] chunk #${idx} prefix: "${this.conversationModePrefix || '(none)'}"`)
-				//console.log(`[speech:debug] chunk #${idx} → elevenlabs: "${prefixed}"`)
-				//console.log(`[speech:debug] chunk #${idx} voiceId=${this.voiceId} modelId=${this.modelId || 'default'}`)
-			}
-
 			const outputPath = `/tmp/voice-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.mp3`
 			const audio = await el.synthesize(prefixed, {
-				voiceId: this.voiceId,
+				voiceId: this.voiceId!,
 				...(this.modelId ? { modelId: this.modelId } : {}),
 				...(this.voiceSettings ? { voiceSettings: this.voiceSettings } : {}),
 			})
 			await this.container.fs.writeFileAsync(outputPath, audio)
 			return { path: outputPath, text }
 		} catch (err: any) {
-			console.error(`[speech] synthesis failed:`, err.message)
+			console.error(`[speech] elevenlabs synthesis failed:`, err.message)
+			return null
+		}
+	}
+
+	private async synthesizeVoicebox(text: string): Promise<{ path: string; text: string } | null> {
+		try {
+			const vb = this.container.client('voicebox')
+			if (!vb.state.get('connected')) {
+				await vb.connect()
+			}
+
+			// Strip [tags] — VoiceBox would speak them literally
+			const cleaned = this.stripTags(text)
+			if (!cleaned) return null
+
+			const outputPath = `/tmp/voice-chat-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.wav`
+			const audio = await vb.synthesize(cleaned, {
+				profileId: this.voicebox!.profileId,
+				engine: this.voicebox!.engine,
+				modelSize: this.voicebox!.modelSize,
+				language: this.voicebox!.language,
+				instruct: this.voicebox!.instruct || undefined,
+			})
+			await this.container.fs.writeFileAsync(outputPath, audio)
+			return { path: outputPath, text: cleaned }
+		} catch (err: any) {
+			console.error(`[speech] voicebox synthesis failed:`, err.message)
 			return null
 		}
 	}

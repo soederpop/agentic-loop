@@ -76,5 +76,57 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     }
   })
 
+  // ── VoiceBox proxy endpoints ────────────────────────────────────────────────
+
+  const VOICEBOX_URL = process.env.VOICEBOX_URL || 'http://127.0.0.1:17493'
+
+  app.get('/api/voicebox/health', async (_req: any, res: any) => {
+    try {
+      const vb = container.client('voicebox') as any
+      if (!vb.state.get('connected')) await vb.connect()
+      res.json({ ok: true })
+    } catch {
+      res.json({ ok: false })
+    }
+  })
+
+  app.get('/api/voicebox/profiles', async (_req: any, res: any) => {
+    try {
+      const vb = container.client('voicebox') as any
+      if (!vb.state.get('connected')) await vb.connect()
+      const profiles = await vb.listProfiles()
+      res.json({ profiles })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/voicebox/effects', async (_req: any, res: any) => {
+    try {
+      const vb = container.client('voicebox') as any
+      if (!vb.state.get('connected')) await vb.connect()
+      const result = await vb.listEffects()
+      res.json(result)
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.post('/api/voicebox/synthesize', async (req: any, res: any) => {
+    try {
+      const { text, profileId, engine, modelSize, language, instruct } = req.body || {}
+      if (!text || !profileId) {
+        return res.status(400).json({ error: 'text and profileId are required' })
+      }
+      const vb = container.client('voicebox') as any
+      if (!vb.state.get('connected')) await vb.connect()
+      const audio = await vb.synthesize(text, { profileId, engine, modelSize, language, instruct })
+      res.setHeader('Content-Type', 'audio/wav')
+      res.send(Buffer.from(audio))
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   console.log('[voice-designer] hooks loaded — TTS and voice config endpoints ready')
 }
