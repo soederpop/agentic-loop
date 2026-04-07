@@ -42,11 +42,14 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
         self.lastKnownCommand = ([command] + args).joined(separator: " ")
         self.lastKnownTitle = request?.title ?? "Terminal"
 
+        let initialWidth = request?.width ?? 920
+        let initialHeight = request?.height ?? 640
+        let screen = NSScreen.main
         let frame = NSRect(
             x: request?.x ?? 220,
-            y: request?.y ?? 220,
-            width: request?.width ?? 920,
-            height: request?.height ?? 640
+            y: topLeftYToAppKitY(request?.y ?? 220, height: initialHeight, screen: screen),
+            width: initialWidth,
+            height: initialHeight
         )
 
         terminalView = TerminalView(frame: .zero)
@@ -103,11 +106,16 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
     func setFrame(x: CGFloat?, y: CGFloat?, width: CGFloat?, height: CGFloat?, animate: Bool) {
         guard let window else { return }
         let current = window.frame
+        let resolvedWidth = width ?? current.width
+        let resolvedHeight = height ?? current.height
+        let resolvedY = y != nil
+            ? topLeftYToAppKitY(y!, height: resolvedHeight, screen: window.screen ?? NSScreen.main)
+            : current.origin.y
         let newFrame = NSRect(
             x: x ?? current.origin.x,
-            y: y ?? current.origin.y,
-            width: width ?? current.width,
-            height: height ?? current.height
+            y: resolvedY,
+            width: resolvedWidth,
+            height: resolvedHeight
         )
         window.setFrame(newFrame, display: true, animate: animate)
     }
@@ -157,7 +165,7 @@ final class TerminalWindowController: NSWindowController, NSWindowDelegate, @pre
             title: lastKnownTitle,
             frame: WindowFrame(
                 x: frame.origin.x,
-                y: frame.origin.y,
+                y: appKitYToTopLeftY(frame.origin.y, height: frame.height, screen: window.screen ?? NSScreen.main),
                 width: frame.width,
                 height: frame.height
             ),

@@ -3,6 +3,16 @@ import AVFoundation
 @preconcurrency
 import WebKit
 
+func topLeftYToAppKitY(_ topLeftY: CGFloat, height: CGFloat, screen: NSScreen?) -> CGFloat {
+    guard let visibleFrame = screen?.visibleFrame else { return topLeftY }
+    return visibleFrame.maxY - topLeftY - height
+}
+
+func appKitYToTopLeftY(_ appKitY: CGFloat, height: CGFloat, screen: NSScreen?) -> CGFloat {
+    guard let visibleFrame = screen?.visibleFrame else { return appKitY }
+    return visibleFrame.maxY - appKitY - height
+}
+
 @MainActor
 final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKUIDelegate {
     let windowId: UUID
@@ -28,11 +38,14 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
         let config = WKWebViewConfiguration()
         webView = WKWebView(frame: .zero, configuration: config)
 
+        let initialWidth = request.width
+        let initialHeight = request.height
+        let screen = NSScreen.main
         let frame = NSRect(
             x: request.x ?? 200,
-            y: request.y ?? 200,
-            width: request.width,
-            height: request.height
+            y: topLeftYToAppKitY(request.y ?? 200, height: initialHeight, screen: screen),
+            width: initialWidth,
+            height: initialHeight
         )
         let window = NSWindow(
             contentRect: frame,
@@ -86,11 +99,16 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
     func setFrame(x: CGFloat?, y: CGFloat?, width: CGFloat?, height: CGFloat?, animate: Bool) {
         guard let window else { return }
         let current = window.frame
+        let resolvedWidth = width ?? current.width
+        let resolvedHeight = height ?? current.height
+        let resolvedY = y != nil
+            ? topLeftYToAppKitY(y!, height: resolvedHeight, screen: window.screen ?? NSScreen.main)
+            : current.origin.y
         let newFrame = NSRect(
             x: x ?? current.origin.x,
-            y: y ?? current.origin.y,
-            width: width ?? current.width,
-            height: height ?? current.height
+            y: resolvedY,
+            width: resolvedWidth,
+            height: resolvedHeight
         )
         window.setFrame(newFrame, display: true, animate: animate)
     }
@@ -185,7 +203,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
             title: lastKnownTitle,
             frame: WindowFrame(
                 x: frame.origin.x,
-                y: frame.origin.y,
+                y: appKitYToTopLeftY(frame.origin.y, height: frame.height, screen: window.screen ?? NSScreen.main),
                 width: frame.width,
                 height: frame.height
             ),

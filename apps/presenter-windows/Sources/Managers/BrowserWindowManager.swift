@@ -466,7 +466,8 @@ public final class BrowserWindowManager {
     }
 
     private func handleWindowFocusChanged(id: UUID, kind: WindowLifecycleEvent.WindowKind, focused: Bool, frame: NSRect) {
-        let windowFrame = WindowFrame(x: frame.origin.x, y: frame.origin.y, width: frame.width, height: frame.height)
+        let topLeftY = appKitYToTopLeftY(frame.origin.y, height: frame.height, screen: NSScreen.main)
+        let windowFrame = WindowFrame(x: frame.origin.x, y: topLeftY, width: frame.width, height: frame.height)
         let eventType: WindowLifecycleEvent.EventType = focused ? .windowFocused : .windowBlurred
         emitWindowLifecycleEvent(WindowLifecycleEvent(type: eventType, windowId: id, kind: kind, frame: windowFrame))
     }
