@@ -1,7 +1,7 @@
 export function started() {
-	assistant.intercept('beforeAsk', async function runOnceBeforeChat(ctx, next) {
-		assistant.interceptors.beforeAsk.remove(runOnceBeforeChat)
+	assistant.use(
+		container.feature('browserUse', { headed: true })
+	)
 
-		await next()
-	})
+	assistant.state.set('sources', [])
 }

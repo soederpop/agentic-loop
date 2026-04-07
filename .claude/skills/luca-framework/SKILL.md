@@ -18,7 +18,7 @@ There are three things to learn, in this order:
 
 ## Phase 1: Discover with `luca describe`
 
-This is your primary tool. Before reading source files, searching for APIs, or writing any code — ask describe. It outputs full documentation for any part of the container: methods, options, events, state, examples.
+This is your primary tool. The `luca` binary is a compiled artifact that bundles all introspection data — it is the authority on what the container provides. Run `luca describe` first — it outputs full documentation for any part of the container: methods, options, events, state, examples. Reading source can be helpful for additional context if it exists in the project, but the source for built-in helpers may not be present — the binary is always the ground truth.
 
 ### See what's available
 
@@ -70,6 +70,18 @@ luca describe fs git --examples     # just examples for both
 luca describe fs --usage --methods  # combine sections
 ```
 
+### Get approximate TypeScript types
+
+Need to know the shape of a helper for type-safe code? Use `--ts`:
+
+```shell
+luca describe fs --ts              # approximate TS interface for fs
+luca describe conversation --ts    # see the conversation feature's type surface
+luca describe rest --ts            # client type shape
+```
+
+This outputs a ~95% accurate TypeScript representation based on runtime introspection. If a type looks wrong or a method signature seems off, verify with `luca eval` against the live instance.
+
 ### Describe the container itself
 
 ```shell
@@ -85,7 +97,9 @@ luca describe --help       # full flag reference for describe
 luca help scaffold         # help for any command
 ```
 
-**Use `luca describe` liberally.** It is the fastest, safest way to understand what the container provides. Every feature, client, and server is self-describing — if you know a name, describe will tell you everything about it. Use dot notation (`ui.banner`, `fs.readFile`) when you need docs on just one method or getter.
+**Use `luca describe` liberally.** It is the fastest, safest way to understand what the container provides. Every feature, client, and server is self-describing — if you know a name, describe will tell you everything about it. Use dot notation (`ui.banner`, `fs.readFile`) when you need docs on just one method or getter. Use `--ts` when you need type information for writing code.
+
+> **NOTE:** The `luca` binary is compiled and bundles all introspection data. `luca describe` reflects what actually ships in the binary — source files for built-in helpers may not exist in your project. Reading source can add context when it's available, but `luca describe` and `luca eval` are always the authority.
 
 ---
 
@@ -232,7 +246,7 @@ Everything `luca describe` outputs is also available at runtime in code:
 ```js
 container.features.describe('fs')   // markdown docs (same as the CLI)
 feature.introspect()                // structured object: { methods, events, state, options }
-container.inspectAsText()           // full container overview as markdown
+container.introspectAsText()           // full container overview as markdown
 ```
 
 This is useful inside commands and scripts where you need introspection data programmatically.
@@ -248,8 +262,80 @@ This is useful inside commands and scripts where you need introspection data pro
 - `luca serve --any-port` will open on any port
 
 
-## Reference
+## Framework Index
 
-- `references/api-docs/` — full pre-generated API reference for every built-in feature, client, and server
-- `references/examples/` — runnable example docs for each feature (e.g. `fs.md`, `git.md`, `proc.md`)
-- `references/tutorials/` — step-by-step tutorials covering the container, helpers, commands, endpoints, and more
+A table of contents for the container. **Run `luca describe <name>` for full docs on any item.** Use `luca describe <name> --ts` when you need type information. Source may not exist locally for built-in helpers — the compiled binary is the authority.
+
+### Features by Category
+
+| Category | Features | What they do |
+|----------|----------|--------------|
+| **File System & Code** | `fs`, `grep`, `fileManager` | Read/write files, search code, watch for changes |
+| **Process & Shell** | `proc`, `processManager`, `secureShell` | Run commands, manage long-running processes, SSH |
+| **AI Assistants** | `assistant`, `assistantsManager`, `conversation`, `conversationHistory`, `fileTools` | Build AI assistants, manage conversations, tool calling. `fileTools` composes lower-level features (`fs`, `grep`) into an assistant-ready tool surface — a good example of how features can define tools for assistants (see `references/examples/feature-as-tool-provider.md`). |
+| **AI Agent Wrappers** | `claudeCode`, `openaiCodex`, `lucaCoder` | Spawn and manage external AI agent CLIs as subprocesses |
+| **Data & Storage** | `sqlite`, `postgres`, `diskCache`, `contentDb`, `redis` | Databases, caching, document management |
+| **Networking** | `networking`, `dns` | Network utilities, DNS |
+| **Google Workspace** | `googleAuth`, `googleDrive`, `googleDocs`, `googleSheets`, `googleCalendar`, `googleMail` | OAuth and Google service wrappers |
+| **Dev Tools** | `git`, `docker`, `esbuild`, `vm`, `python`, `packageFinder` | Version control, containers, bundling, sandboxed execution |
+| **Content & NLP** | `docsReader`, `nlp`, `semanticSearch`, `skillsLibrary`, `jsonTree`, `yamlTree` | Document Q&A, text analysis, semantic search, skills, structured file ingestion |
+| **UI & Output** | `ui`, `ink`, `yaml` | Terminal UI, colors, ascii art, structured data display |
+| **Media & Browser** | `browserUse`, `tts`, `downloader`, `opener`, `telegram` | Browser automation, text-to-speech, downloads, messaging |
+| **System** | `os`, `vault`, `helpers`, `introspectionScanner`, `containerLink`, `repl`, `runpod` | OS info, secrets, runtime introspection, remote container linking |
+
+### Clients
+
+| Client | Purpose |
+|--------|---------|
+| `openai` | Chat completions, embeddings, image generation |
+| `rest` | Generic HTTP client (GET/POST/PUT/PATCH/DELETE) |
+| `websocket` | WebSocket connections |
+| `elevenlabs` | Text-to-speech synthesis |
+| `graph` | GraphQL queries and mutations |
+
+### Servers
+
+| Server | Purpose |
+|--------|---------|
+| `express` | HTTP server with file-based endpoint routing |
+| `mcp` | Model Context Protocol server for AI tool exposure |
+| `websocket` | WebSocket server with JSON framing |
+| `ipcSocket` | Local IPC socket server for inter-process communication |
+
+### Type Discovery
+
+`luca describe <name> --ts` outputs an approximate TypeScript representation of any helper as it exists at runtime — ~95% accurate. This is your go-to for writing type-safe code against the container. The binary compiles in the introspection data, so `--ts` reflects what actually exists at runtime even when source isn't available. Reading source can provide additional context when it's there.
+
+```shell
+luca describe fs --ts              # approximate TS interface for the fs feature
+luca describe conversation --ts    # conversation feature type surface
+luca describe express --ts         # express server type shape
+```
+
+If a method signature or return type looks wrong, verify with `luca eval`:
+
+```shell
+luca eval "typeof container.feature('fs').readFile"
+luca eval "container.feature('fs').readFile('package.json')"
+```
+
+### Bundled Examples and Tutorials
+
+The skill directory includes reference material:
+
+- **`references/examples/`** — short, focused example docs for individual features (e.g. `fs.md`, `git.md`, `proc.md`)
+- **`references/tutorials/`** — longer-form guides covering the container, helpers, commands, endpoints, state/events, assistants, and more
+
+These complement `luca describe` — describe gives you the API surface, examples show you patterns in action, and tutorials walk through building things end to end.
+
+**Tip:** Runnable markdown is a great artifact to produce when building with luca. `luca run doc.md` executes code blocks inside the Luca VM — useful for both testing and documentation. When prototyping a feature or writing a how-to, consider writing it as a markdown file that can be run.
+
+### Container Primitives
+
+| Primitive | Access | Purpose |
+|-----------|--------|---------|
+| State | `container.state`, `helper.state` | Observable key-value state on every object |
+| Events | `container.on()`, `helper.on()` | Event bus on every object |
+| Paths | `container.paths` | `resolve()`, `join()`, `cwd` |
+| Utils | `container.utils` | `uuid()`, `lodash`, `stringUtils`, `hashObject()` |
+| Registries | `container.features`, `.clients`, `.servers` | Discovery and metadata for all helpers |
