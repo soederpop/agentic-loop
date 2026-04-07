@@ -182,9 +182,8 @@ export async function conductResearch(options: z.infer<typeof schemas.conductRes
 	const fullContent = await assistant.contentDb.readMultiple([id])
 
 	// Update status to researching
-	const rawContent = await assistant.contentDb.collection.readRaw(id)
-	const updatedContent = rawContent.replace(/^status:\s*approved/m, 'status: researching')
-	await assistant.contentDb.collection.saveItem(id, { content: updatedContent })
+	doc.meta.status = 'researching'
+	await doc.save()
 
 	// Spawn the researcher
 	if (!researchAssistant) {
