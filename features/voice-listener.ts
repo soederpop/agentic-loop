@@ -25,6 +25,9 @@ export const VoiceListenerStateSchema = FeatureStateSchema.extend({
   wakeWordAvailable: z.boolean().default(false),
   sttAvailable: z.boolean().default(false),
   capabilityMissing: z.array(z.string()).default([]),
+  inputMode: z.enum(['wakeword', 'continuous', 'off']).default('off'),
+  continuousListening: z.boolean().default(false),
+  initialCommandText: z.string().default(''),
 })
 export type VoiceListenerState = z.infer<typeof VoiceListenerStateSchema>
 
@@ -43,6 +46,18 @@ export const VoiceListenerEventsSchema = FeatureEventsSchema.extend({
 export const VoiceListenerOptionsSchema = FeatureOptionsSchema.extend({
 	verbose: z.boolean().default(false).describe('Whether to display debug log output from rustpotter'),
 	debug: z.boolean().default(false).describe('Whether to display debug log output from the feature'),
+	triggerPhrases: z.array(z.string()).default([
+	  'hey chief',
+	  'yo chief',
+	  'hi chief',
+	  'ok chief',
+	  'okay chief',
+	  'hey friday',
+	  'yo friday',
+	  'hi friday',
+	  'ok friday',
+	  'okay friday',
+	]),
 })
 
 export type VoiceListenerOptions = z.infer<typeof VoiceListenerOptionsSchema>
@@ -78,6 +93,7 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
   private _wakeWordAvailable = false
   private _sttAvailable = false
   private _rustpotterBin: string | null = null
+  private _continuousProcessPid: number | null = null
 
   static {
 	  Feature.register(this, 'voiceListener')
@@ -85,6 +101,10 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 
   get isLocked() {
     return this.state.get('locked') === true
+  }
+
+  get inputMode() {
+    return this.state.get('inputMode') as 'wakeword' | 'continuous' | 'off'
   }
 	
 	/**
@@ -199,6 +219,7 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
       wakeWordAvailable: this._wakeWordAvailable,
       sttAvailable: this._sttAvailable,
       capabilityMissing: missing,
+      inputMode: this._wakeWordAvailable ? 'wakeword' : this._sttAvailable ? 'continuous' : 'off',
     })
 
     return {
@@ -219,8 +240,19 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 	}
 
 	this.state.set('triggerProcessPids', [])
+    this.state.set('waitingForTriggerWord', false)
 
 	return this
+  }
+
+  async stopContinuousListening() {
+    if (this._continuousProcessPid) {
+      this.container.proc.kill(this._continuousProcessPid)
+      this._continuousProcessPid = null
+    }
+
+    this.state.set('continuousListening', false)
+    return this
   }
 
   private parseDetectionScore(str: string): { name: string; score: number } | null {
@@ -260,8 +292,35 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 
   react(wakeword: string) {
 	  if (!this.isLocked) {
+      this.state.set('initialCommandText', '')
 		  this.emit('triggerWord', wakeword)
 	  }
+  }
+
+  private normalizeTranscript(text: string) {
+    return text
+      .toLowerCase()
+      .replace(/[“”"'`]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  }
+
+  private matchTriggerPhrase(transcript: string): { wakeword: string; commandText: string } | null {
+    const normalized = this.normalizeTranscript(transcript)
+
+    for (const phrase of this.options.triggerPhrases) {
+      const normalizedPhrase = this.normalizeTranscript(phrase)
+      if (!normalizedPhrase) continue
+      if (normalized === normalizedPhrase || normalized.startsWith(`${normalizedPhrase} `)) {
+        return {
+          wakeword: normalizedPhrase.replace(/\s+/g, '_'),
+          commandText: normalized.slice(normalizedPhrase.length).trim(),
+        }
+      }
+    }
+
+    return null
   }
 
   get modelsDir() {
@@ -387,6 +446,81 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 	return this
   }
 
+  async startContinuousListening() {
+    const caps = await this.checkCapabilities()
+    if (!this._sttAvailable) {
+      this.emit('triggerWordErrorOutput', `Continuous listening unavailable: ${caps.missing.join(', ')}`)
+      return this
+    }
+
+    if (this.state.get('continuousListening')) {
+      return this
+    }
+
+    this.state.set('continuousListening', true)
+    this.state.set('initialCommandText', '')
+
+    const scriptPath = this.container.paths.resolve('scripts', 'dictate-loop')
+    const transcriptLines: string[] = []
+    let viewingTranscript = false
+
+    this.container.proc.spawnAndCapture('bash', [scriptPath, this.container.paths.resolve('tmp')], {
+      onOutput: (output: string) => {
+        const line = String(output).trim()
+        if (!line) return
+
+        this.emit('output', line)
+
+        if (line === '---START_TRANSCRIPT---') {
+          transcriptLines.length = 0
+          viewingTranscript = true
+          return
+        }
+
+        if (line === '---END_TRANSCRIPT---') {
+          viewingTranscript = false
+          const transcript = transcriptLines.join(' ').trim()
+          const matched = this.matchTriggerPhrase(transcript)
+          if (matched && !this.isLocked) {
+            this.state.set('initialCommandText', matched.commandText)
+            this.emit('triggerWord', matched.wakeword)
+          }
+          return
+        }
+
+        if (viewingTranscript) {
+          transcriptLines.push(line)
+          this.emit('preview', transcriptLines.join("\n"))
+        }
+      },
+      onError: (str: string) => {
+        this.emit('triggerWordErrorOutput', str)
+      },
+      onExit: () => {
+        this._continuousProcessPid = null
+        this.state.set('continuousListening', false)
+      },
+      onStart: (childProcess: any) => {
+        if (typeof childProcess.pid === 'number') {
+          this._continuousProcessPid = childProcess.pid
+        }
+      }
+    })
+
+    return this
+  }
+
+  private _listenPid: number | null = null
+
+  /** Cancel an in-progress listen() call by killing the dictation process. */
+  cancelListen() {
+    if (this._listenPid) {
+      this.container.proc.kill(this._listenPid)
+      this._listenPid = null
+      this.state.set('recording', false)
+    }
+  }
+
   async listen(options?: { silenceTimeout?: number }) : Promise<string> {
         const { container } = this
 	const proc = container.feature('proc')
@@ -400,6 +534,9 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 		: [scriptPath]
 
 	await proc.spawnAndCapture('sh', args, {
+		onStart: (child: any) => {
+			this._listenPid = child.pid ?? null
+		},
 		onOutput: (output: string) => {
 			output = String(output).trim()
 
@@ -443,8 +580,9 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
 		}
 	})
 
+	this._listenPid = null
 	return transcriptLines.join("\n")
   }
 }
 
-export default VoiceListener 
+export default VoiceListener

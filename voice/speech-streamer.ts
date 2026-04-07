@@ -59,6 +59,8 @@ export class SpeechStreamer {
 	private _done = false
 	private drainResolve: (() => void) | null = null
 	private chunkIndex = 0
+	private _hasStartedPlaying = false
+	onPlaybackStart?: () => void
 
 	constructor(options: SpeechStreamerOptions) {
 		this.container = options.container
@@ -276,6 +278,13 @@ export class SpeechStreamer {
 			}
 
 			if (!audioResult) continue
+
+			// Notify when the very first chunk begins playing
+			if (!this._hasStartedPlaying) {
+				this._hasStartedPlaying = true
+				console.log('[speech-streamer] first audio chunk playing')
+				this.onPlaybackStart?.()
+			}
 
 			// While this chunk plays, start synthesizing the next one in the background
 			if (this.queue.length > 0) {

@@ -18,8 +18,13 @@ phrases:
   greeting:
     - Hello
     - Top of the morning
+    - Hey yall boys
   thinking:
     - Let me think about that
     - Thinking...
+  farewell:
+    - let's get after it
+    - lets fuckin go
+    - Peace
 provider: elevenlabs
 modelId: eleven_v3

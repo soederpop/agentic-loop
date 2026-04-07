@@ -61,6 +61,7 @@ export const WindowTrackedEntrySchema = z.object({
   openedAt: z.number().optional().describe('Epoch ms when this process first recorded the window'),
   lastAck: z.any().optional().describe('JSON-serializable snapshot of the last relevant ack payload'),
   kind: z.enum(['browser', 'terminal', 'unknown']).optional().describe('How the window was opened, if known'),
+  role: z.string().optional().describe('Semantic role tag (e.g. "overlay") — windows with a role may be excluded from layout operations'),
   title: z.string().optional().describe('Current native window title'),
   frame: z.object({
     x: z.number(),
@@ -143,6 +144,8 @@ export interface SpawnOptions {
   shadow?: boolean
   opacity?: number
   clickThrough?: boolean
+  /** Semantic role tag (e.g. "overlay") — tagged windows are excluded from layout operations like wmArrangeWindows */
+  role?: string
   window?: {
     decorations?: 'normal' | 'hiddenTitleBar' | 'none'
     transparent?: boolean
@@ -193,6 +196,8 @@ export interface SpawnTTYOptions {
   opacity?: number
   /** Ignore mouse events (click-through). */
   clickThrough?: boolean
+  /** Semantic role tag (e.g. "overlay") — tagged windows are excluded from layout operations like wmArrangeWindows */
+  role?: string
   /** Chrome options (decorations, alwaysOnTop, etc.) — use flat fields above instead when possible */
   window?: SpawnOptions['window']
 }
@@ -456,6 +461,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         shadow: z.boolean().optional().describe('Show/hide the window drop shadow (default true)'),
         opacity: z.number().min(0).max(1).optional().describe('Window opacity from 0.0 (invisible) to 1.0 (fully opaque)'),
         clickThrough: z.boolean().optional().describe('Make the window ignore mouse events (click-through)'),
+        role: z.string().optional().describe('Semantic role tag (e.g. "overlay") — tagged windows are excluded from layout operations like wmArrangeWindows'),
       }),
     },
     wmSpawnTerminal: {
@@ -478,6 +484,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         shadow: z.boolean().optional().describe('Show/hide the window drop shadow (default true)'),
         opacity: z.number().min(0).max(1).optional().describe('Window opacity from 0.0 to 1.0'),
         clickThrough: z.boolean().optional().describe('Make the window ignore mouse events (click-through)'),
+        role: z.string().optional().describe('Semantic role tag (e.g. "overlay") — tagged windows are excluded from layout operations like wmArrangeWindows'),
       }),
     },
     wmCloseWindow: {
@@ -574,6 +581,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
           shadow: z.boolean().optional().describe('Drop shadow'),
           opacity: z.number().min(0).max(1).optional().describe('Window opacity (0.0–1.0)'),
           clickThrough: z.boolean().optional().describe('Ignore mouse events'),
+          role: z.string().optional().describe('Semantic role tag (e.g. "overlay") — excluded from layout operations'),
         })).describe('Array of window configurations to spawn'),
       }),
     },
@@ -916,7 +924,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       })
     }
 
-    return this.getOrCreateHandle(ackResult.windowId, ackResult, 'browser')
+    return this.getOrCreateHandle(ackResult.windowId, ackResult, 'browser', opts.role)
   }
 
   /**
@@ -945,7 +953,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       })
     }
 
-    return this.getOrCreateHandle(ackResult.windowId, ackResult, 'terminal')
+    return this.getOrCreateHandle(ackResult.windowId, ackResult, 'terminal', opts.role)
   }
 
   /**
@@ -1195,12 +1203,12 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     }
   }
 
-  async wmSpawnBrowser(opts: { url?: string; html?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean }) {
+  async wmSpawnBrowser(opts: { url?: string; html?: string; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean; role?: string }) {
     const handle = await this.spawn(opts)
     return { windowId: handle.windowId, result: handle.result }
   }
 
-  async wmSpawnTerminal(opts: { command: string; args?: string[]; cwd?: string; env?: Record<string, string>; cols?: number; rows?: number; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean }) {
+  async wmSpawnTerminal(opts: { command: string; args?: string[]; cwd?: string; env?: Record<string, string>; cols?: number; rows?: number; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean; role?: string }) {
     const handle = await this.spawnTTY(opts)
     return { windowId: handle.windowId, result: handle.result }
   }
@@ -1239,7 +1247,12 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
 
   async wmArrangeWindows(opts: { pattern: 'grid' | 'stack' | 'row' | 'column'; gap?: number }) {
     const windows = this.state.get('windows') ?? {}
-    const ids = Object.keys(windows)
+    const ids = Object.keys(windows).filter((id) => {
+      const w = windows[id]
+      if (w?.role === 'overlay') return false
+      if (w?.url === 'about:blank') return false
+      return true
+    })
     if (ids.length === 0) return { arranged: 0 }
 
     const gap = opts.gap ?? 0
@@ -1392,7 +1405,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     return this.eval(opts.windowId, opts.code)
   }
 
-  async wmSpawnLayout(opts: { windows: Array<{ type?: 'window' | 'tty'; url?: string; html?: string; command?: string; args?: string[]; cwd?: string; env?: Record<string, string>; cols?: number; rows?: number; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean }> }) {
+  async wmSpawnLayout(opts: { windows: Array<{ type?: 'window' | 'tty'; url?: string; html?: string; command?: string; args?: string[]; cwd?: string; env?: Record<string, string>; cols?: number; rows?: number; title?: string; width?: DimensionValue; height?: DimensionValue; x?: DimensionValue; y?: DimensionValue; alwaysOnTop?: boolean; decorations?: 'normal' | 'hiddenTitleBar' | 'none'; transparent?: boolean; shadow?: boolean; opacity?: number; clickThrough?: boolean; role?: string }> }) {
     const chromeFields = (entry: typeof opts.windows[number]) => ({
       ...(entry.alwaysOnTop !== undefined && { alwaysOnTop: entry.alwaysOnTop }),
       ...(entry.decorations !== undefined && { decorations: entry.decorations }),
@@ -1403,9 +1416,9 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     })
     const config: LayoutEntry[] = opts.windows.map((entry) => {
       if (entry.type === 'tty' || entry.command) {
-        return { type: 'tty' as const, command: entry.command!, args: entry.args, cwd: entry.cwd, env: entry.env, cols: entry.cols, rows: entry.rows, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y, ...chromeFields(entry) }
+        return { type: 'tty' as const, command: entry.command!, args: entry.args, cwd: entry.cwd, env: entry.env, cols: entry.cols, rows: entry.rows, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y, role: entry.role, ...chromeFields(entry) }
       }
-      return { type: 'window' as const, url: entry.url, html: entry.html, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y, ...chromeFields(entry) }
+      return { type: 'window' as const, url: entry.url, html: entry.html, title: entry.title, width: entry.width, height: entry.height, x: entry.x, y: entry.y, role: entry.role, ...chromeFields(entry) }
     })
     const handles = await this.spawnLayout(config)
     return {
@@ -1438,6 +1451,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     windowId: string | undefined,
     result?: WindowAckResult,
     kind: 'browser' | 'terminal' | 'unknown' = 'unknown',
+    role?: string,
   ): WindowHandle {
     const id = windowId ?? result?.windowId ?? randomUUID()
     const mapKey = this.handleMapKey(id) ?? id
@@ -1448,7 +1462,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     } else if (result) {
       handle.result = result
     }
-    this.trackWindowOpened(id, { kind: kind !== 'unknown' ? kind : undefined })
+    this.trackWindowOpened(id, { kind: kind !== 'unknown' ? kind : undefined, role })
     return handle
   }
 
@@ -2232,6 +2246,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
     windowId: unknown,
     extra?: {
       kind?: 'browser' | 'terminal' | 'unknown'
+      role?: string
       lastAck?: unknown
       title?: string
       url?: string
@@ -2252,6 +2267,7 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
         lastAck:
           extra?.lastAck !== undefined ? this.snapshotForState(extra.lastAck) : prev?.lastAck,
         kind: extra?.kind ?? prev?.kind ?? 'unknown',
+        role: extra?.role ?? prev?.role,
         lastSyncedAt: prev?.lastSyncedAt,
         title: extra?.title ?? prev?.title,
         frame: prev?.frame,

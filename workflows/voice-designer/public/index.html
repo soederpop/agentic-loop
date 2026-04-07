@@ -1184,6 +1184,13 @@
         this.selectEl.addEventListener('change', () => this.selectAssistant(this.selectEl.value))
         this.selectAssistant(assistants[0].name)
 
+        // Auto-save to voice.yaml on every change (debounced)
+        let autoSaveTimer = null
+        this.store.on('config:changed', () => {
+          clearTimeout(autoSaveTimer)
+          autoSaveTimer = setTimeout(() => this.saveConfig(), 600)
+        })
+
         this.state.set('ready', true)
         this.emit('ready')
       } catch (err) {

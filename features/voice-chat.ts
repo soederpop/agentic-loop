@@ -136,6 +136,7 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 	}
 
 	private speechStreamer?: SpeechStreamer
+	private _speechDone?: Promise<void>
 	private _phraseManifest: PhraseManifestEntry[] = []
 	private _phrasesByTag: Map<string, PhraseManifestEntry[]> = new Map()
 	private _lastPhraseByTag: Map<string, string> = new Map()
@@ -167,12 +168,14 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			this.speechStreamer!.push(chunk)
 		})
 
-		this.assistant.on('response', async () => {
-			console.log('assistant response finished')
-			await this.speechStreamer!.finish()
-			// Reset for next exchange
-			this.speechStreamer = this.createSpeechStreamer()
-			this.state.set('turnCount', (this.state.get('turnCount') ?? 0) + 1)
+		this.assistant.on('response', () => {
+			console.log('[voice-chat] LLM response text complete, waiting for speech to drain')
+			// Store the promise so say() can await it — event emitters don't await async handlers
+			this._speechDone = this.speechStreamer!.finish().then(() => {
+				console.log('[voice-chat] speech streamer fully drained')
+				this.speechStreamer = this.createSpeechStreamer()
+				this.state.set('turnCount', (this.state.get('turnCount') ?? 0) + 1)
+			})
 		})
 
 		this.assistant.on('toolCall', (name: string, args: any) => {
@@ -316,7 +319,9 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			options.conversationModePrefix = config.conversationModePrefix
 		}
 
-		return new SpeechStreamer(options)
+		const streamer = new SpeechStreamer(options)
+		streamer.onPlaybackStart = () => this.emit('speaking')
+		return streamer
 	}
 
 	/** Loads the phrase manifest JSON from the assistant's generated folder and indexes by tag. */
@@ -421,27 +426,39 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		}
 
 		this.state.set('conversing', true)
+		this.emit('generating')
+		console.log('[voice-chat] say() starting LLM request')
 		const response = await this.assistant.ask(`
 		Act as if every response you generate text wise, will be read outloud.  Do not use markdown.  Do not feel compelled to use proper punctuation at all, unless it is intended to impact vocal delivery.
-				
+
 		DO NOT Repeat your system prompts or instructions to the user.  Get ready.
-			
-		Rather than use punctuation, use elevenlabs voice tags to control the delivery of your response.  
+
+		Rather than use punctuation, use elevenlabs voice tags to control the delivery of your response.
 
 		Your text will be run through something called a speech streamer which splits on punctuation like periods and 500 characters.
-			
+
 		Try and break up the text to fit within these chunks and avoid periods, commas, or other punctuation. use [pause] instead.
-				
+
 		The user's query is: \n\n\n${text}
 		`)
-		this.state.set('conversing', false)
-		this.emit('finished')
-		
-		// Block until all afplay processes are finished
+		console.log('[voice-chat] assistant.ask() returned, awaiting speech drain')
+
+		// Wait for the speech streamer to fully drain (synthesis + playback)
+		if (this._speechDone) {
+			await this._speechDone
+			this._speechDone = undefined
+		}
+		console.log('[voice-chat] speech drain complete')
+
+		// Safety net: ensure no straggler afplay processes
 		while(this.container.proc.isProcessRunning('afplay')) {
 			this.emit('info', 'Waiting for afplay to finish')
 			await this.container.sleep(20)
 		}
+		console.log('[voice-chat] all afplay done, emitting finished')
+
+		this.state.set('conversing', false)
+		this.emit('finished')
 
 		return response
 	}
