@@ -1,19 +1,17 @@
-voiceId: NtS6nEHDYMQC9QczMQuq 
+voiceId: NtS6nEHDYMQC9QczMQuq
 conversationModePrefix: '[serious voice]'
-
 voiceSettings:
   stability: 0.35
   similarityBoost: 0.8
   style: 0.6
   speed: 1.05
   useSpeakerBoost: true
-
 aliases:
-  - nerd 
-  - yo nerd 
+  - nerd
+  - yo nerd
 phrases:
   generic-ack:
-    - What 
+    - What
     - Ive been training my whole life for this
   generic-finish:
     - Done
@@ -27,6 +25,7 @@ phrases:
     - Oops
     - Oh god
     - That sucked
-
 provider: elevenlabs
 modelId: eleven_v3
+wakeWordThreshold: 0.4
+wakeWordModel: yo_nerd.rpw
