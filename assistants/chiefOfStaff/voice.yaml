@@ -9,6 +9,12 @@ voiceSettings:
 aliases:
   - chief
 phrases:
+  generic-ack:
+    - Go ahead
+    - Talk to me
+    - I'm listening
+    - What's up
+    - Right here
   greeting:
     - Hello
     - Top of the morning
