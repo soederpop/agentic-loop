@@ -98,6 +98,10 @@ export const schemas = {
 
 	ls: z.object({}).describe('List the available documents in the contentbase collection'),
 
+	conductResearch: z.object({
+		reportId: z.string().min(1).describe('The id of the report document (e.g. reports/my-topic). Must be in "approved" status. The report\'s Research Plan section will be used as the research prompt.'),
+	}).describe('Kick off a research job using the researcher assistant. The report must exist and be in "approved" status. The researcher will investigate the questions in the Research Plan, then you synthesize the results back into the report.'),
+
 	commitFile: z.object({
 		filePath: z.string().min(1).describe('The path of the file to commit, relative to the repo root (e.g. docs/memories/SELF.md)'),
 		message: z.string().min(1).describe('The commit message'),
@@ -152,7 +156,61 @@ export async function listCodeDirectories() : Promise<string> {
 	return result
 }
 
-let codingAssistant : Assistant | undefined 
+let researchAssistant : Assistant | undefined
+
+export async function conductResearch(options: z.infer<typeof schemas.conductResearch>) : Promise<string> {
+	const { reportId } = options
+	const id = reportId.replace(/.md$/i, '').replace(/^docs\//i, '')
+
+	// Read the report
+	await assistant.contentDb.collection.load({ refresh: true })
+	const doc = assistant.contentDb.collection.document(id)
+
+	if (!doc) {
+		return JSON.stringify({ success: false, error: `Report "${id}" not found.` })
+	}
+
+	if (doc.meta?.status !== 'approved') {
+		return JSON.stringify({ success: false, error: `Report "${id}" is in "${doc.meta?.status}" status. It must be "approved" before research can begin. Present the research plan to the boss for approval first.` })
+	}
+
+	// Extract the Research Plan section to use as the prompt
+	const fullContent = await assistant.contentDb.readMultiple([id])
+
+	// Update status to researching
+	const rawContent = await assistant.contentDb.collection.readRaw(id)
+	const updatedContent = rawContent.replace(/^status:\s*approved/m, 'status: researching')
+	await assistant.contentDb.collection.saveItem(id, { content: updatedContent })
+
+	// Spawn the researcher
+	if (!researchAssistant) {
+		researchAssistant = await assistant.subagent('researcher')
+	}
+
+	const prompt = [
+		`You are conducting research for a report: "${doc.title || id}"`,
+		'',
+		'Here is the full report with the research plan:',
+		'---',
+		fullContent,
+		'---',
+		'',
+		'Investigate the questions in the Research Plan thoroughly.',
+		'Return your findings organized by question, with sources cited.',
+		'Be specific, factual, and note any contradictions or gaps.',
+	].join('\n')
+
+	const result = await researchAssistant.ask(prompt)
+
+	return JSON.stringify({
+		success: true,
+		reportId: id,
+		message: `Research completed for "${id}". Use readDocs to review the findings, then synthesize them into the report using updateDocument.`,
+		findings: result,
+	})
+}
+
+let codingAssistant : Assistant | undefined
 
 export async function askCodingAssistant(options: z.infer<typeof schemas.askCodingAssistant>) : Promise<string> {
 	const { question } = options

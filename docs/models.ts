@@ -19,11 +19,27 @@ import { toString } from "mdast-util-to-string";
 */
 export const Report = defineModel("Report", {
 	prefix: "reports",
-	description: "Reports either I write, or the AI writes.  They're long form, detailed writeups usually",
+	description: "Reports are research artifacts. They start as a research plan (planning), get approved, then researched and synthesized. Reports can link to sub-reports for parallel or deep-dive investigations.",
 	meta: z.object({
-		goal: z.string().optional().describe("Slug of the goal this idea is aligned to"),
-		tags: z.array(z.string()).default([]).describe("Arbitrary tags for categorizing the idea"),
-	})
+		goal: z.string().optional().describe("Slug of the goal this report is aligned to"),
+		tags: z.array(z.string()).default([]).describe("Arbitrary tags for categorizing the report"),
+		status: z.enum(["planning", "approved", "researching", "synthesizing", "complete", "stale"]).default("planning").describe("planning = draft research plan awaiting approval. approved = green-lit to execute. researching = actively being investigated. synthesizing = findings collected, writing up conclusions. complete = final. stale = outdated, may need refresh."),
+		relatedReports: z.array(z.string()).default([]).describe("Slugs of related or sub-reports (e.g. deep-dives spawned from this report)"),
+	}),
+	sections: {
+		researchPlan: section("Research Plan", {
+			extract: (q: any) => q.selectAll("*").map((n: any) => toString(n)).join("\n"),
+			schema: z.string().optional().describe("What we're researching, why, what questions to answer, what to search for, scope boundaries."),
+		}),
+		findings: section("Findings", {
+			extract: (q: any) => q.selectAll("*").map((n: any) => toString(n)).join("\n"),
+			schema: z.string().optional().describe("Raw findings, sources, evidence collected during research."),
+		}),
+		synthesis: section("Synthesis", {
+			extract: (q: any) => q.selectAll("*").map((n: any) => toString(n)).join("\n"),
+			schema: z.string().optional().describe("Distilled conclusions, recommendations, and actionable insights."),
+		}),
+	},
 });
 
 export const Idea = defineModel("Idea", {
