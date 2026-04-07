@@ -291,6 +291,10 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
   }
 
   react(wakeword: string) {
+	  if (this.container.feature('fs').exists(this.container.paths.resolve('MUTE'))) {
+		  return
+	  }
+
 	  if (!this.isLocked) {
       this.state.set('initialCommandText', '')
 		  this.emit('triggerWord', wakeword)

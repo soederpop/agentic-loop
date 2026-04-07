@@ -520,6 +520,9 @@ const api = {
   assignWakeWord(name, wakePhrase, threshold) {
     return this.put(`/api/wakeword/assistants/${encodeURIComponent(name)}/assign`, { wakePhrase, threshold })
   },
+  saveThreshold(name, threshold) {
+    return this.put(`/api/wakeword/assistants/${encodeURIComponent(name)}/threshold`, { threshold })
+  },
   testChat(assistantName, text) {
     return this.post('/api/wakeword/test-chat', { assistantName, text })
   },
@@ -671,18 +674,20 @@ stepRenderers.phrase = async () => {
 
     ${models.length ? `
       <div class="mb-4">
-        <label>Existing Models</label>
-        <div class="sample-list">
+        <label>Existing Models — click to load & test</label>
+        <div class="sample-list" id="existing-models">
           ${models.map(m => `
-            <div class="sample-row">
+            <div class="sample-row" style="cursor:pointer" onclick="loadExistingModel('${m.filename}', '${m.name}')">
               <span class="num" style="color: var(--success)">*</span>
-              <span class="status">${m.name}</span>
+              <span class="status" style="flex:1">${m.name}</span>
               <span class="text-xs text-dim">${m.filename}</span>
+              <span class="btn btn-sm btn-primary" style="margin-left:8px">Load & Test</span>
             </div>
           `).join('')}
         </div>
         <div class="help-text mt-2">
-          You already have ${models.length} model(s). Recording a new phrase will create an additional model.
+          Click a model to jump straight to testing &amp; threshold tuning.
+          Or type a new phrase below to create a new model.
         </div>
       </div>
     ` : ''}
@@ -716,6 +721,22 @@ async function confirmPhrase() {
   state.samples = []
 
   nextStep()
+}
+
+async function loadExistingModel(filename, name) {
+  state.modelFilename = filename
+  state.phrase = name
+
+  // Check which assistant has this model assigned and load their threshold
+  const { assistants } = await api.listAssistants()
+  const assigned = assistants.find(a => a.wakeWordModel === filename)
+  if (assigned) {
+    state.assignedAssistant = assigned.name
+    state.threshold = assigned.wakeWordThreshold || 0.35
+  }
+
+  // Jump directly to test sensitivity step
+  setStep(STEPS.findIndex(s => s.id === 'test'))
 }
 
 // ── Step 2: Record samples ──────────────────────────────────────────────────
@@ -900,24 +921,45 @@ async function buildModel() {
 
 // ── Step 4: Test sensitivity ────────────────────────────────────────────────
 
-stepRenderers.test = () => {
+stepRenderers.test = async () => {
   $title().textContent = 'Test Sensitivity'
   $badge().innerHTML = ''
 
+  // If we loaded an existing model, check for assigned assistant
+  let assignedInfo = ''
+  if (state.assignedAssistant) {
+    assignedInfo = `
+      <div style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; margin-bottom:16px">
+        <span class="status-badge ok"><span class="status-dot"></span>${state.assignedAssistant}</span>
+        <span class="text-dim text-sm">model: ${state.modelFilename}</span>
+        <span class="text-dim text-sm">current threshold: ${state.threshold.toFixed(2)}</span>
+      </div>
+    `
+  }
+
+  // Check if samples exist for this model (for the verify button)
+  const slug = state.phrase.toLowerCase().trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+  const { samples } = await api.listSamples()
+  const matchingSamples = samples.filter(s => s.name.startsWith(slug + '_'))
+  const hasSamples = matchingSamples.length > 0
+
   $body().innerHTML = `
+    ${assignedInfo}
+
+    ${hasSamples ? `
     <div class="mb-4">
       <div class="text-dim text-sm mb-2">
-        First, let's test the model against your recorded samples to verify the build quality.
+        Test the model against your recorded samples to verify the build quality.
       </div>
       <button class="btn btn-sm" id="verify-btn" onclick="verifySamples()">Verify Against Samples</button>
       <div id="verify-results" class="mt-2"></div>
     </div>
-
     <hr style="border: none; border-top: 1px solid var(--border); margin: 16px 0" />
+    ` : ''}
 
     <div class="mb-4">
       <div class="text-dim text-sm mb-2">
-        Now test live detection. Adjust the threshold and try saying "${state.phrase}".
+        Test live detection. Adjust the threshold and try saying "${state.phrase}".
         Lower = more sensitive (more false positives), higher = less sensitive (may miss detections).
       </div>
 
@@ -949,9 +991,16 @@ stepRenderers.test = () => {
     </div>
 
     <div class="actions">
-      <button class="btn" onclick="stopLiveTest(); prevStep()">Back</button>
-      <button class="btn btn-primary" onclick="stopLiveTest(); nextStep()">Continue</button>
+      <button class="btn" onclick="stopLiveTest(); setStep(STEPS.findIndex(s => s.id === 'phrase'))">Back</button>
+      ${state.assignedAssistant ? `
+        <button class="btn btn-success" id="save-threshold-btn" onclick="saveThreshold()">
+          Save Threshold to ${state.assignedAssistant}
+        </button>
+      ` : ''}
+      <button class="btn btn-primary" onclick="stopLiveTest(); nextStep()">Assign / Continue</button>
     </div>
+
+    <div id="save-status" class="text-sm mt-2" style="min-height:24px"></div>
   `
 }
 
@@ -995,6 +1044,28 @@ async function verifySamples() {
 function updateThreshold(val) {
   state.threshold = parseFloat(val)
   $('#threshold-val').textContent = state.threshold.toFixed(2)
+}
+
+async function saveThreshold() {
+  if (!state.assignedAssistant) return
+  const btn = $('#save-threshold-btn')
+  const status = $('#save-status')
+  btn.disabled = true
+  status.innerHTML = '<span class="text-dim">Saving threshold...</span>'
+
+  try {
+    const result = await api.saveThreshold(state.assignedAssistant, state.threshold)
+    if (result.ok) {
+      status.innerHTML = `<span style="color: var(--success)">Saved threshold ${state.threshold.toFixed(2)} to ${state.assignedAssistant}/voice.yaml</span>`
+      btn.disabled = false
+    } else {
+      status.innerHTML = `<span style="color: var(--error)">${result.error}</span>`
+      btn.disabled = false
+    }
+  } catch (err) {
+    status.innerHTML = `<span style="color: var(--error)">${err.message}</span>`
+    btn.disabled = false
+  }
 }
 
 let detectionCount = 0

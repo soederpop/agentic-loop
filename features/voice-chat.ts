@@ -474,18 +474,18 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 		if(this.isMuted) return
 		if (!this.options.playPhrases) return
 		if (!this.canPlayToolPhrase()) return
+		this.playPhrase('thinking')
 	}
 
 	playToolResultPhrase() {
 		if(this.isMuted) return
 		if (!this.options.playPhrases) return
-		if (!this.canPlayToolPhrase()) return
 	}
-	
+
 	playToolErrorPhrase() {
 		if(this.isMuted) return
 		if (!this.options.playPhrases) return
-		if (!this.canPlayToolPhrase()) return
+		this.playPhrase('mistake')
 	}
 }
 

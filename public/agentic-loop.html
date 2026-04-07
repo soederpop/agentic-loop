@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Agentic Loop</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --surface: #111827;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --muted: #64748b;
+    --accent: #38bdf8;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --orange: #fb923c;
+    --pink: #f472b6;
+    --red: #f87171;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Animated background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 20%, rgba(56,189,248,0.06) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(167,139,250,0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 24px;
+  }
+
+  /* Header */
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  header h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+  }
+
+  header p {
+    color: var(--muted);
+    font-size: 0.95rem;
+    max-width: 600px;
+    margin: 0 auto;
+    line-height: 1.5;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    margin-top: 20px;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .status-dot.live { background: var(--green); }
+  .status-dot.idle { background: var(--orange); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+  }
+
+  /* Loop Diagram */
+  .loop-diagram {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 32px;
+    margin-bottom: 48px;
+  }
+
+  .loop-ring {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    border-radius: 50%;
+    border: 2px dashed var(--border);
+    animation: spin 60s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .loop-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    animation: spin 60s linear infinite reverse;
+  }
+
+  .loop-center .icon { font-size: 2rem; margin-bottom: 4px; }
+  .loop-center .label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .orbit-node {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--muted);
+    animation: spin 60s linear infinite reverse;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    cursor: default;
+  }
+
+  .orbit-node:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 20px rgba(56,189,248,0.2);
+  }
+
+  .orbit-node .node-icon { font-size: 1.3rem; margin-bottom: 2px; }
+
+  /* Position 6 nodes around the ring */
+  .orbit-node:nth-child(2) { top: -32px; left: 50%; transform: translateX(-50%); }
+  .orbit-node:nth-child(3) { top: 12%; right: -32px; }
+  .orbit-node:nth-child(4) { bottom: 12%; right: -32px; }
+  .orbit-node:nth-child(5) { bottom: -32px; left: 50%; transform: translateX(-50%); }
+  .orbit-node:nth-child(6) { bottom: 12%; left: -32px; }
+  .orbit-node:nth-child(7) { top: 12%; left: -32px; }
+
+  /* Override spin for positioned nodes */
+  .orbit-node:nth-child(2),
+  .orbit-node:nth-child(5) {
+    animation: spin 60s linear infinite reverse;
+  }
+
+  /* Sections */
+  .section-title {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Assistants Grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    margin-bottom: 48px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    transition: border-color 0.3s, transform 0.2s;
+    cursor: default;
+  }
+
+  .card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .card-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+
+  .card-role {
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  .card-desc {
+    font-size: 0.8rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    margin-top: 8px;
+    margin-right: 4px;
+  }
+
+  .tag.schedule { border-color: var(--green); color: var(--green); }
+  .tag.reactive { border-color: var(--orange); color: var(--orange); }
+  .tag.manual { border-color: var(--accent2); color: var(--accent2); }
+
+  /* Channels */
+  .channels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 48px;
+  }
+
+  .channel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+    transition: border-color 0.3s, transform 0.2s;
+    cursor: default;
+  }
+
+  .channel:hover {
+    border-color: var(--accent2);
+    transform: translateY(-2px);
+  }
+
+  .channel-icon { font-size: 1.6rem; margin-bottom: 6px; }
+  .channel-name { font-size: 0.85rem; font-weight: 600; }
+  .channel-status {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  /* Pipeline flow */
+  .pipeline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-bottom: 48px;
+    overflow-x: auto;
+    padding: 8px 0;
+  }
+
+  .pipe-step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    text-align: center;
+    min-width: 130px;
+    flex-shrink: 0;
+  }
+
+  .pipe-step .step-icon { font-size: 1.2rem; margin-bottom: 4px; }
+  .pipe-step .step-label { font-size: 0.75rem; font-weight: 600; }
+  .pipe-step .step-detail { font-size: 0.65rem; color: var(--muted); margin-top: 2px; }
+
+  .pipe-arrow {
+    color: var(--border);
+    font-size: 1.2rem;
+    padding: 0 4px;
+    flex-shrink: 0;
+  }
+
+  /* Content Model */
+  .model-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 10px;
+    margin-bottom: 48px;
+  }
+
+  .model-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    transition: border-color 0.3s;
+    cursor: default;
+  }
+
+  .model-chip:hover { border-color: var(--accent); }
+  .model-chip .chip-icon { font-size: 1rem; margin-bottom: 4px; display: block; }
+  .model-chip .chip-count { font-size: 0.65rem; color: var(--muted); font-weight: 400; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 32px 0;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+
+  footer a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  /* Activity feed */
+  .feed {
+    margin-bottom: 48px;
+  }
+
+  .feed-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+  }
+
+  .feed-time {
+    color: var(--muted);
+    font-size: 0.7rem;
+    min-width: 56px;
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+
+  .feed-icon { font-size: 1rem; flex-shrink: 0; }
+  .feed-text { color: var(--text); line-height: 1.4; }
+  .feed-text strong { color: var(--accent); font-weight: 600; }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    header h1 { font-size: 1.6rem; }
+    .loop-ring { width: 240px; height: 240px; }
+    .orbit-node { width: 52px; height: 52px; font-size: 0.5rem; }
+    .orbit-node .node-icon { font-size: 1rem; }
+    .grid { grid-template-columns: 1fr; }
+    .pipeline { flex-wrap: wrap; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <header>
+    <h1>The Agentic Loop</h1>
+    <p>A 24/7 AI assistant system that plans, builds, and ships autonomously on a schedule &mdash; orchestrated through structured markdown and the Luca framework. Ships with Luca Coder built in &mdash; just add an OpenAI API key or run local models via LM Studio.</p>
+    <div class="status-bar">
+      <span><span class="status-dot live"></span>Loop Active</span>
+      <span><span class="status-dot live"></span>Scheduler Running</span>
+      <span><span class="status-dot idle"></span>2 Plays Queued</span>
+    </div>
+  </header>
+
+  <!-- Central Loop Diagram -->
+  <div class="loop-diagram">
+    <div class="loop-ring">
+      <div class="loop-center">
+        <div class="icon">&#x267e;</div>
+        <div class="label">Loop</div>
+      </div>
+      <!-- Orbit: the 6 core stages -->
+      <div class="orbit-node" style="top:-32px;left:50%;transform:translateX(-50%)">
+        <span class="node-icon">&#x1f4cb;</span>Goals
+      </div>
+      <div class="orbit-node" style="top:10%;right:-32px">
+        <span class="node-icon">&#x1f4a1;</span>Ideas
+      </div>
+      <div class="orbit-node" style="bottom:10%;right:-32px">
+        <span class="node-icon">&#x1f4d0;</span>Plans
+      </div>
+      <div class="orbit-node" style="bottom:-32px;left:50%;transform:translateX(-50%)">
+        <span class="node-icon">&#x1f3d7;</span>Build
+      </div>
+      <div class="orbit-node" style="bottom:10%;left:-32px">
+        <span class="node-icon">&#x2705;</span>Review
+      </div>
+      <div class="orbit-node" style="top:10%;left:-32px">
+        <span class="node-icon">&#x1f4ca;</span>Report
+      </div>
+    </div>
+  </div>
+
+  <!-- Assistants -->
+  <div class="section-title">AI Assistants</div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#fb923c,#ea580c)">&#x1f528;</div>
+        <div>
+          <div class="card-name">Luca Coder</div>
+          <div class="card-role">Primary Builder &amp; Architect</div>
+        </div>
+      </div>
+      <div class="card-desc">The built-in coding assistant. Reads, searches, understands, and modifies codebases using Luca framework introspection. Ships with the repo &mdash; just needs an OpenAI API key or local LM Studio models.</div>
+      <span class="tag schedule">scheduled</span>
+      <span class="tag reactive">reactive</span>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#38bdf8,#0284c7)">&#x1f9e0;</div>
+        <div>
+          <div class="card-name">Chief of Staff</div>
+          <div class="card-role">Orchestrator &amp; Scheduler</div>
+        </div>
+      </div>
+      <div class="card-desc">Runs plays on a cron schedule, triages incoming requests, explores ideas, creates project plans, and generates research reports.</div>
+      <span class="tag schedule">scheduled</span>
+      <span class="tag reactive">reactive</span>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#a78bfa,#7c3aed)">&#x1f50d;</div>
+        <div>
+          <div class="card-name">Researcher</div>
+          <div class="card-role">Deep Dive Analyst</div>
+        </div>
+      </div>
+      <div class="card-desc">Conducts web research missions, synthesizes findings into structured reports. Can spawn sub-reports for parallel deep dives.</div>
+      <span class="tag manual">on-demand</span>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#f472b6,#db2777)">&#x1f680;</div>
+        <div>
+          <div class="card-name">Rocket</div>
+          <div class="card-role">Workflow Runner</div>
+        </div>
+      </div>
+      <div class="card-desc">Launches and manages interactive workflow processes. Matches user requests to the right workflow, spawns it, and monitors status.</div>
+      <span class="tag reactive">reactive</span>
+    </div>
+
+    <div class="card" style="border-style:dashed;opacity:0.7">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#d4a574,#c4956a)">&#x1f3ad;</div>
+        <div>
+          <div class="card-name">Claude Code</div>
+          <div class="card-role">Optional &mdash; External Builder</div>
+        </div>
+      </div>
+      <div class="card-desc">Anthropic's CLI agent. Drop-in parallel builder if you have access &mdash; handles complex multi-step builds and code reviews.</div>
+      <span class="tag manual">optional</span>
+    </div>
+
+    <div class="card" style="border-style:dashed;opacity:0.7">
+      <div class="card-header">
+        <div class="card-icon" style="background:linear-gradient(135deg,#34d399,#059669)">&#x1f4bb;</div>
+        <div>
+          <div class="card-name">OpenAI Codex</div>
+          <div class="card-role">Optional &mdash; Parallel Builder</div>
+        </div>
+      </div>
+      <div class="card-desc">OpenAI's coding agent. Another parallel builder option &mdash; picks up approved plans and delivers independently-built features.</div>
+      <span class="tag manual">optional</span>
+    </div>
+  </div>
+
+  <!-- Communication Channels -->
+  <div class="section-title">Communication Channels</div>
+  <div class="channels">
+    <div class="channel">
+      <div class="channel-icon">&#x1f399;</div>
+      <div class="channel-name">Voice</div>
+      <div class="channel-status">VoiceBox TTS / Wake Word</div>
+    </div>
+    <div class="channel">
+      <div class="channel-icon">&#x2708;</div>
+      <div class="channel-name">Telegram</div>
+      <div class="channel-status">Bot &amp; Notifications</div>
+    </div>
+    <div class="channel">
+      <div class="channel-icon">&#x2709;</div>
+      <div class="channel-name">Email</div>
+      <div class="channel-status">Inbound / Outbound</div>
+    </div>
+    <div class="channel">
+      <div class="channel-icon">&#x1f4ac;</div>
+      <div class="channel-name">iMessage</div>
+      <div class="channel-status">Direct Chat</div>
+    </div>
+    <div class="channel">
+      <div class="channel-icon">&#x1f310;</div>
+      <div class="channel-name">Web Chat</div>
+      <div class="channel-status">Browser UI</div>
+    </div>
+    <div class="channel">
+      <div class="channel-icon">&#x1f4df;</div>
+      <div class="channel-name">CLI</div>
+      <div class="channel-status">Terminal / luca</div>
+    </div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="section-title">Execution Pipeline</div>
+  <div class="pipeline">
+    <div class="pipe-step">
+      <div class="step-icon">&#x1f4e5;</div>
+      <div class="step-label">Ingest</div>
+      <div class="step-detail">Goals, Ideas, Tasks</div>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-step">
+      <div class="step-icon">&#x1f9e9;</div>
+      <div class="step-label">Plan</div>
+      <div class="step-detail">Approve &amp; Scope</div>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-step">
+      <div class="step-icon">&#x2699;</div>
+      <div class="step-label">Build</div>
+      <div class="step-detail">Luca Coder</div>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-step">
+      <div class="step-icon">&#x1f9ea;</div>
+      <div class="step-label">Test</div>
+      <div class="step-detail">Verify &amp; Validate</div>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-step">
+      <div class="step-icon">&#x1f4e6;</div>
+      <div class="step-label">Ship</div>
+      <div class="step-detail">Commit &amp; Deploy</div>
+    </div>
+    <div class="pipe-arrow">&rarr;</div>
+    <div class="pipe-step">
+      <div class="step-icon">&#x1f4e3;</div>
+      <div class="step-label">Report</div>
+      <div class="step-detail">Summary &amp; Notify</div>
+    </div>
+  </div>
+
+  <!-- Content Model -->
+  <div class="section-title">Content Model (Contentbase)</div>
+  <div class="model-grid">
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f3af;</span>
+      Goals
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f4a1;</span>
+      Ideas
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f4c1;</span>
+      Projects
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f4d0;</span>
+      Plans
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f3ad;</span>
+      Plays
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x2611;</span>
+      Tasks
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f4dd;</span>
+      Prompts
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f4ca;</span>
+      Reports
+    </div>
+    <div class="model-chip">
+      <span class="chip-icon">&#x1f9e0;</span>
+      Memories
+    </div>
+  </div>
+
+  <!-- Simulated Activity Feed -->
+  <div class="section-title">Recent Activity (simulated)</div>
+  <div class="feed" id="feed"></div>
+
+  <footer>
+    Powered by <a href="https://github.com/soederpop/luca">Luca Framework</a> &amp; <a href="https://github.com/soederpop/contentbase">Contentbase</a>
+  </footer>
+
+</div>
+
+<script>
+  const activities = [
+    { time: '2m ago', icon: '\u{1F528}', text: '<strong>Luca Coder</strong> completed plan <em>voice-router-refactor</em> &mdash; 3 files changed, tests passing' },
+    { time: '8m ago', icon: '\u{1F9E0}', text: '<strong>Chief of Staff</strong> ran play <em>explore-spark-ideas</em> &mdash; promoted 1 idea to project' },
+    { time: '15m ago', icon: '\u{1F528}', text: '<strong>Luca Coder</strong> picked up task <em>fix-endpoint-cors</em> &mdash; build in progress' },
+    { time: '22m ago', icon: '\u2708\uFE0F', text: '<strong>Telegram</strong> delivered daily summary to owner' },
+    { time: '30m ago', icon: '\u{1F50D}', text: '<strong>Researcher</strong> completed report <em>tts-provider-comparison</em> &mdash; 4 findings synthesized' },
+    { time: '45m ago', icon: '\u{1F399}', text: '<strong>Voice</strong> wake-word triggered &mdash; routed to Chief of Staff' },
+    { time: '1h ago', icon: '\u{1F680}', text: '<strong>Rocket</strong> launched workflow <em>project-builder</em> &mdash; running on port 7700' },
+    { time: '2h ago', icon: '\u{1F9E0}', text: '<strong>Chief of Staff</strong> ran play <em>turn-idea-into-project</em> &mdash; 1 project drafted' },
+    { time: '3h ago', icon: '\u2709\uFE0F', text: '<strong>Email</strong> inbound task received &mdash; queued for triage' },
+    { time: '4h ago', icon: '\u{1F528}', text: '<strong>Luca Coder</strong> shipped task <em>add-sqlite-indexes</em> &mdash; committed to main' },
+  ];
+
+  const feed = document.getElementById('feed');
+
+  function renderFeed() {
+    // Show 6 random-ish items, rotating
+    const offset = Math.floor(Date.now() / 12000) % activities.length;
+    const visible = [];
+    for (let i = 0; i < 6; i++) {
+      visible.push(activities[(offset + i) % activities.length]);
+    }
+    feed.innerHTML = visible.map(a => `
+      <div class="feed-item">
+        <span class="feed-time">${a.time}</span>
+        <span class="feed-icon">${a.icon}</span>
+        <span class="feed-text">${a.text}</span>
+      </div>
+    `).join('');
+  }
+
+  renderFeed();
+  setInterval(renderFeed, 12000);
+
+  // Animate status dots randomly
+  const dots = document.querySelectorAll('.status-dot');
+  setInterval(() => {
+    dots.forEach(d => {
+      d.style.animationDuration = (1.5 + Math.random() * 1.5) + 's';
+    });
+  }, 5000);
+</script>
+
+</body>
+</html>

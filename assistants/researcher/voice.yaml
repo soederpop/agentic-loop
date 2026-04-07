@@ -1,0 +1,32 @@
+voiceId: NtS6nEHDYMQC9QczMQuq 
+conversationModePrefix: '[serious voice]'
+
+voiceSettings:
+  stability: 0.35
+  similarityBoost: 0.8
+  style: 0.6
+  speed: 1.05
+  useSpeakerBoost: true
+
+aliases:
+  - nerd 
+  - yo nerd 
+phrases:
+  generic-ack:
+    - What 
+    - Ive been training my whole life for this
+  generic-finish:
+    - Done
+    - Finished
+  greeting:
+    - Hello
+    - Hi
+  thinking:
+    - let me cook
+  mistake:
+    - Oops
+    - Oh god
+    - That sucked
+
+provider: elevenlabs
+modelId: eleven_v3

@@ -24,8 +24,20 @@ phrases:
     - Check you later
   thinking:
     - Hold up, let me cook...
-    - Thinking...
+    - Momento
+    - One sec
+    - Checking
+    - On it
+    - Aspetta
+    - Let me see
+    - Looking
+  mistake:
+    - Mannaggia
+    - Oops
+    - Merda
+    - Aye
 provider: elevenlabs
 modelId: eleven_v3
-wakeWordThreshold: 0.43
+
+wakeWordThreshold: 0.48
 wakeWordModel: yo_rocket.rpw

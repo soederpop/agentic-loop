@@ -21,10 +21,23 @@ phrases:
     - Hey yall boys
   thinking:
     - Let me think about that
-    - Thinking...
+    - One sec
+    - Checking
+    - On it
+    - Hold on
+    - Looking
+    - Pulling that up
+    - Gimme a sec
+  mistake:
+    - Whoops
+    - My bad
+    - Dammit
+    - Ugh
   farewell:
     - let's get after it
     - lets fuckin go
     - Peace
 provider: elevenlabs
 modelId: eleven_v3
+wakeWordThreshold: 0.47
+wakeWordModel: yo_chief.rpw

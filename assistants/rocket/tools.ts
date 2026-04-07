@@ -10,9 +10,15 @@ export async function README(options: z.infer<typeof schemas.README>) {
   const content = await container.fs.readFile(
     assistant.paths.resolve('assistant-README.md')
   )
+
+  const savedLayouts = await container.fs.readFile(
+	  assistant.paths.resolve('layouts.md')
+  )
   
   return `
     ${content}
+
+    ${savedLayouts}
   `
 }
 

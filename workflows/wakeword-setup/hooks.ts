@@ -369,6 +369,35 @@ export async function onSetup({ app, container, wss }: WorkflowHooksSetupContext
     }
   })
 
+  // ── Threshold-only update ────────────────────────────────────────────────────
+
+  app.put('/api/wakeword/assistants/:name/threshold', async (req: any, res: any) => {
+    try {
+      const { name } = req.params
+      const { threshold } = req.body || {}
+      if (threshold == null) return res.status(400).json({ error: 'threshold is required' })
+
+      const manager = container.feature('assistantsManager') as any
+      const entry = manager.list().find((a: any) => a.name === name)
+      if (!entry) return res.status(404).json({ error: `Assistant "${name}" not found` })
+
+      const inst = container.feature('assistant', { folder: entry.folder } as any) as any
+      const voicePath = inst.paths.join('voice.yaml')
+
+      if (!fs.exists(voicePath)) {
+        return res.status(400).json({ error: `No voice.yaml found for "${name}"` })
+      }
+
+      const config = yaml.parse(fs.readFile(voicePath))
+      config.wakeWordThreshold = threshold
+      await fs.writeFileAsync(voicePath, yaml.stringify(config))
+
+      res.json({ ok: true, wakeWordThreshold: threshold })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   // ── End-to-end test (voice chat) ────────────────────────────────────────────
 
   app.post('/api/wakeword/test-chat', async (req: any, res: any) => {
