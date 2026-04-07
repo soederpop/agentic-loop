@@ -107,6 +107,10 @@ export const schemas = {
 		message: z.string().min(1).describe('The commit message'),
 	}).describe('Stage and commit exactly one file. Use this right after updateDocument to commit the change. Only the specified file will be staged — other working tree changes are left untouched.'),
 
+	presentDocument: z.object({
+		path: z.string().min(1).describe('The document id to present (e.g. "goals/user-experience-improvements"). Use the ids from the ls tool. Prefixes like "docs/" and suffixes like ".md" are stripped automatically.'),
+	}).describe('Open a contentbase document in a native window via the content service. Call ls first to see available document ids, then pass the one you want to present.'),
+
 }
 
 export async function ls() : Promise<string> {
@@ -283,6 +287,37 @@ export async function commitFile(options: z.infer<typeof schemas.commitFile>): P
 	} catch (err: any) {
 		return { success: false, error: err?.message || String(err) }
 	}
+}
+
+export async function presentDocument(options: z.infer<typeof schemas.presentDocument>): Promise<{ success: boolean, url?: string, error?: string }> {
+	// Normalize: strip leading "docs/" and trailing ".md"
+	const docPath = options.path
+		.replace(/^docs\//, '')
+		.replace(/\.md$/i, '')
+
+	// Verify the document exists
+	await assistant.contentDb.collection.load({ refresh: true })
+	const available = assistant.contentDb.collection.available
+	if (!available.includes(docPath)) {
+		return { success: false, error: `Document "${docPath}" not found. Call ls to see available documents.` }
+	}
+
+	// Look up the content service port from the instance registry
+	const registry = assistant.container.feature('instanceRegistry')
+	const instance = registry.getSelf()
+	const contentPort = instance?.ports?.content
+
+	if (!contentPort) {
+		return { success: false, error: 'Content service port not found. Is luca main running?' }
+	}
+
+	const url = `http://localhost:${contentPort}/docs/${docPath}`
+
+	// Open in a native window via windowManager
+	const windowManager = assistant.container.feature('windowManager')
+	await windowManager.spawn({ url, title: docPath, width: 900, height: 700 })
+
+	return { success: true, url }
 }
 
 export async function getOverallStatusSummary(

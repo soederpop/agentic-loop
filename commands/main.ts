@@ -18,10 +18,48 @@ export const argsSchema = CommandOptionsSchema.extend({
   concurrencyOneOff: z.number().default(4).describe('Max concurrent one-off tasks'),
   concurrencyScheduled: z.number().default(2).describe('Max concurrent scheduled tasks'),
   voiceService: z.boolean().default(true).describe('Enable voice service (use --no-voice-service to disable)'),
+  contentService: z.boolean().default(true).describe('Enable content service / cnotes serve (use --no-content-service to disable)'),
   commsService: z.boolean().default(true).describe('Enable communications service (use --no-comms-service to disable)'),
 })
 
 type MainOptions = z.infer<typeof argsSchema>
+
+/**
+ * Merge config.yml values into options. CLI flags win over config.yml, config.yml wins over defaults.
+ * We detect explicit CLI flags by scanning process.argv for --flagName patterns.
+ */
+function applyConfigToOptions(options: MainOptions, config: Record<string, any>): MainOptions {
+  const argv = process.argv.join(' ')
+
+  function wasExplicit(flag: string): boolean {
+    // Check for --flag-name (kebab) and --flagName (camel) forms
+    const kebab = flag.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)
+    return argv.includes(`--${flag}`) || argv.includes(`--${kebab}`) || argv.includes(`--no-${flag}`) || argv.includes(`--no-${kebab}`)
+  }
+
+  const main = config.main || {}
+  const scheduler = config.scheduler || {}
+  const builder = config.builder || {}
+  const services = config.services || {}
+
+  // main section
+  if (main.docsPath != null && !wasExplicit('docsPath')) options.docsPath = main.docsPath
+
+  // scheduler section
+  if (scheduler.taskInterval != null && !wasExplicit('taskInterval')) options.taskInterval = scheduler.taskInterval
+  if (scheduler.concurrencyOneOff != null && !wasExplicit('concurrencyOneOff')) options.concurrencyOneOff = scheduler.concurrencyOneOff
+  if (scheduler.concurrencyScheduled != null && !wasExplicit('concurrencyScheduled')) options.concurrencyScheduled = scheduler.concurrencyScheduled
+
+  // builder section
+  if (builder.watchInterval != null && !wasExplicit('watchInterval')) options.watchInterval = builder.watchInterval
+
+  // services section (enable/disable)
+  if (services.voice != null && !wasExplicit('voiceService')) options.voiceService = services.voice
+  if (services.content != null && !wasExplicit('contentService')) options.contentService = services.content
+  if (services.comms != null && !wasExplicit('commsService')) options.commsService = services.comms
+
+  return options
+}
 
 async function main(options: MainOptions, context: ContainerContext) {
   const { container } = context as any
@@ -109,6 +147,21 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   const fs = container.feature('fs')
   fs.ensureFolder(container.paths.resolve('logs'))
   fs.ensureFolder(container.paths.resolve('logs/prompt-outputs'))
+
+  // --- Load config.yml and merge into options (CLI flags still win) ---
+  const yaml = container.feature('yaml')
+  const configPath = container.paths.resolve('config.yml')
+  let projectConfig: Record<string, any> = {}
+
+  if (fs.exists(configPath)) {
+    try {
+      projectConfig = yaml.parse(fs.readFileSync(configPath, 'utf-8').toString('utf-8')) || {}
+    } catch (err: any) {
+      console.warn(`Warning: failed to parse config.yml: ${err?.message || err}`)
+    }
+  }
+
+  applyConfigToOptions(options, projectConfig)
 
   // Features already discovered in main() for registry access
   await container.docs.load()
@@ -265,6 +318,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     scheduler.stop()
     builder.stopWatcher()
     if (voiceService) voiceService.stop().catch(() => {})
+    if (contentServiceProcess) {
+      try { contentServiceProcess.kill('SIGTERM') } catch {}
+      contentServiceProcess = null
+    }
     if (commsService) commsService.pause()
     log('main', 'All subsystems paused. Process alive, WebSocket still listening.')
     recordEvent('main', 'paused')
@@ -279,6 +336,31 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     if (voiceService) {
       try { await voiceService.start() } catch (err: any) {
         log('voice', `failed to resume: ${err?.message || err}`)
+      }
+    }
+    if (options.contentService && !contentServiceProcess) {
+      try {
+        const docsPath = container.paths.resolve(options.docsPath)
+        contentServiceProcess = proc.spawn('cnotes', ['serve', docsPath, '--port', String(contentServicePort)], {
+          cwd: container.paths.cwd,
+          stdout: 'pipe',
+          stderr: 'pipe',
+        })
+        contentServiceProcess.stdout?.on('data', (chunk: Buffer) => {
+          const line = chunk.toString().trim()
+          if (line) log('contentService', line)
+        })
+        contentServiceProcess.stderr?.on('data', (chunk: Buffer) => {
+          const line = chunk.toString().trim()
+          if (line) log('contentService', line)
+        })
+        contentServiceProcess.on('exit', (code: number | null) => {
+          log('contentService', `exited with code ${code}`)
+          contentServiceProcess = null
+        })
+        log('contentService', `resumed on port ${contentServicePort}`)
+      } catch (err: any) {
+        log('contentService', `failed to resume: ${err?.message || err}`)
       }
     }
     if (commsService) commsService.unpause()
@@ -319,6 +401,11 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         port: workflowService.state.get('port'),
         workflowCount: workflowService.state.get('workflowCount'),
       } : { listening: false, disabled: true },
+      contentService: contentServiceProcess ? {
+        running: true,
+        port: contentServicePort,
+        pid: contentServiceProcess.pid,
+      } : { running: false, disabled: !options.contentService },
       comms: commsService ? {
         started: commsService.isStarted,
         paused: commsService.isPaused,
@@ -671,16 +758,51 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('workflowService', `failed to start: ${err?.message || err}`)
   }
 
-  // 6. Communications Service
+  // 6. Content Service (cnotes serve)
+  let contentServiceProcess: any = null
+  let contentServicePort: number | null = null
+
+  if (options.contentService) {
+    try {
+      const registryPorts = (options as any)._registryPorts
+      contentServicePort = registryPorts?.content || 4100
+      const docsPath = container.paths.resolve(options.docsPath)
+
+      contentServiceProcess = proc.spawn('cnotes', ['serve', docsPath, '--port', String(contentServicePort)], {
+        cwd: container.paths.cwd,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      })
+
+      contentServiceProcess.stdout?.on('data', (chunk: Buffer) => {
+        const line = chunk.toString().trim()
+        if (line) log('contentService', line)
+      })
+      contentServiceProcess.stderr?.on('data', (chunk: Buffer) => {
+        const line = chunk.toString().trim()
+        if (line) log('contentService', line)
+      })
+      contentServiceProcess.on('exit', (code: number | null) => {
+        log('contentService', `exited with code ${code}`)
+        recordEvent('contentService', 'exited', { code })
+        contentServiceProcess = null
+      })
+
+      log('contentService', `starting cnotes serve on port ${contentServicePort} (docs: ${options.docsPath})`)
+      recordEvent('contentService', 'started', { port: contentServicePort })
+    } catch (err: any) {
+      log('contentService', `failed to start: ${err?.message || err}`)
+    }
+  } else {
+    log('contentService', 'disabled via --no-content-service')
+  }
+
+  // 7. Communications Service
   let commsService: any = null
 
   if (options.commsService) {
     try {
-      const yaml = container.feature('yaml')
-      const commsFs = container.feature('fs')
-      const configPath = container.paths.resolve('config.yml')
-      const config = yaml.parse(commsFs.readFileSync(configPath, 'utf-8').toString('utf-8'))
-      const commsConfig = config.communications || {}
+      const commsConfig = projectConfig.communications || {}
 
       commsService = await startCommsService(container, {
         imsg: commsConfig.imsg?.enabled,
@@ -714,6 +836,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.assistantCount || 0} assistants`)
     log('main', `WindowManager: ${status.windowManager.listening ? `listening` : 'off'}, client ${status.windowManager.clientConnected ? 'connected' : 'disconnected'}, ${status.windowManager.windowCount || 0} windows`)
     log('main', `WorkflowService: ${status.workflowService.listening ? `listening on :${status.workflowService.port}` : 'off'}, ${status.workflowService.workflowCount || 0} workflows`)
+    log('main', `ContentService: ${status.contentService.running ? `running on :${status.contentService.port} (pid ${status.contentService.pid})` : status.contentService.disabled ? 'disabled' : 'stopped'}`)
     log('main', `Comms: ${status.comms.started ? `running [${status.comms.channels?.join(', ') || 'no channels'}]` : status.comms.disabled ? 'disabled' : 'stopped'}${status.comms.paused ? ' (paused)' : ''}`)
     log('main', '')
   })
@@ -729,6 +852,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     voiceService?.stop().catch(() => {})
     windowManager?.stop().catch(() => {})
     workflowService?.stop().catch(() => {})
+    if (contentServiceProcess) {
+      try { contentServiceProcess.kill('SIGTERM') } catch {}
+      contentServiceProcess = null
+    }
     if (commsService?.isStarted) commsService.pause()
 
     wss.stop().catch(() => {})
