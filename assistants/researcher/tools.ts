@@ -4,7 +4,7 @@ const fileTools = container.feature('fileTools')
 
 export const use = [
 	container.feature('browserUse', { headed: true }),
-	fileTools.toTools({ only: ['listDirectory', 'writeFile', 'editFile', 'deleteFile'] }),
+	fileTools.toTools({ only: ['listDirectory', 'readFile', 'writeFile', 'editFile', 'deleteFile'] }),
 ]
 
 export const schemas = {
