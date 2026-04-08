@@ -379,6 +379,4 @@ export async function onSetup({ app, docs, container, broadcast }: WorkflowHooks
       res.status(500).json({ error: err.message })
     }
   })
-
-  console.log('[playbook-designer] hooks loaded — play CRUD and execution ready')
 }

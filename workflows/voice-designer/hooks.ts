@@ -127,6 +127,4 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       res.status(500).json({ error: err.message })
     }
   })
-
-  console.log('[voice-designer] hooks loaded — TTS and voice config endpoints ready')
 }

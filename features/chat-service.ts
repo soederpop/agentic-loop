@@ -300,23 +300,29 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 			callbacks.onToolEnd(callId, toolName, false, endedAt, endedAt - startedAt, error?.message || String(error))
 		}
 
-		session.assistant.on('chunk', onChunk)
-		session.assistant.on('toolCall', onToolCall)
-		session.assistant.on('toolResult', onToolResult)
-		session.assistant.on('toolError', onToolError)
+		const activeAssistant = this._voiceChat && this._voiceMode === 'always'
+			? this._voiceChat.assistant
+			: session.assistant
+
+		activeAssistant.on('chunk', onChunk)
+		activeAssistant.on('toolCall', onToolCall)
+		activeAssistant.on('toolResult', onToolResult)
+		activeAssistant.on('toolError', onToolError)
 
 		try {
-			const response = await session.assistant.ask(text)
+			const response = this._voiceChat && this._voiceMode === 'always'
+				? await this._voiceChat.ask(text)
+				: await activeAssistant.ask(text)
 			callbacks.onComplete(messageId, response)
 			return response
 		} catch (err: any) {
 			callbacks.onError(err.message || 'Assistant error')
 			return ''
 		} finally {
-			session.assistant.off('chunk', onChunk)
-			session.assistant.off('toolCall', onToolCall)
-			session.assistant.off('toolResult', onToolResult)
-			session.assistant.off('toolError', onToolError)
+			activeAssistant.off('chunk', onChunk)
+			activeAssistant.off('toolCall', onToolCall)
+			activeAssistant.off('toolResult', onToolResult)
+			activeAssistant.off('toolError', onToolError)
 		}
 	}
 

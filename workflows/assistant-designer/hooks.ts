@@ -668,6 +668,4 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       res.status(500).json({ error: err.message })
     }
   })
-
-  console.log('[assistant-designer] hooks loaded — designer, deploy, chat, eval ready')
 }

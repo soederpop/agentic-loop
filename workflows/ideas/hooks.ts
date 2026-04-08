@@ -76,6 +76,4 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     }
     res.json({ ok: true, cleared: assistantName })
   })
-
-  console.log('[ideas] hooks loaded — chat at /api/workflows/ideas/chat')
 }

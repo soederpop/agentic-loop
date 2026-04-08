@@ -5,13 +5,24 @@ export const description = 'Talk to an assistant by name — voice mode if it ha
 
 export const positionals = ['cmd', 'target']
 
+const envBool = (key: string) => process.env[key] === '1' || process.env[key] === 'true'
+const envStr = (key: string) => process.env[key] || undefined
+
 export const argsSchema = z.object({
   _: z.array(z.union([z.string(),z.number()])).describe('the words that come after'),
   target: z.string()
     .optional()
-    .describe('Which assistant to route to'),
-  mode: z.enum(['voice','text']).default('voice').describe('How you want the assistant to respond'),
-  dry: z.boolean().default(false).describe('Dry run — show routing info without executing'),
+    .default(envStr('YO_TARGET') ?? '')
+    .describe('Which assistant to route to (env: YO_TARGET)'),
+  mode: z.enum(['voice','text'])
+    .default((envStr('YO_MODE') as 'voice' | 'text') ?? 'voice')
+    .describe('How you want the assistant to respond (env: YO_MODE)'),
+  summarize: z.boolean()
+    .default(envBool('YO_SUMMARIZE'))
+    .describe('Summarize long responses into audio-friendly chunks before speaking (env: YO_SUMMARIZE)'),
+  dry: z.boolean()
+    .default(envBool('YO_DRY'))
+    .describe('Dry run — show routing info without executing (env: YO_DRY)'),
 })
 
 /**
@@ -94,23 +105,66 @@ export default async function yo(options: z.infer<typeof argsSchema>, context: C
   }
 
   if (useVoice) {
-    // Voice mode — use voiceChat for spoken interaction
+    // Voice mode — use voiceMode feature attached to the assistant
     console.log(ui.colors.dim(`(voice mode → ${matchedAssistant})`))
 
-    const voiceChat = container.feature('voiceChat', {
-      assistant: matchedAssistant,
-    }) as any
+    const assistant = assistantsManager.create(matchedAssistant, {
+      maxTokens: 250,
+      temperature: 0.3,
+    })
 
-    await voiceChat.start()
-    const response = await voiceChat.say(message)
+    // Read voice.yaml to configure voiceMode
+    const yaml = container.feature('yaml')
+    const voiceConfigPath = assistant.paths.join('voice.yaml')
+    const voiceCfg = yaml.parse(container.fs.readFile(voiceConfigPath))
+    const provider = voiceCfg.provider || 'elevenlabs'
 
+    const voiceModeOpts: Record<string, any> = {
+      provider,
+      conversationModePrefix: voiceCfg.conversationModePrefix,
+      maxChunkLength: voiceCfg.maxChunkLength || 200,
+      summarize: options.summarize,
+    }
+
+    if (provider === 'voicebox') {
+      voiceModeOpts.voicebox = {
+        profileId: voiceCfg.voicebox?.profileId,
+        engine: voiceCfg.voicebox?.engine || 'qwen',
+        modelSize: voiceCfg.voicebox?.modelSize || '1.7B',
+        language: voiceCfg.voicebox?.language || 'en',
+        instruct: voiceCfg.voicebox?.instruct,
+      }
+    } else {
+      voiceModeOpts.voiceId = voiceCfg.voiceId
+      voiceModeOpts.modelId = voiceCfg.modelId || 'eleven_v3'
+      voiceModeOpts.voiceSettings = voiceCfg.voiceSettings
+    }
+
+    const voiceMode = container.feature('voiceMode', voiceModeOpts)
+    assistant.use(voiceMode)
+    await assistant.start()
+
+    // Stream text to terminal as it arrives
     console.log()
-    console.log(`${ui.colors.blue(matchedAssistant)} ${ui.colors.dim('>')} ${response}`)
+    process.stdout.write(`${ui.colors.blue(matchedAssistant)} ${ui.colors.dim('>')} `)
+    assistant.on('chunk', (chunk: string) => {
+      process.stdout.write(chunk)
+    })
+    assistant.on('response', () => {
+      process.stdout.write('\n')
+    })
 
-    // Wait for any afplay processes to finish before exiting
+    await assistant.ask(message)
+
+    // Wait for speech to finish playing
+    await voiceMode.waitForSpeechDone()
+
+    // Safety net for any straggler afplay
     while (container.proc.isProcessRunning('afplay')) {
       await container.sleep(50)
     }
+
+    process.exit(0)
   } else {
     // Text mode — ask the assistant and pretty-print markdown
     console.log(ui.colors.dim(`(text mode → ${matchedAssistant})`))

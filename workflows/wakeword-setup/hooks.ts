@@ -436,6 +436,4 @@ export async function onSetup({ app, container, wss }: WorkflowHooksSetupContext
       res.status(500).json({ error: err.message })
     }
   })
-
-  console.log('[wakeword-setup] hooks loaded — recording, model building, and testing endpoints ready')
 }

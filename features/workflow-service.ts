@@ -806,7 +806,6 @@ h1 { color: var(--accent, #7aa2f7); margin-bottom: 2rem; }
       const httpServer = (server as any)._listener
       if (httpServer) {
         wss = chatService.attach(httpServer)
-        console.log('[workflow-service] ChatService WebSocket attached')
       } else {
         console.warn('[workflow-service] HTTP _listener unavailable — WebSocket skipped')
       }
@@ -829,18 +828,24 @@ h1 { color: var(--accent, #7aa2f7); margin-bottom: 2rem; }
     }
 
     const hookWorkflows = realWorkflows.filter((w) => w.hasHooks)
+    const loadedHooks: string[] = []
+    const failedHooks: string[] = []
     for (const workflow of hookWorkflows) {
       const hooksPath = container.paths.resolve(workflow.folderPath, 'hooks.ts')
       try {
         const hooks: WorkflowHooks = await import(hooksPath)
         if (hooks.onSetup) {
           await hooks.onSetup({ app, chatService, docs, container, broadcast, wss })
-          console.log(`[workflow-service] hooks loaded: ${workflow.name}`)
+          loadedHooks.push(workflow.name)
         }
         if (hooks.onTeardown) this._hooksTeardowns.push(hooks.onTeardown)
       } catch (err: any) {
+        failedHooks.push(workflow.name)
         console.error(`[workflow-service] hooks failed for ${workflow.name}:`, err.message)
       }
+    }
+    if (failedHooks.length) {
+      console.warn(`[workflow-service] ${failedHooks.length} hook(s) failed: ${failedHooks.join(', ')}`)
     }
 
     // ── Update state ───────────────────────────────────────────────────────────
@@ -848,6 +853,7 @@ h1 { color: var(--accent, #7aa2f7); margin-bottom: 2rem; }
     this.state.set('port', server.port)
     this.state.set('listening', true)
     this.state.set('workflowCount', servedWorkflows.length)
+    this.state.set('hooksLoaded', loadedHooks.length)
 
     this.emit('started', { port: server.port, workflowCount: servedWorkflows.length })
 

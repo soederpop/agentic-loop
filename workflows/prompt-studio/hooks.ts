@@ -206,6 +206,4 @@ export async function onSetup({ app, docs, container }: WorkflowHooksSetupContex
       res.status(500).json({ error: err.message })
     }
   })
-
-  console.log('[prompt-studio] hooks loaded — prompts, run-prompt, eval ready')
 }

@@ -169,8 +169,6 @@ export async function onSetup({ app, chatService, docs, container, broadcast, ws
       return false
     })
   }
-
-  console.log('[project-builder] hooks loaded — build API and chat ready')
 }
 
 export async function onTeardown() {

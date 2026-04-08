@@ -341,7 +341,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     if (options.contentService && !contentServiceProcess) {
       try {
         const docsPath = container.paths.resolve(options.docsPath)
-        contentServiceProcess = proc.spawn('cnotes', ['serve', docsPath, '--port', String(contentServicePort)], {
+        contentServiceProcess = proc.spawn('cnotes', ['serve', docsPath, '--port', String(contentServicePort), '--refresh-interval', '20'], {
           cwd: container.paths.cwd,
           stdout: 'pipe',
           stderr: 'pipe',
@@ -514,6 +514,33 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         break
       case 'voice-route':
         handleVoiceRoute(payload, respond)
+        break
+      case 'voice-cancel':
+        if (voiceService) {
+          voiceService.cancelInteraction()
+          log('voice', 'cancelled by overlay')
+          respond({ ok: true })
+        } else {
+          respond({ error: 'voice service not running' })
+        }
+        break
+      case 'assistant-picker-select':
+        if (voiceService) {
+          voiceService.handlePickerSelect(payload.assistant)
+          log('voice', `picker selected: ${payload.assistant}`)
+          respond({ ok: true })
+        } else {
+          respond({ error: 'voice service not running' })
+        }
+        break
+      case 'assistant-picker-cancel':
+        if (voiceService) {
+          voiceService.handlePickerCancel()
+          log('voice', 'picker cancelled')
+          respond({ ok: true })
+        } else {
+          respond({ error: 'voice service not running' })
+        }
         break
       case 'eval':
         handleEval(payload, ws, respond)
@@ -738,7 +765,8 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       log('windowManager', `error: ${err?.message || err}`)
     })
 
-    log('windowManager', `listening on ${windowManager.state.get('socketPath')}`)
+    const socketPath = windowManager.state.get('socketPath')
+    log('windowManager', socketPath ? `listening on ${socketPath}` : 'started')
   } catch (err: any) {
     log('windowManager', `failed to start: ${err?.message || err}`)
   }
@@ -752,7 +780,9 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       ...(registryPorts?.workflow ? { port: registryPorts.workflow } : {}),
     })
     await workflowService.start()
-    log('workflowService', `listening on http://localhost:${workflowService.port}`)
+    const hooksLoaded = workflowService.state.get('hooksLoaded') || 0
+    const workflowCount = workflowService.state.get('workflowCount') || 0
+    log('workflowService', `listening on http://localhost:${workflowService.port} — ${workflowCount} workflows, ${hooksLoaded} hooks`)
     recordEvent('workflowService', 'started', { port: workflowService.port })
   } catch (err: any) {
     log('workflowService', `failed to start: ${err?.message || err}`)
@@ -768,7 +798,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       contentServicePort = registryPorts?.content || 4100
       const docsPath = container.paths.resolve(options.docsPath)
 
-      contentServiceProcess = proc.spawn('cnotes', ['serve', docsPath, '--port', String(contentServicePort)], {
+      contentServiceProcess = proc.spawn('cnotes', ['serve', docsPath, '--port', String(contentServicePort), '--refresh-interval', '20'], {
         cwd: container.paths.cwd,
         stdout: 'pipe',
         stderr: 'pipe',

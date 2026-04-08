@@ -50,6 +50,4 @@ export async function onSetup({ app, chatService, container, wss }: WorkflowHook
       listener.off('preview', onPreview)
     }
   })
-
-  console.log(`[dashboard] voice dictation WebSocket on port ${voicePort}`)
 }

@@ -142,6 +142,21 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       this.handleTriggerWord(wakeword)
     })
 
+    // 5. Wire up hotkey trigger from native app (Ctrl+Space → assistant picker)
+    this.windowManager.on('hotkeyTrigger', () => {
+      this.emit('info', 'Hotkey trigger received — opening assistant picker')
+      this.showAssistantPicker().then((selected) => {
+        if (selected) {
+          this.emit('info', `Picker selected: ${selected}`)
+          this.handleTriggerWord(selected)
+        } else {
+          this.emit('info', 'Picker dismissed')
+        }
+      }).catch((err: any) => {
+        this.emit('info', `Picker error: ${err?.message || String(err)}`)
+      })
+    })
+
     if (listener.inputMode === 'wakeword') {
       listener.waitForTriggerWord()
     } else if (listener.inputMode === 'continuous') {
@@ -154,6 +169,16 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     this.emit('started')
 
     return this
+  }
+
+  /** Cancels any in-progress voice interaction (e.g. user clicked overlay ✕). */
+  async cancelInteraction() {
+    this._cancelled = true
+    this.killAfplay()
+    this.listener.cancelListen()
+    await this.closeTriggerOverlay()
+    this.listener.unlock()
+    this.emit('info', 'Voice interaction cancelled')
   }
 
   /** Tears down the voice subsystem. */
@@ -261,9 +286,17 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     return entry.chat
   }
 
+  private get authorityPort(): number | null {
+    try {
+      const registry = this.container.feature('instanceRegistry') as any
+      return registry.getSelf()?.ports?.authority ?? null
+    } catch { return null }
+  }
+
   private buildTriggerOverlayHtml(assistantName: string, wakeword: string) {
     const label = assistantName.replace(/[&<>"']/g, '')
     const phrase = wakeword.replace(/[&<>"']/g, '').replace(/_/g, ' ')
+    const wsPort = this.authorityPort
 
     return `<!doctype html>
 <html>
@@ -406,7 +439,7 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
 </head>
 <body>
   <div class="shell">
-    <div class="cancel">\u2715</div>
+    <div class="cancel" id="cancelBtn">\u2715</div>
     <div class="dot" id="dot"></div>
     <div class="status" id="status">Listening</div>
     <div class="assistant">${label}</div>
@@ -537,6 +570,19 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     // Also keep setVU as fallback if host sends levels
     window.setVU = function(level) { applyLevel(level); };
 
+    // Cancel button: connect to authority WS and send voice-cancel
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      ${wsPort ? `
+      try {
+        const ws = new WebSocket('ws://localhost:${wsPort}');
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ action: 'voice-cancel' }));
+          setTimeout(() => ws.close(), 500);
+        };
+      } catch (e) { console.warn('cancel WS failed', e); }
+      ` : `console.warn('no authority port — cancel unavailable');`}
+    });
+
     // Auto-start mic VU
     startMicVU();
   </script>
@@ -611,6 +657,274 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     } catch {
       // no afplay running, that's fine
     }
+  }
+
+  /** The picker overlay handle (if open). */
+  private _pickerOverlay: WindowHandleLike | null = null
+
+  /** Builds the HTML for the assistant picker overlay. */
+  private buildAssistantPickerHtml(): string {
+    const wsPort = this.authorityPort
+    const assistants = this._entries.map(e => e.assistantName)
+    const assistantsJson = JSON.stringify(assistants)
+
+    return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: rgba(6, 10, 20, 0.82);
+      --border: rgba(255,255,255,0.12);
+      --text: rgba(255,255,255,0.96);
+      --muted: rgba(210,225,255,0.55);
+      --selected-bg: rgba(91,192,255,0.18);
+      --selected-border: rgba(91,192,255,0.5);
+      --selected-text: #8cf3ff;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: transparent;
+      overflow: hidden;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      border-radius: 16px;
+    }
+    body {
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      backdrop-filter: blur(24px) saturate(140%);
+      -webkit-backdrop-filter: blur(24px) saturate(140%);
+    }
+    .shell {
+      width: 100%; height: 100%;
+      border-radius: 16px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+      display: flex;
+      flex-direction: column;
+      padding: 12px 0;
+    }
+    .header {
+      padding: 0 16px 10px;
+      font-size: 11px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 4px;
+    }
+    .list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 8px;
+    }
+    .item {
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.1s, border-color 0.1s;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .item:hover {
+      background: rgba(255,255,255,0.05);
+    }
+    .item.selected {
+      background: var(--selected-bg);
+      border-color: var(--selected-border);
+      color: var(--selected-text);
+    }
+    .item .index {
+      font-size: 12px;
+      color: var(--muted);
+      min-width: 18px;
+      text-align: center;
+    }
+    .item.selected .index {
+      color: var(--selected-border);
+    }
+    .hint {
+      padding: 8px 16px 2px;
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      letter-spacing: 0.05em;
+      border-top: 1px solid var(--border);
+      margin-top: 4px;
+    }
+    .hint kbd {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.15);
+      font-family: inherit;
+      font-size: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="header">Select Assistant</div>
+    <div class="list" id="list"></div>
+    <div class="hint">
+      <kbd>\u2191</kbd><kbd>\u2193</kbd> or <kbd>j</kbd><kbd>k</kbd> to navigate \u2002\u00b7\u2002 <kbd>Enter</kbd> to select \u2002\u00b7\u2002 <kbd>Esc</kbd> to cancel
+    </div>
+  </div>
+  <script>
+    const assistants = ${assistantsJson};
+    const listEl = document.getElementById('list');
+    let selectedIndex = 0;
+
+    function render() {
+      listEl.innerHTML = '';
+      assistants.forEach((name, i) => {
+        const div = document.createElement('div');
+        div.className = 'item' + (i === selectedIndex ? ' selected' : '');
+        div.innerHTML = '<span class="index">' + (i + 1) + '</span>' + name;
+        div.addEventListener('click', () => { selectedIndex = i; confirm(); });
+        listEl.appendChild(div);
+      });
+      const sel = listEl.querySelector('.selected');
+      if (sel) sel.scrollIntoView({ block: 'nearest' });
+    }
+
+    function move(delta) {
+      selectedIndex = (selectedIndex + delta + assistants.length) % assistants.length;
+      render();
+    }
+
+    function sendCommand(action, extra) {
+      ${wsPort ? `
+      try {
+        const ws = new WebSocket('ws://localhost:${wsPort}');
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: 'command', payload: { action, ...extra } }));
+          setTimeout(() => ws.close(), 500);
+        };
+      } catch (e) { console.warn('picker WS failed', e); }
+      ` : `console.warn('no authority port');`}
+    }
+
+    function confirm() {
+      const selected = assistants[selectedIndex];
+      if (!selected) return;
+      sendCommand('assistant-picker-select', { assistant: selected });
+    }
+
+    function cancel() {
+      sendCommand('assistant-picker-cancel', {});
+    }
+
+    document.addEventListener('keydown', (e) => {
+      switch (e.key) {
+        case 'ArrowDown': case 'j': e.preventDefault(); move(1); break;
+        case 'ArrowUp': case 'k': e.preventDefault(); move(-1); break;
+        case 'Enter': e.preventDefault(); confirm(); break;
+        case 'Escape': e.preventDefault(); cancel(); break;
+        default:
+          // Number keys 1-9 for direct selection
+          const num = parseInt(e.key);
+          if (num >= 1 && num <= assistants.length) {
+            selectedIndex = num - 1;
+            confirm();
+          }
+      }
+    });
+
+    render();
+    // Focus the window so keyboard events are captured
+    window.focus();
+  </script>
+</body>
+</html>`
+  }
+
+  /** Pending picker resolve callback, set by showAssistantPicker, resolved by handlePickerSelect/Cancel */
+  private _pickerResolve: ((value: string | null) => void) | null = null
+  private _pickerTimeout: ReturnType<typeof setTimeout> | null = null
+
+  /** Opens the assistant picker overlay. Returns the selected assistant name, or null if cancelled. */
+  async showAssistantPicker(): Promise<string | null> {
+    // Don't show picker if already in a voice interaction
+    if (this.listener.state.get('locked')) {
+      this.emit('info', 'Picker ignored — voice interaction in progress')
+      return null
+    }
+
+    // Don't show picker if no assistants
+    if (this._entries.length === 0) {
+      this.emit('info', 'Picker ignored — no voice assistants discovered')
+      return null
+    }
+
+    // Close any existing picker
+    await this.closeAssistantPicker()
+
+    const wm = this.windowManager as any
+    const overlayWidth = 360
+    const itemHeight = 48
+    const chromeHeight = 100 // header + hint + padding
+    const overlayHeight = Math.min(chromeHeight + this._entries.length * itemHeight, 500)
+    const display = wm.getPrimaryDisplay()
+    const centeredX = Math.round((display.width - overlayWidth) / 2)
+
+    const handle = await wm.spawn({
+      html: this.buildAssistantPickerHtml(),
+      width: overlayWidth,
+      height: overlayHeight,
+      x: centeredX,
+      y: 80,
+      alwaysOnTop: true,
+      decorations: 'none',
+      transparent: true,
+      shadow: false,
+      clickThrough: false,
+    })
+
+    this._pickerOverlay = handle as WindowHandleLike
+
+    return new Promise<string | null>((resolve) => {
+      this._pickerResolve = resolve
+
+      // Auto-cancel after 30s
+      this._pickerTimeout = setTimeout(() => {
+        this.handlePickerCancel()
+      }, 30000)
+    })
+  }
+
+  /** Called by the command handler when the picker overlay sends a selection. */
+  handlePickerSelect(assistant: string) {
+    const resolve = this._pickerResolve
+    this._pickerResolve = null
+    if (this._pickerTimeout) { clearTimeout(this._pickerTimeout); this._pickerTimeout = null }
+    this.closeAssistantPicker()
+    resolve?.(assistant)
+  }
+
+  /** Called by the command handler when the picker overlay is cancelled. */
+  handlePickerCancel() {
+    const resolve = this._pickerResolve
+    this._pickerResolve = null
+    if (this._pickerTimeout) { clearTimeout(this._pickerTimeout); this._pickerTimeout = null }
+    this.closeAssistantPicker()
+    resolve?.(null)
+  }
+
+  private async closeAssistantPicker() {
+    const overlay = this._pickerOverlay
+    this._pickerOverlay = null
+    await overlay?.close().catch(() => {})
   }
 
   /** Resolves a wake word to a voice assistant entry by matching against aliases. */

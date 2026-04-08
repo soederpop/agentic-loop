@@ -109,7 +109,17 @@ export class VoiceChat extends Feature<VoiceChatState, VoiceChatOptions> {
 			temperature: 0.3
 		}
 
-		return this.assistantsManager.create(this.options.assistant, createOptions)
+		const assistantRef = this.options.assistant
+		const [assistantName, assistantUUID] = assistantRef.split(':')
+
+		if (assistantUUID) {
+			const existing = this.container.getHelperByUUID(assistantUUID) as Assistant | undefined
+			if (existing) {
+				return existing
+			}
+		}
+
+		return this.assistantsManager.create(assistantName || assistantRef, createOptions)
 	}
 
 	async start() {

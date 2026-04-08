@@ -117,6 +117,7 @@ export const WindowManagerEventsSchema = FeatureEventsSchema.extend({
   terminalExited: z.tuple([z.any().describe('Terminal lifecycle payload emitted when a terminal process exits')]).describe('Emitted when the native app reports a terminal process exit event'),
   windowFocus: z.tuple([z.any().describe('Focus payload with windowId, kind, focused (boolean), and frame {x, y, width, height}')]).describe('Emitted when a window gains or loses focus'),
   windowStateSync: z.tuple([z.any().describe('Authoritative native window roster snapshot')]).describe('Emitted when the broker or native app pushes a full window state snapshot'),
+  hotkeyTrigger: z.tuple([z.any().describe('The hotkey trigger message from the native app')]).describe('Emitted when the native app sends a hotkey trigger (e.g. Ctrl+Space for assistant picker)'),
   error: z.tuple([z.any().describe('The error')]).describe('Emitted on error'),
 })
 
@@ -1775,6 +1776,11 @@ export class WindowManager extends Feature<WindowManagerState, WindowManagerOpti
       this.emit('windowFocus', messageOut)
       // Broadcast to all producers
       this.broadcastToProducers(JSON.stringify(messageOut))
+    }
+
+    if (msg.type === 'hotkeyTrigger') {
+      this.emit('hotkeyTrigger', msg)
+      return
     }
 
     if (msg.type === 'windowStateSync') {

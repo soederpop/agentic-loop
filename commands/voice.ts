@@ -154,13 +154,15 @@ async function generateForAssistant(
 		if (!el.state.get('connected')) await el.connect()
 		return el.synthesize(text, {
 			voiceId: voice,
+			modelId: cfg.modelId || 'eleven_v3',
 			...(cfg.voiceSettings ? { voiceSettings: cfg.voiceSettings } : {}),
 		})
 	}
 
 	for (let i = 0; i < phrases.length; i++) {
 		const phrase = phrases[i]
-		const cacheKey = `voice-tts:${container.utils.hashObject({ text: phrase.text, voice, provider, format })}`
+		const modelId = cfg.modelId || 'eleven_v3'
+		const cacheKey = `voice-tts:${container.utils.hashObject({ text: phrase.text, voice, provider, format, modelId })}`
 		const textPart = slugify(phrase.text).slice(0, 48)
 		const fileName = `${String(i + 1).padStart(2, '0')}-${slugify(phrase.id)}${textPart ? `-${textPart}` : ''}.${format}`
 		const finalPath = `${outputDir}/${fileName}`
