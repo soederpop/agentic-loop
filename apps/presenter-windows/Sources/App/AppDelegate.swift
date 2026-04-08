@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -22,6 +23,26 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         self.appController = appController
         launchStartupCommandIfConfigured(settings: settings)
         appController.start()
+
+        // Register existing hotkey (Cmd+Opt+L) with id 0
+        HotkeyManager.shared.register(
+            id: 0,
+            keyCode: settings.hotkeyKeyCode,
+            modifiers: settings.hotkeyModifiers
+        ) {
+            AppLogger.info("primary hotkey triggered")
+        }
+
+        // Register Ctrl+Space (id 1) — sends hotkeyTrigger to open the assistant picker
+        HotkeyManager.shared.register(
+            id: 1,
+            keyCode: UInt32(0x31),       // kVK_Space
+            modifiers: UInt32(0x1000)   // controlKey
+        ) {
+            AppLogger.info("assistant picker hotkey triggered (ctrl+space)")
+            windowIPCClient.sendHotkeyTrigger()
+        }
+
         AppLogger.info("window manager app initialized")
     }
 

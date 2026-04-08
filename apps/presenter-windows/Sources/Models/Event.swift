@@ -293,6 +293,16 @@ public struct WindowFocusMessage: Encodable {
     }
 }
 
+public struct HotkeyTriggerMessage: Encodable {
+    public let type: String
+    public let timestamp: String
+
+    public init() {
+        self.type = "hotkeyTrigger"
+        self.timestamp = ISO8601DateFormatter().string(from: Date())
+    }
+}
+
 public struct WindowStateSyncMessage: Encodable {
     public let type: String
     public let windows: [ManagedWindowState]
