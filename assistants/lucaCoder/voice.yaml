@@ -1,42 +1,32 @@
-voiceId: YjlcD3XHztjJEo2wNszv
-conversationModePrefix: '[cool relaxed swagger]'
+voiceId: jYMoRsZQbrEVBccBz1fa
+conversationModePrefix: '[calm]'
 voiceSettings:
   stability: 0.75
   similarityBoost: 0.88
   style: 0.83
   speed: 1.2
   useSpeakerBoost: true
-aliases:
-  - hacker
-  - yo hacker
 phrases:
   generic-ack:
     - talk to me
-    - hollar
     - get at me
     - speak
+    - '[denzel] my man'
   generic-finish:
     - finished
     - done
-    - killed it
     - next
-  greeting:
-    - sup
-    - whats good
   farewell:
-    - im out
-    - ill get at you
     - peace
+    - i’ll get at you
+    - aight deuces
   thinking:
     - workin
-    - lemme cook
-    - aight
-    - aight hold up
+    - running some shit
+    - '[confident] let me cook'
   mistake:
-    - sheeeit
     - got damn
     - motherfucker
 provider: elevenlabs
 modelId: eleven_v3
-wakeWordThreshold: 0.45
-wakeWordModel: yo_hacker.rpw
+aliases: []

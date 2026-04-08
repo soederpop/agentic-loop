@@ -1,5 +1,12 @@
 import { z } from 'zod'
 
+const fileTools = container.feature('fileTools')
+
+export const use = [
+	container.feature('browserUse', { headed: true }),
+	fileTools.toTools({ only: ['listDirectory', 'writeFile', 'editFile', 'deleteFile'] }),
+]
+
 export const schemas = {
 	createResearchJob: z.object({
 		prompt: z.string().describe(
@@ -146,7 +153,17 @@ const effortModels: Record<string, string> = {
 }
 
 export async function createResearchJob(options: z.infer<typeof schemas.createResearchJob>): Promise<string> {
+	if (assistant.isFork) {
+		return JSON.stringify({ error: 'Research forks cannot create sub-forks. Answer the question directly.' })
+	}
+
 	const model = effortModels[options.effort || 'medium']
+
+	const outputFolder = assistant.state.get('outputFolder') as string | undefined
+	
+	if (outputFolder) {
+		await container.fs.ensureFolderAsync(outputFolder)
+	}
 
 	const job = await assistant.createResearchJob(
 		options.prompt,
@@ -154,6 +171,20 @@ export async function createResearchJob(options: z.infer<typeof schemas.createRe
 		{
 			history: options.history === 'full' ? 'full' : 'none',
 			model,
+			forbidTools: ['createResearchJob', 'checkResearchJobs'],
+			onFork: (fork) => {
+				if (outputFolder) {
+					fork.addSystemPromptExtension('output-folder', [
+						'## Output Directory',
+						`Write ALL research output files to: ${outputFolder}/`,
+						'Do NOT write files outside of this directory.',
+						'',
+						'## Incremental Saving',
+						'Save your work to disk incrementally — create your output file early with your first finding, then use editFile to append new sections as you discover more.',
+						'Do NOT wait until you are finished to write. Partial results must survive interruption.',
+					].join('\n'))
+				}
+			},
 		}
 	)
 

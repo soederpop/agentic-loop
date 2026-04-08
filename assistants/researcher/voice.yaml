@@ -6,9 +6,6 @@ voiceSettings:
   style: 0.6
   speed: 1.05
   useSpeakerBoost: true
-aliases:
-  - nerd
-  - yo nerd
 phrases:
   generic-ack:
     - What
@@ -27,5 +24,3 @@ phrases:
     - That sucked
 provider: elevenlabs
 modelId: eleven_v3
-wakeWordThreshold: 0.4
-wakeWordModel: yo_nerd.rpw

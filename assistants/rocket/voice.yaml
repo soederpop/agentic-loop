@@ -39,5 +39,5 @@ phrases:
 provider: elevenlabs
 modelId: eleven_v3
 
-wakeWordThreshold: 0.48
+wakeWordThreshold: 0.44
 wakeWordModel: yo_rocket.rpw

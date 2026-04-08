@@ -1,6 +1,4 @@
 import { z } from 'zod'
-import matter from 'gray-matter'
-import { validateDocument } from 'contentbase'
 import type { Assistant, AGIContainer } from '@soederpop/luca/agi'
 
 declare global {
@@ -74,17 +72,6 @@ export const schemas = {
 	}).describe('Call this function to execute a prompt that you or I have written.  The response will be the output of the claude code session.'),
 	*/
 
-	updateDocument: z.object({
-	   id: z.string().min(1).describe('The id of the document you want to write. No need to include the .md extension'),
-		 rawContent: z.string().describe('YAML Frontmatter + Markdown content for the document.  Follow the model schema.  If you do not know it or are not sure, call the README tool.')
-	}).describe('Call this function when you want to update the contents of an existing document. Make sure you understand the models requirements in terms of section headings and yaml frontmatter meta fields'),
-
-	readDocs: z.object({
-		idOrIdsCsv: z.string().describe('Pass a single document id, or a CSV list of document ids to read multiple documents at once.  Omit the markdown extension.'),
-	}).describe('Call this function when you want to read documents.  Pass it a single id, or a CSV list'),
-
-	listCodeDirectories: z.object({}).describe('The list code directories commands shows the portfolio directory structure. Your only interest in these paths is for asking questions of our coding assistant and knowing where to direct them to look. Consult memories/USER for some common references so you can translate when i am asking.'),
-
 	askCodingAssistant: z.object({
 		question: z.string().min(15).describe('The question you want to ask the coding assistant.  The coding assistant has grep, ls, cat, sed, awk, cat, and can read all of the code on this system and answer specific questions based on it.'),
 	}).describe('Ask the coding assistant a question.  The coding assistant has grep, ls, cat, sed, awk, cat, and can read all of the code on this system and answer specific questions based on it.'),
@@ -100,12 +87,17 @@ export const schemas = {
 
 	conductResearch: z.object({
 		reportId: z.string().min(1).describe('The id of the report document (e.g. reports/my-topic). Must be in "approved" status. The report\'s Research Plan section will be used as the research prompt.'),
-	}).describe('Kick off a research job using the researcher assistant. The report must exist and be in "approved" status. The researcher will investigate the questions in the Research Plan, then you synthesize the results back into the report.'),
+		subfolder: z.string().optional().describe('Optional subfolder within docs/reports/ for the researcher to write artifacts into. Created automatically if it does not exist. E.g. "jason-eckert-harvest" → docs/reports/jason-eckert-harvest/'),
+	}).describe('Kick off a research job in the background using the researcher assistant. The report must exist and be in "approved" status. Returns immediately after launch — use checkResearchStatus to monitor progress. The researcher writes results to disk incrementally.'),
+
+	checkResearchStatus: z.object({
+		reportId: z.string().optional().describe('The id of a specific report to check status for. If omitted, returns status of all research jobs.'),
+	}).describe('Check the status of background research jobs. Returns whether each job is running, completed, or failed. You can also check the output directory for incremental results.'),
 
 	commitFile: z.object({
 		filePath: z.string().min(1).describe('The path of the file to commit, relative to the repo root (e.g. docs/memories/SELF.md)'),
 		message: z.string().min(1).describe('The commit message'),
-	}).describe('Stage and commit exactly one file. Use this right after updateDocument to commit the change. Only the specified file will be staged — other working tree changes are left untouched.'),
+	}).describe('Stage and commit exactly one file. Use this after writing or editing a document to commit the change. Only the specified file will be staged — other working tree changes are left untouched.'),
 
 	presentDocument: z.object({
 		path: z.string().min(1).describe('The document id to present (e.g. "goals/user-experience-improvements"). Use the ids from the ls tool. Prefixes like "docs/" and suffixes like ".md" are stripped automatically.'),
@@ -125,7 +117,7 @@ export async function ls() : Promise<string> {
 		'----',
 		...available.sort(),
 		'----',
-		'You can call readDocs({ idOrIdsCsv }) with any one of these values'
+		'You can use readFile to read any of these documents at docs/<id>.md'
 	].join('\n')
 }
 
@@ -139,32 +131,29 @@ export async function README() : Promise<string> {
 	return docs
 }
 
-export async function readDocs(options: z.infer<typeof schemas.readDocs>): Promise<string> {
-	const { idOrIdsCsv } = options
-
-	const ids = idOrIdsCsv.split(',').map(id => id.trim().replace(/.md$/i, '').replace(/^docs\//i, ''))
-
-	// make sure the collection is fresh, this is expensive i know
-	await assistant.contentDb.collection.load({ refresh: true })
-
-	const combinedDocs = await assistant.contentDb.readMultiple(ids, {
-		meta: true,
-	})
-
-	return combinedDocs 
-}
-
-
-export async function listCodeDirectories() : Promise<string> {
-	const result = await assistant.container.proc.exec('tree -d -L 3 -I node_modules')
-	return result
-}
 
 let researchAssistant : Assistant | undefined
 
+interface ResearchJob {
+	reportId: string
+	outputDir: string
+	startedAt: string
+	status: 'running' | 'completed' | 'failed'
+	error?: string
+	finishedAt?: string
+}
+
+const researchJobs: Map<string, ResearchJob> = new Map()
+
 export async function conductResearch(options: z.infer<typeof schemas.conductResearch>) : Promise<string> {
-	const { reportId } = options
+	const { reportId, subfolder } = options
 	const id = reportId.replace(/.md$/i, '').replace(/^docs\//i, '')
+
+	// Check if there's already a running job for this report
+	const existing = researchJobs.get(id)
+	if (existing?.status === 'running') {
+		return JSON.stringify({ success: false, error: `Research is already running for "${id}" (started ${existing.startedAt}). Use checkResearchStatus to monitor progress.` })
+	}
 
 	// Read the report
 	await assistant.contentDb.collection.load({ refresh: true })
@@ -176,6 +165,14 @@ export async function conductResearch(options: z.infer<typeof schemas.conductRes
 
 	if (doc.meta?.status !== 'approved') {
 		return JSON.stringify({ success: false, error: `Report "${id}" is in "${doc.meta?.status}" status. It must be "approved" before research can begin. Present the research plan to the boss for approval first.` })
+	}
+
+	// Determine and create output directory
+	let outputDir = 'docs/reports'
+	if (subfolder) {
+		outputDir = `docs/reports/${subfolder}`
+		const fs = container.feature('fs')
+		await fs.ensureFolderAsync(outputDir)
 	}
 
 	// Extract the Research Plan section to use as the prompt
@@ -190,8 +187,22 @@ export async function conductResearch(options: z.infer<typeof schemas.conductRes
 		researchAssistant = await assistant.subagent('researcher')
 	}
 
+	// Set output folder on researcher state so it propagates to forks via onFork
+	researchAssistant.state.set('outputFolder', outputDir)
+	researchAssistant.addSystemPromptExtension('output-folder', [
+		'## Output Directory',
+		`Write ALL research output files to: ${outputDir}/`,
+		'Do NOT write files outside of this directory.',
+		'',
+		'## Incremental Saving',
+		'Save your work to disk incrementally — create your output file early with your first finding, then use editFile to append new sections as you discover more.',
+		'Do NOT wait until you are finished to write. Partial results must survive interruption.',
+	].join('\n'))
+
 	const prompt = [
 		`You are conducting research for a report: "${doc.title || id}"`,
+		'',
+		`IMPORTANT: Write all output files to the ${outputDir}/ directory. Save incrementally — create your file early and append findings as you go, so partial results survive if the job is aborted.`,
 		'',
 		'Here is the full report with the research plan:',
 		'---',
@@ -203,14 +214,51 @@ export async function conductResearch(options: z.infer<typeof schemas.conductRes
 		'Be specific, factual, and note any contradictions or gaps.',
 	].join('\n')
 
-	const result = await researchAssistant.ask(prompt)
+	// Track the job
+	const job: ResearchJob = {
+		reportId: id,
+		outputDir,
+		startedAt: new Date().toISOString(),
+		status: 'running',
+	}
+	researchJobs.set(id, job)
+
+	// Fire and forget — don't await
+	researchAssistant.ask(prompt).then(() => {
+		job.status = 'completed'
+		job.finishedAt = new Date().toISOString()
+	}).catch((err: any) => {
+		job.status = 'failed'
+		job.error = err?.message || String(err)
+		job.finishedAt = new Date().toISOString()
+	})
 
 	return JSON.stringify({
 		success: true,
 		reportId: id,
-		message: `Research completed for "${id}". Use readDocs to review the findings, then synthesize them into the report using updateDocument.`,
-		findings: result,
+		outputDir,
+		message: `Research job launched for "${id}". The researcher is working in the background and writing results to ${outputDir}/. Use checkResearchStatus to monitor progress, or check the output directory directly.`,
 	})
+}
+
+export async function checkResearchStatus(options: z.infer<typeof schemas.checkResearchStatus>) : Promise<string> {
+	const { reportId } = options
+	const id = reportId ? reportId.replace(/.md$/i, '').replace(/^docs\//i, '') : undefined
+
+	if (id) {
+		const job = researchJobs.get(id)
+		if (!job) {
+			return JSON.stringify({ found: false, message: `No research job found for "${id}".` })
+		}
+		return JSON.stringify(job)
+	}
+
+	// Return all jobs
+	const allJobs = Object.fromEntries(researchJobs)
+	if (researchJobs.size === 0) {
+		return JSON.stringify({ message: 'No research jobs have been launched this session.' })
+	}
+	return JSON.stringify(allJobs)
 }
 
 let codingAssistant : Assistant | undefined
@@ -243,36 +291,6 @@ export async function executePrompt(options: z.infer<typeof schemas.executePromp
 }
 */
 
-export async function updateDocument(options: z.infer<typeof schemas.updateDocument>) : Promise<{ success: boolean, errors?: string[] }> {
-	const { id, rawContent } = options
-	const collection = assistant.contentDb.collection
-
-	// Parse the raw content to extract meta and body
-	const { data: meta, content } = matter(rawContent)
-
-	// Create an in-memory document for validation
-	const doc = collection.createDocument({ id, content, meta })
-
-	// Find the model definition for this pathId
-	const modelDef = collection.findModelDefinition(id)
-
-	if (modelDef) {
-		const result = validateDocument(doc, modelDef)
-
-		if (!result.valid) {
-			return {
-				success: false,
-				errors: result.errors.map(e => `${e.path.join('.')}: ${e.message}`)
-			}
-		}
-	}
-
-	// Validation passed (or no model to validate against) — write to disk
-	await collection.saveItem(id, { content: rawContent })
-	await collection.load({ refresh: true })
-
-	return { success: true }
-}
 
 export async function commitFile(options: z.infer<typeof schemas.commitFile>): Promise<{ success: boolean, error?: string }> {
 	const { filePath, message } = options

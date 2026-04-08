@@ -5,7 +5,7 @@ tags:
   - company
   - legal-tech
   - legalist
-status: approved
+status: researching
 relatedReports: []
 ---
 

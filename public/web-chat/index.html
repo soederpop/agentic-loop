@@ -599,9 +599,10 @@
         pickerEl.appendChild(opt)
       }
 
-      const saved = getAssistantId()
-      const valid = assistantList.some(a => a.id === saved)
-      pickerEl.value = valid ? saved : defaultAssistant
+      const defaultValid = assistantList.some(a => a.id === defaultAssistant)
+      const initialAssistant = defaultValid ? defaultAssistant : (assistantList[0]?.id || 'chiefOfStaff')
+      pickerEl.value = initialAssistant
+      setAssistantId(initialAssistant)
     } catch (e) {
       console.error('Failed to load assistants', e)
     }
