@@ -1,5 +1,5 @@
 ---
-status: pending
+status: approved
 project: tauri-desktop-app
 ---
 
