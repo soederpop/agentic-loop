@@ -7,6 +7,7 @@
 import type { WorkflowHooksSetupContext } from '../../features/workflow-service'
 
 let _builders: Map<string, any> | null = null
+let _watcherClient: any = null
 
 export async function onSetup({ app, chatService, docs, container, broadcast, wss }: WorkflowHooksSetupContext) {
   // ── Builder instances keyed by project slug ──────────────────────────────
@@ -38,9 +39,57 @@ export async function onSetup({ app, chatService, docs, container, broadcast, ws
     }
   }
 
+  // ── Watcher client: tap into ongoing builds from luca main ─────────────
+  // Creates a single IPC client that connects to the main process's builder
+  // server (if running) and bridges watcher events to the browser via broadcast.
+
+  try {
+    const watcherClient = container.feature('projectBuilder' as any, { docsPath: './docs' })
+    if (watcherClient._ready) await watcherClient._ready
+
+    if (watcherClient.state.get('mode') === 'client') {
+      _watcherClient = watcherClient
+      const watcherEvents = [
+        'build:start', 'build:complete', 'build:error',
+        'build:aborting', 'build:aborted', 'build:loaded',
+        'plan:start', 'plan:delta', 'plan:complete',
+        'plan:error', 'plan:skipped', 'plan:queued',
+      ]
+      for (const event of watcherEvents) {
+        watcherClient.on(`watcher:${event}`, (data: any) => {
+          broadcast(event, { ...data, projectSlug: data.slug })
+        })
+      }
+    }
+  } catch {
+    // IPC server not running — no ongoing builds to tap into, that's fine
+  }
+
   // Expose to shared serializers used by GET /api/projects, GET /api/project/:slug
   app.locals.getBuilder = getBuilder
   app.locals.wireBuilderEvents = wireBuilderEvents
+
+  // ── Watcher status API (must be before :slug param route) ───────────────
+
+  app.get('/api/build/watcher/status', async (_req: any, res: any) => {
+    try {
+      if (!_watcherClient || _watcherClient.state.get('mode') !== 'client') {
+        return res.json({ connected: false })
+      }
+      const state = await _watcherClient.sendRequest('getState').catch(() => null)
+      if (!state) return res.json({ connected: true, state: null })
+      res.json({
+        connected: true,
+        buildStatus: state.buildStatus,
+        projectSlug: state.projectSlug,
+        currentPlanId: state.currentPlanId,
+        watching: state.watching,
+        loaded: state.loaded,
+      })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
 
   // ── Build status API ────────────────────────────────────────────────────
 
@@ -180,4 +229,5 @@ export async function onTeardown() {
     }
     _builders = null
   }
+  _watcherClient = null
 }

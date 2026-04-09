@@ -698,6 +698,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     watchInterval: options.watchInterval,
   })
 
+  // Start IPC server so external clients (e.g. project-builder workflow) can tap into live builds
+  await builder.startServer()
+  log('builder', 'IPC server listening')
+
   builder.on('watcher:building', (d: any) => {
     log('builder', `building: ${d.slug}`)
     recordEvent('builder', 'building', d)
@@ -709,6 +713,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   builder.on('watcher:plan:start', (d: any) => {
     log('builder', `${d.slug}: plan started`)
     recordEvent('builder', 'plan:start', d)
+  })
+  builder.on('watcher:plan:delta', (d: any) => {
+    const preview = (d.text || '').slice(0, 120).replace(/\n/g, ' ')
+    log('builder', `${d.slug}: ${preview}`)
   })
   builder.on('watcher:plan:complete', (d: any) => {
     const cost = d.costUsd != null ? `$${d.costUsd.toFixed(4)}` : ''

@@ -73,17 +73,45 @@ const MAX_TOOL_OUTPUT = 500
 const DISK_CACHE_KEY = 'project-builder:state-v2'
 const REQUEST_TIMEOUT_MS = 10_000
 
-const ONE_FINAL_NOTE = (planPath: string, remainingPlanPaths: string[]) => `
+const ONE_FINAL_NOTE = (opts: {
+  planPath: string
+  retrospectivePath: string
+  handoffNotesPath: string
+  remainingPlanPaths: string[]
+  previousRetrospectives: { planTitle: string; path: string }[]
+}) => `
 
 ## ONE FINAL NOTE
 
-This plan document is located at: ${planPath}
+This plan document is located at: ${opts.planPath}
 
 When you finish this plan, do the following:
 
-1. Add a \`## Retrospective\` section to the end of this plan document (${planPath}) and write a few short paragraphs about what you learned.
-2. Update any remaining plans in the sequence with anything critical they need to know based on your work. Add your handoff notes to those plans — DO NOT OVERWRITE any existing content in them.
-${remainingPlanPaths.length > 0 ? `\nRemaining plans:\n${remainingPlanPaths.map(p => `- ${p}`).join('\n')}` : ''}
+1. Write a retrospective file at: ${opts.retrospectivePath}
+   - Start with a heading like \`# Retrospective: <plan title>\`
+   - Write a few short paragraphs about what you learned, what went well, what was harder than expected, and any gotchas.
+   - Include any technical decisions you made and why.
+
+2. Write a handoff notes file at: ${opts.handoffNotesPath}
+   - Start with a heading like \`# Handoff Notes: <plan title>\`
+   - Include anything critical that subsequent plans need to know based on your work.
+   - Document any assumptions, incomplete items, or risks for the next phases.
+${opts.remainingPlanPaths.length > 0 ? `\nRemaining plans in the sequence:\n${opts.remainingPlanPaths.map(p => `- ${p}`).join('\n')}` : ''}
+${opts.previousRetrospectives.length > 0 ? `\nPrevious retrospectives (read these if you need context on prior decisions):\n${opts.previousRetrospectives.map(r => `- ${r.planTitle}: ${r.path}`).join('\n')}` : ''}
+`
+
+const CONTEXT_PREAMBLE = (opts: {
+  projectOverviewPath: string
+  previousPlanPaths: { title: string; path: string }[]
+}) => `
+## Context
+
+Before starting, read the project overview to understand the full scope and goals:
+- Project overview: ${opts.projectOverviewPath}
+${opts.previousPlanPaths.length > 0 ? `\nPrevious plans have already been completed. Read them to understand what's been built:\n${opts.previousPlanPaths.map(p => `- ${p.title}: ${p.path}`).join('\n')}` : ''}
+
+---
+
 `
 
 /** Events that trigger a disk state snapshot when in server mode. */
@@ -762,7 +790,47 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
           .map(p => resolve(this.options.docsPath, `${p.id}.md`))
 
         const planFilePath = resolve(this.options.docsPath, `${plan.id}.md`)
-        const prompt = plan.content + ONE_FINAL_NOTE(planFilePath, remainingPlanPaths)
+        const planSlug = plan.id.split('/').pop() || plan.id
+        const projectSlug = this.requireSlug()
+
+        // Paths for retrospective and handoff notes in the reports folder
+        const reportsDir = resolve(this.options.docsPath, 'project-builds', projectSlug)
+        const retrospectivePath = resolve(reportsDir, `${planSlug}-retrospective.md`)
+        const handoffNotesPath = resolve(reportsDir, `${planSlug}-handoff-notes.md`)
+
+        // Gather previous retrospectives for context
+        const previousRetrospectives = this.plans
+          .slice(0, i)
+          .filter(p => p.status === 'completed')
+          .map(p => {
+            const pSlug = p.id.split('/').pop() || p.id
+            return {
+              planTitle: p.title,
+              path: resolve(reportsDir, `${pSlug}-retrospective.md`),
+            }
+          })
+
+        // Gather completed previous plan paths
+        const previousPlanPaths = this.plans
+          .slice(0, i)
+          .filter(p => p.status === 'completed')
+          .map(p => ({
+            title: p.title,
+            path: resolve(this.options.docsPath, `${p.id}.md`),
+          }))
+
+        const projectOverviewPath = resolve(this.options.docsPath, `projects/${projectSlug}.md`)
+
+        const prompt = CONTEXT_PREAMBLE({
+          projectOverviewPath,
+          previousPlanPaths,
+        }) + plan.content + ONE_FINAL_NOTE({
+          planPath: planFilePath,
+          retrospectivePath,
+          handoffNotesPath,
+          remainingPlanPaths,
+          previousRetrospectives,
+        })
 
         const sessionId = await cc.start(prompt, {
           cwd: process.cwd(),
@@ -1018,6 +1086,8 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
   private async markPlanCompleted(planId: string, stats: { costUsd: number; turns: number; toolCalls: number }): Promise<void> {
     try {
       const doc = this.contentDb.collection.document(planId)
+      // Reload from disk to pick up any changes the Claude session made (e.g. retrospective sections)
+      await doc.reload()
       doc.meta.status = 'completed'
       doc.meta.costUsd = stats.costUsd
       doc.meta.turns = stats.turns
@@ -1035,6 +1105,7 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
   private async updateProjectStatus(status: string): Promise<void> {
     try {
       const doc = this.contentDb.collection.document(`projects/${this.requireSlug()}`)
+      await doc.reload()
       doc.meta.status = status
       await doc.save({ normalize: false })
     } catch (err) {
