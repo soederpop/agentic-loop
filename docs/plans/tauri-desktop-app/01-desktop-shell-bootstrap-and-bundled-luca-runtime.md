@@ -1,5 +1,5 @@
 ---
-status: pending
+status: approved
 project: tauri-desktop-app
 ---
 
@@ -30,9 +30,20 @@ The demoable outcome: launch the desktop app, have it start the bundled Luca run
    - WebSocket connection to the authority succeeds
    - optional status query succeeds
 
-5. **Workspace/cwd selection for V1** — Define and implement a simple first version of the workspace model. For this phase, it is enough to support one app-owned workspace/cwd with a clearly visible path in the UI and code.
+5. **Workspace/cwd selection for V1** — Define and implement a simple first version of the workspace model. For this phase, it is enough to support one app-owned workspace/cwd with a clearly visible path in the UI and code. The plan must explicitly distinguish between:
+   - a shared per-user Agentic Loop home at `~/.luca/agentic-loop` that stores app-installed helper packs, templates, and app-managed support files
+   - the selected instance workspace/project directory that Luca actually runs in as its cwd
+   Luca should run in the selected instance workspace, not in `~/.luca/agentic-loop`.
 
-6. **Engine lifecycle policy** — Implement at least one explicit policy for app close behavior, such as:
+6. **Instance creation/bootstrap flow** — Add the first-run and “new instance” path for creating a new Agentic Loop project. For V1 this should:
+   - create or select a target instance directory
+   - run `luca bootstrap --output <instance-dir>` or an equivalent app-owned starter flow
+   - ensure the generated instance `luca.cli.ts` discovers both local project helpers and the shared helper pack from `~/.luca/agentic-loop`
+   - define and document helper precedence/collision policy, with instance-local helpers taking precedence over shared defaults
+
+7. **Shared helper-pack installation** — On first run, ensure `~/.luca/agentic-loop` exists and is populated with the Agentic Loop’s shared `commands/`, `features/`, and any other shipped helper directories needed by instances. This shared install must be versioned, repairable, and separable from any specific user project workspace.
+
+8. **Engine lifecycle policy** — Implement at least one explicit policy for app close behavior, such as:
    - quit app and stop Luca
    - optionally keep Luca running in background for later phases
    For this phase, clarity and predictability matter more than flexibility.
@@ -44,13 +55,18 @@ The demoable outcome: launch the desktop app, have it start the bundled Luca run
 - `commands/main.ts` — Authority runtime behavior
 - `features/instance-registry.ts` — Shared registry and port allocation
 - `luca.cli.ts` — Project startup behavior
+- `setup.sh` — current setup expectations and dependency flow
+- `scripts/install.sh` — current machine dependency installation flow
 
 ## Verification
 
 - The desktop app builds and launches locally
 - The bundled Luca binary is present and executable from the app runtime
 - Launching the desktop app starts `luca main` successfully for the configured workspace
+- The configured workspace/cwd shown in the UI is the instance project directory, while the shared helper-pack home is tracked separately as `~/.luca/agentic-loop`
+- A new Agentic Loop instance can be created from the desktop app and bootstrapped successfully
+- The bootstrapped instance loads shared Agentic Loop helpers from `~/.luca/agentic-loop` while preserving instance-local override behavior
 - Readiness detection completes without relying only on arbitrary sleep delays
-- The app can display engine status such as pid, running/stopped state, workspace, and authority port
+- The app can display engine status such as pid, running/stopped state, workspace, shared helper-pack location, and authority port
 - Closing the app follows the documented lifecycle policy with no orphaned Luca authority process left behind unintentionally
 - Restarting the app after a clean shutdown starts the engine again successfully
