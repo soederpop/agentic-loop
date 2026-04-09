@@ -1979,10 +1979,17 @@
     }
 
     function populateAssistantDropdowns(assistants) {
-      const items = Array.isArray(assistants) ? assistants : []
-      const assistantOptions = items.length
-        ? items.map((assistant) => `<option value="${esc(assistant.id)}">${esc(assistant.name || assistant.id)}</option>`).join('')
-        : '<option value="claude">claude</option>'
+      const builtinAgents = [
+        { id: 'claude', name: 'Claude' },
+        { id: 'codex', name: 'Codex' },
+      ]
+
+      const merged = [...builtinAgents, ...(Array.isArray(assistants) ? assistants : [])]
+        .filter((assistant, index, arr) => arr.findIndex(item => item.id === assistant.id) === index)
+
+      const assistantOptions = merged.length
+        ? merged.map((assistant) => `<option value="${esc(assistant.id)}">${esc(assistant.name || assistant.id)}</option>`).join('')
+        : '<option value="claude">Claude</option><option value="codex">Codex</option>'
 
       document.getElementById('ed-agent').innerHTML = assistantOptions
       document.getElementById('cr-agent').innerHTML = assistantOptions
@@ -2600,6 +2607,7 @@
     // Boot
     // ══════════════════════════════════════════════════════════════════════════════
 
+    populateAssistantDropdowns([])
     buildCreatePreview()
     app.start()
   </script>

@@ -992,6 +992,10 @@
       <label>Goal</label>
       <select class="editor-meta-select" id="editor-goal-select"></select>
     </div>
+    <div class="editor-meta-field" id="editor-agent-field" style="display:none">
+      <label>Agent</label>
+      <select class="editor-meta-select" id="editor-agent-select"></select>
+    </div>
   </div>
   <div id="monaco-container"></div>
   <div class="editor-preview" id="editor-preview" style="display:none">
@@ -1252,8 +1256,13 @@
     /** Load all projects from the API */
     async loadProjects() {
       const api = container.feature('apiClient')
+      const currentSlug = this._current?.slug || this.state.get('currentSlug')
       const data = await api.fetchProjects()
       this._projects = data.projects || []
+      if (currentSlug) {
+        this._current = this._projects.find(p => p.slug === currentSlug) || null
+        this.state.set('currentSlug', this._current?.slug || '')
+      }
       this.state.set('projectCount', this._projects.length)
       this.emit('projects:loaded', { count: this._projects.length })
       return this._projects
@@ -1759,6 +1768,7 @@
     _editor = null
     _monacoPromise = null
     _goals = null
+    _assistants = null
     _currentMeta = {}
 
     async afterInitialize() {
@@ -1805,6 +1815,20 @@
       const data = await api.fetchGoals()
       this._goals = data.goals || []
       return this._goals
+    }
+
+    /** Load assistants for plan assignment (cached) */
+    async loadAssistants() {
+      if (this._assistants) return this._assistants
+      const api = container.feature('apiClient')
+      const data = await api.fetchAssistants()
+      const builtinAgents = [
+        { id: 'claude', name: 'Claude' },
+        { id: 'codex', name: 'Codex' },
+      ]
+      this._assistants = [...builtinAgents, ...((data && data.assistants) || [])]
+        .filter((assistant, index, arr) => arr.findIndex(item => item.id === assistant.id) === index)
+      return this._assistants
     }
 
     /** Open the editor for a project */
@@ -2272,6 +2296,13 @@
     showProjectUI(project)
   })
 
+  store.on('project:refreshed', () => {
+    const project = store.current
+    if (!project) return
+    selectEl.value = project.slug
+    showProjectUI(project)
+  })
+
   app.on('empty', showEmpty)
 
   // ── BuildManager events ──
@@ -2469,6 +2500,8 @@
   const editorStatusSelect = document.getElementById('editor-status-select')
   const editorGoalSelect = document.getElementById('editor-goal-select')
   const editorGoalField = document.getElementById('editor-goal-field')
+  const editorAgentSelect = document.getElementById('editor-agent-select')
+  const editorAgentField = document.getElementById('editor-agent-field')
   const monacoContainer = document.getElementById('monaco-container')
   const editorPreview = document.getElementById('editor-preview')
   const editorPreviewContent = document.getElementById('editor-preview-content')
@@ -2485,6 +2518,7 @@
         `<option value="${s}" ${s === editor._currentMeta.status ? 'selected' : ''}>${s}</option>`
       ).join('')
       editorGoalField.style.display = ''
+      editorAgentField.style.display = 'none'
       const goals = await editor.loadGoals()
       editorGoalSelect.innerHTML = '<option value="">none</option>' + goals.map(g =>
         `<option value="${g.slug}" ${g.slug === editor._currentMeta.goal ? 'selected' : ''}>${g.title}</option>`
@@ -2496,6 +2530,14 @@
         `<option value="${s}" ${s === editor._currentMeta.status ? 'selected' : ''}>${s}</option>`
       ).join('')
       editorGoalField.style.display = 'none'
+      editorAgentField.style.display = ''
+      const assistants = await editor.loadAssistants()
+      editorAgentSelect.innerHTML = assistants.map(a =>
+        `<option value="${a.id}" ${a.id === editor._currentMeta.agent ? 'selected' : ''}>${a.name}</option>`
+      ).join('')
+      if (!editorAgentSelect.value && assistants.length) {
+        editorAgentSelect.value = editor._currentMeta.agent || assistants[0].id
+      }
     }
 
     editorSaveBtn.disabled = true
@@ -2561,6 +2603,7 @@
 
   editorStatusSelect.addEventListener('change', () => editor.setMeta('status', editorStatusSelect.value))
   editorGoalSelect.addEventListener('change', () => editor.setMeta('goal', editorGoalSelect.value))
+  editorAgentSelect.addEventListener('change', () => editor.setMeta('agent', editorAgentSelect.value))
 
   // Keyboard shortcut: Cmd/Ctrl+S to save
   document.addEventListener('keydown', (e) => {

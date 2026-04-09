@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assistant Gallery</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0c0c14;
+    --surface: #151520;
+    --surface-2: #1c1c2a;
+    --surface-3: #232336;
+    --border: #2e2e45;
+    --text: #e4e4f0;
+    --text-dim: #8888aa;
+    --text-faint: #555572;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --accent-glow: #00fff740;
+    --purple: #c084fc;
+    --purple-dim: #c084fc25;
+    --pink: #f472b6;
+    --pink-dim: #f472b620;
+    --green: #39ff14;
+    --green-dim: #39ff1420;
+    --orange: #f59e0b;
+    --blue: #60a5fa;
+    --error: #ff003c;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    overflow: hidden;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── Header ──────────────────────────── */
+  .header {
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .header h1 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .header .subtitle {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-left: auto;
+  }
+
+  .pip-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .pip {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    cursor: pointer;
+    transition: all 0.3s;
+  }
+
+  .pip.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent-glow);
+  }
+
+  .pip:hover:not(.active) {
+    border-color: var(--text-dim);
+  }
+
+  /* ── Main carousel ──────────────────── */
+  .carousel-viewport {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .carousel-track {
+    display: flex;
+    height: 100%;
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+
+  .card-slot {
+    flex-shrink: 0;
+    /* width set dynamically via JS to match viewport */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 80px;
+  }
+
+  /* ── Card ────────────────────────────── */
+  .card {
+    width: 100%;
+    max-width: 680px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.4);
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .card.active {
+    border-color: var(--accent);
+    box-shadow: 0 0 40px var(--accent-dim), 0 0 80px rgba(0, 0, 0, 0.5);
+  }
+
+  /* ── Portrait ────────────────────────── */
+  .portrait-area {
+    height: 260px;
+    background: var(--surface-2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .portrait-placeholder {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    border: 3px dashed var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    color: var(--text-faint);
+    font-size: 11px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .portrait-placeholder .icon {
+    font-size: 36px;
+    opacity: 0.5;
+  }
+
+  .portrait-img {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--accent);
+    box-shadow: 0 0 30px var(--accent-dim);
+    position: relative;
+    z-index: 1;
+    display: none;
+  }
+
+  /* Ambient glow behind portrait */
+  .portrait-area::before {
+    content: '';
+    position: absolute;
+    width: 300px;
+    height: 300px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--card-color, var(--purple)) 0%, transparent 70%);
+    opacity: 0.08;
+    filter: blur(40px);
+  }
+
+  /* ── Card body ───────────────────────── */
+  .card-body {
+    padding: 24px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .card-name {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-name .color-bar {
+    width: 4px;
+    height: 22px;
+    border-radius: 2px;
+  }
+
+  .voice-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--purple-dim);
+    color: var(--purple);
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .wake-word {
+    font-size: 10px;
+    color: var(--text-faint);
+    margin-left: 4px;
+  }
+
+  .card-about {
+    color: var(--text-dim);
+    font-size: 12px;
+    line-height: 1.7;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+
+  .card-about::-webkit-scrollbar { width: 4px; }
+  .card-about::-webkit-scrollbar-track { background: transparent; }
+  .card-about::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── Personality tags ────────────────── */
+  .personality {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .phrase-tag {
+    font-size: 10px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
+  .voice-prefix {
+    font-size: 11px;
+    color: var(--pink);
+    font-style: italic;
+  }
+
+  /* ── Actions ─────────────────────────── */
+  .card-actions {
+    display: flex;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+  }
+
+  .btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    letter-spacing: 0.5px;
+  }
+
+  .btn:hover {
+    background: var(--surface-3);
+    border-color: var(--text-dim);
+  }
+
+  .btn-voice {
+    border-color: var(--purple);
+    color: var(--purple);
+  }
+
+  .btn-voice:hover {
+    background: var(--purple-dim);
+    box-shadow: 0 0 16px var(--purple-dim);
+  }
+
+  .btn-voice.listening {
+    border-color: var(--green);
+    color: var(--green);
+    animation: pulse-glow 1.5s ease-in-out infinite;
+  }
+
+  .btn-chat {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn-chat:hover {
+    background: var(--accent-dim);
+    box-shadow: 0 0 16px var(--accent-dim);
+  }
+
+  .btn-chat.launching {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 8px var(--green-dim); }
+    50% { box-shadow: 0 0 24px var(--green-dim); }
+  }
+
+  /* ── Nav arrows ──────────────────────── */
+  .nav-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 10;
+  }
+
+  .nav-arrow:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--surface-2);
+    box-shadow: 0 0 16px var(--accent-dim);
+  }
+
+  .nav-arrow.disabled {
+    opacity: 0.2;
+    pointer-events: none;
+  }
+
+  .nav-prev { left: 24px; }
+  .nav-next { right: 24px; }
+
+  /* ── Voice overlay ───────────────────── */
+  .voice-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(12, 12, 20, 0.92);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+  }
+
+  .voice-overlay.active { display: flex; }
+
+  .voice-panel {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .voice-ring {
+    width: 160px;
+    height: 160px;
+    border-radius: 50%;
+    border: 3px solid var(--purple);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.3s;
+  }
+
+  .voice-ring.speaking {
+    border-color: var(--green);
+    box-shadow: 0 0 40px var(--green-dim);
+    animation: pulse-ring 1s ease-in-out infinite;
+  }
+
+  @keyframes pulse-ring {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+  }
+
+  .voice-ring .name {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  .voice-status {
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .voice-cancel {
+    padding: 8px 24px;
+    border: 1px solid var(--error);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--error);
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .voice-cancel:hover {
+    background: rgba(255, 0, 60, 0.1);
+  }
+
+  /* ── Loading ─────────────────────────── */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-size: 14px;
+    gap: 10px;
+  }
+
+  .loading .dot-pulse {
+    animation: dot-pulse 1.4s infinite both;
+  }
+
+  @keyframes dot-pulse {
+    0%, 80%, 100% { opacity: 0.3; }
+    40% { opacity: 1; }
+  }
+
+  /* ── Responsive ──────────────────────── */
+  @media (max-width: 800px) {
+    .card-slot { padding: 0 16px; }
+    .portrait-area { height: 200px; }
+    .portrait-placeholder, .portrait-img { width: 140px; height: 140px; }
+    .nav-arrow { width: 36px; height: 36px; font-size: 16px; }
+    .nav-prev { left: 8px; }
+    .nav-next { right: 8px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Assistants</h1>
+  <div class="pip-row" id="pips"></div>
+  <div class="subtitle" id="counter"></div>
+</div>
+
+<div class="carousel-viewport" id="viewport">
+  <button class="nav-arrow nav-prev" id="prevBtn">&larr;</button>
+  <button class="nav-arrow nav-next" id="nextBtn">&rarr;</button>
+  <div class="carousel-track" id="track">
+    <div class="card-slot"><div class="loading"><span class="dot-pulse">loading assistants</span></div></div>
+  </div>
+</div>
+
+<div class="voice-overlay" id="voiceOverlay">
+  <div class="voice-panel">
+    <div class="voice-ring" id="voiceRing">
+      <span class="name" id="voiceName"></span>
+    </div>
+    <div class="voice-status" id="voiceStatus">connecting...</div>
+    <button class="voice-cancel" id="voiceCancel">end voice</button>
+  </div>
+</div>
+
+<script>
+(function() {
+  // ── Color palette per assistant ──
+  const COLORS = {
+    chiefOfStaff: '#f59e0b',
+    rocket:       '#f472b6',
+    lucaCoder:    '#60a5fa',
+    researcher:   '#39ff14',
+  }
+
+  const FALLBACK_COLOR = '#c084fc'
+
+  // ── State ──
+  let assistants = []
+  let currentIndex = 0
+  let ws = null
+
+  // ── Elements ──
+  const track = document.getElementById('track')
+  const pips = document.getElementById('pips')
+  const counter = document.getElementById('counter')
+  const prevBtn = document.getElementById('prevBtn')
+  const nextBtn = document.getElementById('nextBtn')
+  const viewport = document.getElementById('viewport')
+  const voiceOverlay = document.getElementById('voiceOverlay')
+  const voiceRing = document.getElementById('voiceRing')
+  const voiceName = document.getElementById('voiceName')
+  const voiceStatus = document.getElementById('voiceStatus')
+  const voiceCancel = document.getElementById('voiceCancel')
+
+  // ── Fetch assistants ──
+  async function load() {
+    try {
+      const res = await fetch('/api/workflows/assistant-gallery/assistants')
+      const data = await res.json()
+      assistants = data.assistants || []
+      render()
+    } catch (err) {
+      track.innerHTML = '<div class="card-slot"><div class="loading">failed to load assistants</div></div>'
+    }
+  }
+
+  // ── Render carousel ──
+  function render() {
+    if (!assistants.length) {
+      track.innerHTML = '<div class="card-slot"><div class="loading">no assistants found</div></div>'
+      return
+    }
+
+    track.innerHTML = assistants.map((a, i) => buildCard(a, i)).join('')
+    pips.innerHTML = assistants.map((_, i) =>
+      `<div class="pip ${i === 0 ? 'active' : ''}" data-i="${i}"></div>`
+    ).join('')
+
+    pips.querySelectorAll('.pip').forEach(p => {
+      p.addEventListener('click', () => goTo(parseInt(p.dataset.i)))
+    })
+
+    updateCarousel()
+  }
+
+  function buildCard(a, index) {
+    const color = COLORS[a.id] || FALLBACK_COLOR
+    const vc = a.voiceConfig || {}
+    const phrases = vc.phrases || {}
+    const aliases = vc.aliases || []
+    const prefix = vc.conversationModePrefix || ''
+
+    // Collect some fun catchphrases from all phrase categories
+    const allPhrases = []
+    Object.values(phrases).forEach(arr => {
+      if (Array.isArray(arr)) allPhrases.push(...arr)
+    })
+    // Pick up to 6 interesting ones
+    const showPhrases = allPhrases
+      .filter(p => p.length > 2 && p.length < 40)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 6)
+
+    // Parse ABOUT.md — strip the h1 title line
+    const aboutLines = (a.about || '').split('\n')
+    const aboutBody = aboutLines
+      .filter(l => !l.startsWith('# '))
+      .join('\n')
+      .trim()
+      .replace(/^## (.+)$/gm, '<strong style="color:var(--text);display:block;margin-top:8px;">$1</strong>')
+      .replace(/\n\n/g, '<br><br>')
+      .replace(/\n/g, '<br>')
+
+    const wakeWords = aliases.length
+      ? aliases.map(w => `"${w}"`).join(', ')
+      : ''
+
+    return `
+    <div class="card-slot">
+      <div class="card ${index === currentIndex ? 'active' : ''}" data-id="${a.id}" style="--card-color: ${color}">
+        <div class="portrait-area">
+          <div class="portrait-placeholder" id="portrait-${a.id}">
+            <span class="icon">&#9679;</span>
+            <span>character portrait</span>
+            <span style="font-size:9px;color:var(--text-faint)">drop image here</span>
+          </div>
+          <img class="portrait-img" id="portrait-img-${a.id}" alt="${a.name}" />
+        </div>
+        <div class="card-body">
+          <div class="card-name">
+            <span class="color-bar" style="background:${color}"></span>
+            ${formatName(a.name)}
+            ${a.hasVoice ? '<span class="voice-badge">voice</span>' : ''}
+            ${wakeWords ? `<span class="wake-word">${wakeWords}</span>` : ''}
+          </div>
+          ${prefix ? `<div class="voice-prefix">${prefix}</div>` : ''}
+          <div class="card-about">${aboutBody || '<em style="color:var(--text-faint)">no description</em>'}</div>
+          ${showPhrases.length ? `
+          <div class="personality">
+            ${showPhrases.map(p => `<span class="phrase-tag">"${esc(p)}"</span>`).join('')}
+          </div>` : ''}
+          <div class="card-actions">
+            ${a.hasVoice ? `<button class="btn btn-voice" onclick="startVoice('${a.id}')">&#9835; voice chat</button>` : ''}
+            <button class="btn btn-chat" onclick="launchChat('${a.id}', this)">&#9654; open chat</button>
+          </div>
+        </div>
+      </div>
+    </div>`
+  }
+
+  function formatName(name) {
+    // camelCase to Title Case
+    return name.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase()).trim()
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
+  }
+
+  // ── Carousel navigation ──
+  function syncSlotWidths() {
+    const w = viewport.offsetWidth
+    track.querySelectorAll('.card-slot').forEach(s => { s.style.width = w + 'px' })
+    return w
+  }
+
+  function updateCarousel() {
+    const w = syncSlotWidths()
+    track.style.transform = `translateX(${-currentIndex * w}px)`
+
+    // Update pips
+    pips.querySelectorAll('.pip').forEach((p, i) => {
+      p.classList.toggle('active', i === currentIndex)
+    })
+
+    // Update active card styling
+    track.querySelectorAll('.card').forEach((c, i) => {
+      c.classList.toggle('active', i === currentIndex)
+    })
+
+    // Update arrows
+    prevBtn.classList.toggle('disabled', currentIndex === 0)
+    nextBtn.classList.toggle('disabled', currentIndex === assistants.length - 1)
+
+    // Counter
+    counter.textContent = `${currentIndex + 1} / ${assistants.length}`
+  }
+
+  function goTo(i) {
+    currentIndex = Math.max(0, Math.min(i, assistants.length - 1))
+    updateCarousel()
+  }
+
+  prevBtn.addEventListener('click', () => goTo(currentIndex - 1))
+  nextBtn.addEventListener('click', () => goTo(currentIndex + 1))
+
+  // Keyboard nav
+  document.addEventListener('keydown', (e) => {
+    if (voiceOverlay.classList.contains('active')) return
+    if (e.key === 'ArrowLeft') goTo(currentIndex - 1)
+    if (e.key === 'ArrowRight') goTo(currentIndex + 1)
+  })
+
+  // Resize handler
+  window.addEventListener('resize', () => updateCarousel())
+
+  // ── Launch web-chat ──
+  window.launchChat = async function(assistantId, btn) {
+    if (btn) {
+      btn.classList.add('launching')
+      btn.textContent = 'launching...'
+    }
+    try {
+      const res = await fetch('/api/workflows/assistant-gallery/launch-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistant: assistantId }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'launch failed')
+    } catch (err) {
+      console.error('launch error:', err)
+    } finally {
+      if (btn) {
+        setTimeout(() => {
+          btn.classList.remove('launching')
+          btn.innerHTML = '&#9654; open chat'
+        }, 2000)
+      }
+    }
+  }
+
+  // ── Voice chat ──
+  window.startVoice = function(assistantId) {
+    const a = assistants.find(x => x.id === assistantId)
+    if (!a) return
+
+    voiceOverlay.classList.add('active')
+    voiceName.textContent = formatName(a.name)
+    voiceStatus.textContent = 'connecting...'
+    voiceRing.classList.remove('speaking')
+
+    connectVoiceWs(assistantId)
+  }
+
+  function connectVoiceWs(assistantId) {
+    // Connect to main WS and request voice mode for this assistant
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:'
+    ws = new WebSocket(`${proto}//${location.host}/ws`)
+
+    ws.onopen = () => {
+      voiceStatus.textContent = 'listening...'
+      ws.send(JSON.stringify({
+        type: 'start_voice',
+        assistant: assistantId,
+      }))
+    }
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data)
+        if (msg.type === 'voice_listening') {
+          voiceStatus.textContent = 'listening...'
+          voiceRing.classList.remove('speaking')
+        } else if (msg.type === 'voice_recording') {
+          voiceStatus.textContent = 'hearing you...'
+          voiceRing.classList.add('speaking')
+        } else if (msg.type === 'voice_transcribing') {
+          voiceStatus.textContent = 'thinking...'
+        } else if (msg.type === 'voice_speaking' || msg.type === 'assistant_speaking') {
+          voiceStatus.textContent = 'speaking...'
+          voiceRing.classList.add('speaking')
+        } else if (msg.type === 'voice_complete') {
+          voiceStatus.textContent = 'listening...'
+          voiceRing.classList.remove('speaking')
+        } else if (msg.type === 'voice_preview') {
+          voiceStatus.textContent = msg.text || 'listening...'
+        }
+      } catch {}
+    }
+
+    ws.onclose = () => {
+      voiceStatus.textContent = 'disconnected'
+      voiceRing.classList.remove('speaking')
+    }
+
+    ws.onerror = () => {
+      voiceStatus.textContent = 'connection error'
+    }
+  }
+
+  voiceCancel.addEventListener('click', () => {
+    voiceOverlay.classList.remove('active')
+    if (ws) {
+      try {
+        ws.send(JSON.stringify({ type: 'stop_voice' }))
+        ws.close()
+      } catch {}
+      ws = null
+    }
+  })
+
+  // Escape to close voice
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && voiceOverlay.classList.contains('active')) {
+      voiceCancel.click()
+    }
+  })
+
+  // ── Portrait drag-drop (placeholder for image gen) ──
+  document.addEventListener('dragover', (e) => e.preventDefault())
+  document.addEventListener('drop', (e) => {
+    e.preventDefault()
+    const target = e.target.closest('.portrait-placeholder')
+    if (!target) return
+
+    const file = e.dataTransfer.files[0]
+    if (!file || !file.type.startsWith('image/')) return
+
+    const id = target.id.replace('portrait-', '')
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = document.getElementById(`portrait-img-${id}`)
+      if (img) {
+        img.src = reader.result
+        img.style.display = 'block'
+        target.style.display = 'none'
+      }
+    }
+    reader.readAsDataURL(file)
+  })
+
+  // ── Init ──
+  load()
+})()
+</script>
+</body>
+</html>
