@@ -1,13 +1,13 @@
 ---
-status: pending
+status: approved
 project: tauri-desktop-app
 ---
 
 # Phase 3: External CLI Installation + Repair Flows
 
-Add optional installation of the same Luca binary for terminal use, along with version checks, path visibility, repair actions, and update prompts.
+Add optional installation of the same Luca binary for terminal use, along with version checks, path visibility, repair actions, and update prompts. This phase should also cover installation, verification, and repair of the desktop app’s non-Luca runtime dependencies and the shared Agentic Loop helper pack under `~/.luca/agentic-loop`.
 
-The demoable outcome: from onboarding or settings, the user can install Luca for terminal use into a user-managed location, verify that installation, and repair or refresh it later if the external CLI is missing or outdated.
+The demoable outcome: from onboarding or settings, the user can install Luca for terminal use into a user-managed location, verify that installation, repair or refresh it later if the external CLI is missing or outdated, and inspect/fix required support dependencies such as `sox`, `mlx_whisper`/`mlx-whisper`, `rustpotter`, Bun, and other app-managed setup prerequisites.
 
 ## Deliverables
 
@@ -33,18 +33,38 @@ The demoable outcome: from onboarding or settings, the user can install Luca for
 
 5. **PATH guidance UX** — If the install directory is not in PATH, provide exact platform-appropriate guidance rather than silently mutating shell configuration by default.
 
-6. **Version drift detection** — When the bundled Luca version changes after an app update, the app should detect that the external CLI install may be stale and offer a refresh action.
+6. **Shared helper-pack installation + repair** — Add install/verify/repair flows for the shared Agentic Loop content under `~/.luca/agentic-loop`, including:
+   - helper directories such as `commands/`, `features/`, and any shipped templates/support files
+   - version/manifest tracking for the shared helper pack
+   - reseed/repair behavior if the shared install is missing, partial, or incompatible with the bundled app version
+
+7. **Dependency health checks + repair actions** — Add a dependency section in onboarding/settings that reports the presence and health of important machine/runtime dependencies already used by the project’s setup scripts, including at minimum:
+   - `sox`
+   - `mlx_whisper` / `mlx-whisper`
+   - `rustpotter`
+   - Bun
+   - Python/pipx where required for `mlx-whisper`
+   - optional tools such as `gws`
+   The desktop app does not need to auto-install every dependency on every platform in V1, but it should detect missing pieces, show why they matter, and offer either an app-managed install flow or exact repair guidance.
+
+8. **Version drift detection** — When the bundled Luca version changes after an app update, the app should detect that the external CLI install may be stale and offer a refresh action. It should also detect drift between the bundled app version and the installed shared helper pack in `~/.luca/agentic-loop`.
 
 ## References
 
 - `docs/reports/tauri-desktop-app-research.md`
 - `docs/reports/tauri-luca-desktop-shipping-report.md`
 - Tauri app shell from Phase 1
+- `setup.sh` — current guided setup expectations
+- `scripts/install.sh` — current dependency installation script
+- `scripts/download-tools.sh` — current CLI install/download assumptions
+- `features/voice-listener.ts` — current voice dependency detection (`rustpotter`, `sox`, `mlx_whisper`)
 
 ## Verification
 
 - A user can install the bundled Luca binary to a user-managed CLI location from the app
 - The app can verify the installed CLI without manual shell work
 - The app correctly reports whether the install directory appears to be in PATH
-- Reinstall/repair actions work when the external CLI is missing or outdated
-- After simulating a bundled-version change, the app detects drift and offers to refresh the installed CLI
+- The app can install, verify, or repair the shared Agentic Loop helper-pack home at `~/.luca/agentic-loop`
+- The app reports dependency health for voice/native prerequisites such as `sox`, `mlx_whisper`, `rustpotter`, Bun, and optional tools like `gws`
+- Repair actions work when the external CLI, shared helper pack, or supported dependencies are missing or outdated
+- After simulating a bundled-version change, the app detects drift and offers to refresh the installed CLI and shared helper pack
