@@ -45,3 +45,9 @@ docs/TABLE-OF-CONTENTS.md
 # the examples folder I can use to teach the agent shit
 examples/
 shared/*.*
+
+apps/desktop/src-tauri/binaries
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/target
+
+MUTE
