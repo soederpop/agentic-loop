@@ -576,7 +576,7 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       try {
         const ws = new WebSocket('ws://localhost:${wsPort}');
         ws.onopen = () => {
-          ws.send(JSON.stringify({ action: 'voice-cancel' }));
+          ws.send(JSON.stringify({ type: 'command', payload: { action: 'voice-cancel' } }));
           setTimeout(() => ws.close(), 500);
         };
       } catch (e) { console.warn('cancel WS failed', e); }
