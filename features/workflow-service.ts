@@ -71,6 +71,8 @@ function serializePlan(p: any) {
     title: p.title,
     status: p.meta.status,
     project: p.meta.project,
+    agent: p.meta.agent || p.meta.agentOptions?.agent || 'claude',
+    agentOptions: p.meta.agentOptions,
     costUsd: p.meta.costUsd,
     turns: p.meta.turns,
     toolCalls: p.meta.toolCalls,
@@ -443,7 +445,7 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
 
     app.post('/api/plans', async (req: any, res: any) => {
       try {
-        const { title, project: projectSlug, status } = req.body || {}
+        const { title, project: projectSlug, status, agent } = req.body || {}
         if (!title || typeof title !== 'string') {
           return res.status(400).json({ error: 'Title is required' })
         }
@@ -466,7 +468,7 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
           return res.status(409).json({ error: `Plan "${slug}" already exists` })
         }
         const yaml = container.feature('yaml')
-        const planMeta: Record<string, any> = { status: status || 'pending' }
+        const planMeta: Record<string, any> = { status: status || 'pending', agent: agent || 'claude' }
         if (projectSlug) planMeta.project = projectSlug
         const frontmatter = yaml.stringify(planMeta).trim()
         const body = `# ${title}\n\n## References\n\n- \n\n## Test plan\n\n- `
@@ -503,6 +505,8 @@ export class WorkflowService extends Feature<WorkflowServiceState, WorkflowServi
         if (meta) {
           if (meta.status !== undefined) doc.meta.status = meta.status
           if (meta.project !== undefined) doc.meta.project = meta.project
+          if (meta.agent !== undefined) doc.meta.agent = meta.agent
+          if (meta.agentOptions !== undefined) doc.meta.agentOptions = meta.agentOptions
         }
         if (content !== undefined) {
           const yaml = container.feature('yaml')

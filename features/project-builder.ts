@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { Feature, features } from '@soederpop/luca'
 import { FeatureStateSchema, FeatureOptionsSchema } from '@soederpop/luca/schemas'
-import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'fs'
+import { mkdirSync, writeFileSync, existsSync, unlinkSync, appendFileSync } from 'fs'
 import { resolve, dirname } from 'path'
 
 // ─── Schemas ─────────────────────────────────────────────────────────────────
@@ -42,6 +42,7 @@ export interface PlanInfo {
   status: string
   group: number
   content: string
+  agent?: string
   costUsd?: number
   turns?: number
   toolCalls?: number
@@ -72,6 +73,7 @@ export type BuildStatus = ProjectBuilderState['buildStatus']
 const MAX_TOOL_OUTPUT = 500
 const DISK_CACHE_KEY = 'project-builder:state-v2'
 const REQUEST_TIMEOUT_MS = 10_000
+const BUILT_IN_CODING_AGENTS = new Set(['claude', 'codex'])
 
 const ONE_FINAL_NOTE = (opts: {
   planPath: string
@@ -616,6 +618,7 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
             status: doc.meta?.status || 'pending',
             group: groupIdx,
             content: doc.content || '',
+            agent: doc.meta?.agent || doc.meta?.agentOptions?.agent || 'claude',
             costUsd: doc.meta?.costUsd,
             turns: doc.meta?.turns,
             toolCalls: doc.meta?.toolCalls,
@@ -715,6 +718,8 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
     }
 
     const cc = this.container.feature('claudeCode', { streaming: true })
+    const codex = this.container.feature('openaiCodex')
+    const proc = this.container.feature('proc')
     let totalCost = 0
 
     const deltaHandler = (data: any) => {
@@ -832,24 +837,68 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
           previousRetrospectives,
         })
 
-        const sessionId = await cc.start(prompt, {
-          cwd: process.cwd(),
-          streaming: true,
-          dangerouslySkipPermissions: this.options.dangerouslySkipPermissions,
-          ...plan.agentOptions,
-        })
+        const planAgent = String(plan.agent || plan.agentOptions?.agent || 'claude')
+        const agentOptions = { ...(plan.agentOptions || {}) }
+        delete agentOptions.agent
+        let sessionId = this.container.utils.uuid()
+        let session: any
 
-        this.planSessionMap.set(plan.id, sessionId)
-        this.currentSessionId = sessionId
+        if (planAgent === 'claude') {
+          sessionId = await cc.start(prompt, {
+            cwd: process.cwd(),
+            streaming: true,
+            dangerouslySkipPermissions: this.options.dangerouslySkipPermissions,
+            ...agentOptions,
+          })
 
-        this.emit('plan:start', { planId: plan.id, sessionId })
+          this.planSessionMap.set(plan.id, sessionId)
+          this.currentSessionId = sessionId
+          this.emit('plan:start', { planId: plan.id, sessionId, agent: planAgent })
+          session = await cc.waitForSession(sessionId)
+        } else if (planAgent === 'codex') {
+          sessionId = await codex.start(prompt, {
+            cwd: process.cwd(),
+            ...agentOptions,
+          })
 
-        const session = await cc.waitForSession(sessionId)
+          this.planSessionMap.set(plan.id, sessionId)
+          this.currentSessionId = sessionId
+          this.emit('plan:start', { planId: plan.id, sessionId, agent: planAgent })
+          session = await codex.waitForSession(sessionId)
+        } else {
+          const planSlugSafe = plan.id.split('/').pop() || plan.id
+          const promptFile = resolve(this.buildDir, `${planSlugSafe}.prompt.md`)
+          try { mkdirSync(dirname(promptFile), { recursive: true }) } catch {}
+          writeFileSync(promptFile, prompt, 'utf-8')
+
+          const outFile = resolve(this.buildDir, `${planSlugSafe}.md`)
+          this.planSessionMap.set(plan.id, sessionId)
+          this.currentSessionId = sessionId
+          this.emit('plan:start', { planId: plan.id, sessionId, agent: planAgent, promptFile })
+
+          const escapedPromptFile = JSON.stringify(promptFile)
+          const escapedOutFile = JSON.stringify(outFile)
+          const escapedAgent = JSON.stringify(planAgent)
+          const result = await proc.execAndCapture(`luca prompt ${escapedAgent.slice(1, -1)} ${escapedPromptFile.slice(1, -1)} --out-file ${escapedOutFile.slice(1, -1)} --chrome`)
+
+          let output = ''
+          try { output = this.container.feature('fs').readFile(outFile) } catch { output = result.stdout || '' }
+          this.planOutput.set(plan.id, output)
+          this.planMessages.set(plan.id, [{ message: { content: [{ type: 'text', text: output }] } }])
+
+          session = {
+            status: result.exitCode === 0 ? 'completed' : 'error',
+            error: result.exitCode === 0 ? null : (result.stderr || `luca prompt exited with code ${result.exitCode}`),
+            costUsd: 0,
+            turns: 0,
+            result: output || result.stdout || null,
+          }
+        }
 
         if (this._aborted) break
 
         if (session.status === 'error') {
-          this.emit('plan:error', { planId: plan.id, sessionId, error: session.error })
+          this.emit('plan:error', { planId: plan.id, sessionId, error: session.error, agent: planAgent })
           this.setState({ buildStatus: 'error' })
           await this.updateProjectStatus('failed')
           this.emit('build:error', {
@@ -936,9 +985,12 @@ export class ProjectBuilder extends Feature<ProjectBuilderState, ProjectBuilderO
     if (this.currentSessionId) {
       try {
         const cc = this.container.feature('claudeCode')
-        // Race abort against a timeout so we don't hang forever
+        const codex = this.container.feature('openaiCodex')
         await Promise.race([
-          cc.abort(this.currentSessionId),
+          Promise.any([
+            Promise.resolve(cc.abort(this.currentSessionId as any)),
+            Promise.resolve(codex.abort(this.currentSessionId as any)),
+          ]),
           new Promise((_, reject) => setTimeout(() => reject(new Error('abort timed out')), 5_000)),
         ])
       } catch (err) {

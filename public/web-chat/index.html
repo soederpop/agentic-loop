@@ -175,6 +175,73 @@
     border-color: var(--assistant);
   }
 
+  .assistant-turn {
+    align-self: flex-start;
+    max-width: 80%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: fadeIn 0.15s ease-out;
+  }
+
+  .assistant-turn .message,
+  .assistant-turn .tool-activity {
+    max-width: 100%;
+  }
+
+  .message.assistant.markdown {
+    white-space: normal;
+  }
+
+  .message.assistant.markdown p:first-child,
+  .message.assistant.markdown > :first-child {
+    margin-top: 0;
+  }
+
+  .message.assistant.markdown p:last-child,
+  .message.assistant.markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  .message.assistant.markdown p,
+  .message.assistant.markdown ul,
+  .message.assistant.markdown ol,
+  .message.assistant.markdown pre,
+  .message.assistant.markdown blockquote,
+  .message.assistant.markdown h1,
+  .message.assistant.markdown h2,
+  .message.assistant.markdown h3,
+  .message.assistant.markdown h4,
+  .message.assistant.markdown h5,
+  .message.assistant.markdown h6 {
+    margin: 0 0 0.8em 0;
+  }
+
+  .message.assistant.markdown ul,
+  .message.assistant.markdown ol {
+    padding-left: 1.4em;
+  }
+
+  .message.assistant.markdown code {
+    background: rgba(255,255,255,0.06);
+    padding: 0.1em 0.3em;
+    border-radius: 4px;
+    font-size: 0.95em;
+  }
+
+  .message.assistant.markdown pre {
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
+
+  .message.assistant.markdown pre code {
+    background: transparent;
+    padding: 0;
+  }
+
   .message.error {
     align-self: center;
     background: transparent;
@@ -554,6 +621,7 @@
   let initialized = false
   let streaming = false
   let streamingEl = null
+  let currentAssistantTurnEl = null
 
   // ── Tool activity state ────────────────
   let toolActivityEl = null
@@ -823,7 +891,8 @@
         toolActivityEl = null
         toolItems = {}
         toolCount = 0
-        streamingEl = appendMessage('assistant', '')
+        currentAssistantTurnEl = createAssistantTurn()
+        streamingEl = appendMessage('assistant', '', currentAssistantTurnEl)
         streamingEl.classList.add('streaming')
         addCursor(streamingEl)
         sendBtn.disabled = true
@@ -852,10 +921,11 @@
         if (streamingEl) {
           removeCursor(streamingEl)
           streamingEl.classList.remove('streaming')
-          if (msg.text) streamingEl.textContent = msg.text
+          if (msg.text) renderAssistantMarkdown(streamingEl, msg.text)
         }
         streaming = false
         streamingEl = null
+        currentAssistantTurnEl = null
         sendBtn.disabled = false
         micBtn.disabled = voiceState !== 'idle'
         inputEl.focus()
@@ -895,10 +965,11 @@
     wrapper.appendChild(toggle)
     wrapper.appendChild(list)
 
-    if (streamingEl) {
-      messagesEl.insertBefore(wrapper, streamingEl)
+    const parent = currentAssistantTurnEl || messagesEl
+    if (streamingEl && streamingEl.parentNode === parent) {
+      parent.insertBefore(wrapper, streamingEl)
     } else {
-      messagesEl.appendChild(wrapper)
+      parent.appendChild(wrapper)
     }
 
     toolActivityEl = wrapper
@@ -971,13 +1042,104 @@
   }
 
   // ── DOM helpers ────────────────────────
-  function appendMessage(role, text) {
+  function createAssistantTurn() {
     const el = document.createElement('div')
-    el.className = `message ${role}`
-    el.textContent = text
+    el.className = 'assistant-turn'
     messagesEl.appendChild(el)
     scrollToBottom()
     return el
+  }
+
+  function appendMessage(role, text, parentEl = messagesEl) {
+    const el = document.createElement('div')
+    el.className = `message ${role}`
+    el.textContent = text
+    parentEl.appendChild(el)
+    scrollToBottom()
+    return el
+  }
+
+  function renderAssistantMarkdown(el, text) {
+    el.classList.add('markdown')
+    el.innerHTML = markdownToHtml(text)
+  }
+
+  function markdownToHtml(text) {
+    const safe = escapeHtml(String(text || ''))
+    const codeBlocks = []
+    let html = safe.replace(/```([\w-]+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+      const idx = codeBlocks.length
+      codeBlocks.push(`<pre><code${lang ? ` class="language-${lang}"` : ''}>${code}</code></pre>`)
+      return `@@CODEBLOCK_${idx}@@`
+    })
+
+    html = html.replace(/^### (.*)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.*)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.*)$/gm, '<h1>$1</h1>')
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[(.*?)\]\((https?:[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
+
+    const lines = html.split('\n')
+    const out = []
+    let inUl = false
+    let inOl = false
+    let paragraph = []
+
+    const flushParagraph = () => {
+      if (!paragraph.length) return
+      out.push(`<p>${paragraph.join('<br>')}</p>`)
+      paragraph = []
+    }
+
+    const closeLists = () => {
+      if (inUl) { out.push('</ul>'); inUl = false }
+      if (inOl) { out.push('</ol>'); inOl = false }
+    }
+
+    for (const line of lines) {
+      if (!line.trim()) {
+        flushParagraph()
+        closeLists()
+        continue
+      }
+      if (/^@@CODEBLOCK_\d+@@$/.test(line.trim())) {
+        flushParagraph()
+        closeLists()
+        out.push(line.trim())
+        continue
+      }
+      if (/^<h[1-6]>/.test(line.trim())) {
+        flushParagraph()
+        closeLists()
+        out.push(line.trim())
+        continue
+      }
+      const ulMatch = line.match(/^[-*] (.*)$/)
+      if (ulMatch) {
+        flushParagraph()
+        if (inOl) { out.push('</ol>'); inOl = false }
+        if (!inUl) { out.push('<ul>'); inUl = true }
+        out.push(`<li>${ulMatch[1]}</li>`)
+        continue
+      }
+      const olMatch = line.match(/^\d+\. (.*)$/)
+      if (olMatch) {
+        flushParagraph()
+        if (inUl) { out.push('</ul>'); inUl = false }
+        if (!inOl) { out.push('<ol>'); inOl = true }
+        out.push(`<li>${olMatch[1]}</li>`)
+        continue
+      }
+      paragraph.push(line)
+    }
+
+    flushParagraph()
+    closeLists()
+    html = out.join('\n')
+    html = html.replace(/@@CODEBLOCK_(\d+)@@/g, (_, i) => codeBlocks[Number(i)] || '')
+    return html
   }
 
   function addCursor(el) {

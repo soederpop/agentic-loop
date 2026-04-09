@@ -1828,7 +1828,7 @@
 
       this.state.set('targetType', 'plan')
       this.state.set('targetId', planId)
-      this._currentMeta = { status: plan.status, project: plan.project }
+      this._currentMeta = { status: plan.status, project: plan.project, agent: plan.agent || 'claude', agentOptions: plan.agentOptions }
 
       await this._openEditor(plan.title, plan.content, 'plan')
     }

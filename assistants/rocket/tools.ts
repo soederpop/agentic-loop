@@ -2,8 +2,10 @@ import { z } from 'zod'
 
 export const schemas = {
   README: z.object({}).describe("CALL THIS README FUNCTION AS EARLY AS POSSIBLE, It will explain your role in the system, which is primarily to launch workflow applications and organize the windows for the user."),
-  launchChatWithChief: z.object({}).describe("Call this if the user wants to chat with the chief, the chief of staff, the adult in the room, etc."),
-  launchChatWithCoder: z.object({}).describe("Call this if the user wants to chat with a coder, developer,nerd, dork, somebody who knows what the they are doing, somebody who can actually get shit done, etc."),
+  listAvailableAssistants: z.object({}).describe("List the available assistants Rocket can launch a web chat with."),
+  launchChatWithAssistant: z.object({
+    assistant: z.string().describe("The assistant name to launch with luca web-chat --assistant <name>. Call listAvailableAssistants first if you are unsure which names are available."),
+  }).describe("Launch a web chat with any available assistant by name."),
 }
 
 export async function README(options: z.infer<typeof schemas.README>) {
@@ -22,31 +24,45 @@ export async function README(options: z.infer<typeof schemas.README>) {
   `
 }
 
-export async function launchChatWithChief(options: z.infer<typeof schemas.launchChatWithChief>) {
-	let pid = 'unknown'
+export async function listAvailableAssistants(options: z.infer<typeof schemas.listAvailableAssistants>) {
+  const assistantsManager = container.feature('assistantsManager')
+  await assistantsManager.discover()
+  const available = assistantsManager.available || []
 
-	container.proc.spawnAndCapture('luca', ['web-chat','--assistant','chiefOfStaff'], {
-		onStart(c) {
-			if(c?.pid) {
-				pid = `${c.pid}`
-			}
-		}
-	})
-	await container.sleep(4000)
-	return `Launched the Chat with the Chief. PID: ${pid}`
-
+  return JSON.stringify({ assistants: available }, null, 2)
 }
-export async function launchChatWithCoder(options: z.infer<typeof schemas.launchChatWithCoder>) {
+
+export async function launchChatWithAssistant(options: z.infer<typeof schemas.launchChatWithAssistant>) {
+	const assistantsManager = container.feature('assistantsManager')
+	await assistantsManager.discover()
+
+	const available = assistantsManager.available || []
+	const assistantName = options.assistant
+
+	if (!available.includes(assistantName)) {
+		return JSON.stringify({
+			ok: false,
+			error: `Assistant "${assistantName}" is not available.`,
+			assistants: available,
+		}, null, 2)
+	}
+
 	let pid = 'unknown'
 
-	container.proc.spawnAndCapture('luca', ['web-chat','--assistant','lucaCoder'], {
+	container.proc.spawnAndCapture('luca', ['web-chat', '--assistant', assistantName], {
 		onStart(c) {
-			if(c?.pid) {
+			if (c?.pid) {
 				pid = `${c.pid}`
 			}
 		}
 	})
 	await container.sleep(4000)
-	return `Launched the Chat with the Luca Coder. PID: ${pid}`
+
+	return JSON.stringify({
+		ok: true,
+		assistant: assistantName,
+		pid,
+		message: `Launched chat with ${assistantName}.`,
+	}, null, 2)
 }
 

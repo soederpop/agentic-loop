@@ -35,6 +35,7 @@ export async function onSetup({ app, docs, container, broadcast }: WorkflowHooks
   const readFileStr = async (p: string): Promise<string> => ((await fs.readFile(p)) as any).toString('utf-8')
   const yaml = container.feature('yaml')
   const proc = container.feature('proc')
+  const assistantsManager = container.feature('assistantsManager') as any
 
   // ── Schedules ──────────────────────────────────────────────────────────────
 
@@ -46,6 +47,21 @@ export async function onSetup({ app, docs, container, broadcast }: WorkflowHooks
         label: formatScheduleLabel(name),
       })),
     })
+  })
+
+  app.get('/api/assistants', async (_req: any, res: any) => {
+    try {
+      await assistantsManager.discover()
+      const assistants = (assistantsManager.list?.() || [])
+        .map((entry: any) => ({
+          id: entry.name,
+          name: entry.name,
+        }))
+        .sort((a: any, b: any) => a.name.localeCompare(b.name))
+      res.json({ assistants })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
   })
 
   // ── Plays list ─────────────────────────────────────────────────────────────

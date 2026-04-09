@@ -404,6 +404,24 @@ export class TaskScheduler extends Feature<TaskSchedulerState, TaskSchedulerOpti
         if (result.exitCode !== 0) {
           throw new Error(result.stderr || `luca prompt exited with code ${result.exitCode}`)
         }
+
+        try {
+          const historyDir = this.container.paths.resolve('logs', 'prompt-outputs')
+          await (this.container.feature('fs') as any).mkdirAsync(historyDir, { recursive: true })
+          const historyPath = this.container.paths.resolve(historyDir, `${taskId.replace(/\//g, '--')}-${Date.now()}.md`)
+          const sections = [
+            '---',
+            `task: ${taskId}`,
+            `agent: ${task.agent}`,
+            `completedAt: "${new Date().toISOString()}"`,
+            '---',
+            '',
+            '# Task Run Output',
+            '',
+            result.stdout || '',
+          ]
+          await (this.container.feature('fs') as any).writeFileAsync(historyPath, sections.join('\n'))
+        } catch {}
       }
 
       const now = Date.now()
