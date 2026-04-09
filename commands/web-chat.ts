@@ -2,9 +2,9 @@ import { z } from 'zod'
 import { networkInterfaces } from 'os'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
-import type { AssistantsManager } from '@soederpop/luca/agi'
+import type { AssistantsManager, Assistant } from '@soederpop/luca/agi'
 import type { ChatService } from '../features/chat-service'
-import type { VoiceChat } from '../features/voice-chat'
+import type VoiceMode from '../features/voice-mode'
 import type { VoiceListener } from '../features/voice-listener'
 
 export const argsSchema = CommandOptionsSchema.extend({
@@ -38,7 +38,9 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	const assistantsManager = container.feature('assistantsManager') as AssistantsManager
 	await assistantsManager.discover()
 
-	const baseAssistant = assistantsManager.create(options.assistant)
+	const baseAssistant = assistantsManager.create(options.assistant, {
+		historyMode: 'session',
+	}) as Assistant
 
 	// Set up the ChatService feature
 	const chatService = container.feature('chatService', {
@@ -47,19 +49,32 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 		historyMode: 'session',
 	}) as unknown as ChatService
 
-	// Wire up VoiceChat for TTS playback when voice mode is active
-	const voiceChat = container.feature('voiceChat', {
-		assistant: `${options.assistant}:${baseAssistant.uuid}`,
-		historyMode: 'session',
-	}) as unknown as VoiceChat
+	// Create voiceMode from the assistant's voice.yaml and attach it
+	let voiceMode: VoiceMode | null = null
+	try {
+		const { VoiceMode: VoiceModeClass } = require('../features/voice-mode')
+		const config = VoiceModeClass.readVoiceConfig(container, baseAssistant)
+		const vmOptions = VoiceModeClass.optionsFromConfig(config, {
+			debug: false,
+		})
 
-	await voiceChat.start()
+		voiceMode = container.feature('voiceMode', vmOptions) as unknown as VoiceMode
+		baseAssistant.use(voiceMode as any)
 
-	if (voiceChat.isStarted) {
-		chatService.setVoiceChat(voiceChat)
-		console.log(`[web-chat] VoiceChat attached for TTS playback`)
-	} else {
-		console.log(`[web-chat] VoiceChat not available — voice mode will be text-only`)
+		// Start disabled — web chat starts in text mode, user can toggle on
+		voiceMode.disableVoiceMode()
+
+		const caps = await voiceMode.checkCapabilities()
+		if (caps.available) {
+			chatService.setVoiceAssistant(baseAssistant, voiceMode)
+			console.log(`[web-chat] VoiceMode attached for TTS playback`)
+		} else {
+			console.log(`[web-chat] VoiceMode not available (${caps.missing.join(', ')}) — voice mode will be text-only`)
+			voiceMode = null
+		}
+	} catch (err: any) {
+		console.log(`[web-chat] VoiceMode setup failed: ${err.message} — voice mode will be text-only`)
+		voiceMode = null
 	}
 
 	const publicDir = container.paths.resolve('public', 'web-chat')

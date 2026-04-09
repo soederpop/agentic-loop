@@ -321,11 +321,22 @@ export async function startVoiceService(
 
 async function checkCapabilities(container: any): Promise<void> {
 	const listener = container.feature('voiceListener' as any) as any
-	const chat = container.feature('voiceChat', { assistant: 'chiefOfStaff' }) as any
 
-	const [listenerCaps, chatCaps] = await Promise.all([
+	// Create a voiceMode instance to check TTS capabilities
+	const am = container.feature('assistantsManager') as any
+	await am.discover()
+	const assistant = am.create('chiefOfStaff')
+	const { VoiceMode: VoiceModeClass } = require('../features/voice-mode')
+	let ttsCaps = { available: false, missing: ['no voice config'] as string[] }
+	try {
+		const config = VoiceModeClass.readVoiceConfig(container, assistant)
+		const vmOptions = VoiceModeClass.optionsFromConfig(config)
+		const vm = container.feature('voiceMode', vmOptions) as any
+		ttsCaps = await vm.checkCapabilities()
+	} catch {}
+
+	const [listenerCaps] = await Promise.all([
 		listener.checkCapabilities(),
-		chat.checkCapabilities(),
 	])
 
 	const mark = (ok: boolean) => ok ? '\x1b[32m+\x1b[0m' : '\x1b[31m-\x1b[0m'
@@ -335,10 +346,10 @@ async function checkCapabilities(container: any): Promise<void> {
 	console.log('  ──────────────────────')
 	console.log(`  ${mark(listener.state.get('wakeWordAvailable'))} Wake word   rustpotter + .rpw models`)
 	console.log(`  ${mark(listener.state.get('sttAvailable'))}  STT         sox + mlx_whisper`)
-	console.log(`  ${mark(chatCaps.available)}  TTS/LLM     ELEVENLABS_API_KEY + voice.yaml`)
+	console.log(`  ${mark(ttsCaps.available)}  TTS/LLM     ELEVENLABS_API_KEY + voice.yaml`)
 	console.log('')
 
-	const allMissing = [...listenerCaps.missing, ...chatCaps.missing]
+	const allMissing = [...listenerCaps.missing, ...ttsCaps.missing]
 	if (allMissing.length) {
 		console.log('  Missing:')
 		for (const m of allMissing) {

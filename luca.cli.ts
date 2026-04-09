@@ -32,7 +32,7 @@ export async function main(container: any) {
   container
   	.addContext('luca', container)
 	.addContext('chief', chief)
-	.addContext('voiceChief', container.feature('voiceChat', { assistant: 'chiefOfStaff' }))
+	.addContext('voiceMode', container.feature('voiceMode'))
 	.addContext('docs', await container.docs.load())
 	.addContext('wm', container.feature('windowManager', { autoListen: true }))
 

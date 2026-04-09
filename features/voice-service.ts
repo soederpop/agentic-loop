@@ -2,8 +2,9 @@ import { z } from 'zod'
 import { FeatureStateSchema, FeatureOptionsSchema } from '@soederpop/luca'
 import { Feature, features } from '@soederpop/luca'
 import type { WindowManager } from '@soederpop/luca'
+import type { Assistant } from '@soederpop/luca/agi'
 import type { VoiceListener } from './voice-listener'
-import type VoiceChat from './voice-chat'
+import type VoiceMode from './voice-mode'
 
 declare module '@soederpop/luca' {
   interface AvailableFeatures {
@@ -29,7 +30,8 @@ export type VoiceServiceOptions = z.infer<typeof VoiceServiceOptionsSchema>
 type VoiceAssistantEntry = {
   assistantName: string
   aliases: string[]
-  chat: VoiceChat | null
+  assistant: Assistant | null
+  voiceMode: VoiceMode | null
 }
 
 type WindowHandleLike = {
@@ -40,6 +42,8 @@ type WindowHandleLike = {
 /**
  * Orchestrates the voice subsystem: wake word detection, STT, and assistant routing.
  * Maps wake words to assistants via voice.yaml aliases discovered through assistantsManager.
+ *
+ * Each voice-enabled assistant gets a VoiceMode attached directly — no VoiceChat wrapper.
  */
 export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions> {
   static override shortcut = 'features.voiceService' as const
@@ -105,13 +109,13 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     const firstEntry = this._entries[0]
     let ttsAvailable = false
     if (firstEntry) {
-      const chat = this.getOrCreateChat(firstEntry)
-      const chatCaps = await chat.checkCapabilities()
-      ttsAvailable = chatCaps.available
+      const { voiceMode } = this.getOrCreateAssistant(firstEntry)
+      const caps = await voiceMode.checkCapabilities()
+      ttsAvailable = caps.available
 
       this.state.setState({
         ttsAvailable,
-        capabilityMissing: [...listenerCaps.missing, ...chatCaps.missing],
+        capabilityMissing: [...listenerCaps.missing, ...caps.missing],
       })
     } else {
       this.state.setState({
@@ -220,7 +224,8 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       const voiceEntry: VoiceAssistantEntry = {
         assistantName: entry.name,
         aliases,
-        chat: null,
+        assistant: null,
+        voiceMode: null,
       }
 
       this._entries.push(voiceEntry)
@@ -238,30 +243,45 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     this.emit('info', `Discovered ${this._entries.length} voice-enabled assistant(s)`)
   }
 
-  /** Creates or returns the VoiceChat instance for an assistant entry. */
-  private getOrCreateChat(entry: VoiceAssistantEntry): VoiceChat {
-    if (entry.chat) return entry.chat
+  /** Creates or returns the assistant + voiceMode for an entry. */
+  private getOrCreateAssistant(entry: VoiceAssistantEntry): { assistant: Assistant; voiceMode: VoiceMode } {
+    if (entry.assistant && entry.voiceMode) {
+      return { assistant: entry.assistant, voiceMode: entry.voiceMode }
+    }
 
-    entry.chat = this.container.feature('voiceChat', {
-      assistant: entry.assistantName,
-      playPhrases: true,
+    const am = this.container.feature('assistantsManager' as any) as any
+
+    // Create assistant with voice-oriented prompts
+    const assistant = am.create(entry.assistantName, {
       prependPrompt: VOICE_INSTRUCTIONS_PRE,
       appendPrompt: VOICE_INSTRUCTIONS_POST,
-      maxTokens: 500,
       historyMode: 'daily',
-    }) as unknown as VoiceChat
+    }) as Assistant
 
-    entry.chat.on('toolCall', (payload: any) => {
+    // Read voice.yaml and build voiceMode options
+    const { VoiceMode: VoiceModeClass } = require('./voice-mode')
+    const config = VoiceModeClass.readVoiceConfig(this.container, assistant)
+    const vmOptions = VoiceModeClass.optionsFromConfig(config, {
+      playPhrases: true,
+      debug: !!this.container.argv.debug,
+    })
+
+    const voiceMode = this.container.feature('voiceMode', vmOptions) as unknown as VoiceMode
+
+    // Attach voiceMode to the assistant
+    assistant.use(voiceMode as any)
+
+    // Wire up tool event logging
+    voiceMode.on('toolCall', (payload: any) => {
       const name = payload?.name || 'unknown'
       const args = payload?.args || {}
       console.log(`[voice-service][${entry.assistantName}] toolCall ${name} ${JSON.stringify(args)}`)
     })
 
-    entry.chat.on('toolResult', (payload: any) => {
+    voiceMode.on('toolResult', (payload: any) => {
       const name = payload?.name || 'unknown'
       const result = payload?.result
       let summary = ''
-
       if (typeof result === 'string') {
         summary = result.length > 200 ? `${result.slice(0, 200)}...` : result
       } else if (result !== undefined) {
@@ -272,18 +292,20 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
           summary = String(result)
         }
       }
-
       console.log(`[voice-service][${entry.assistantName}] toolResult ${name}${summary ? ` ${summary}` : ''}`)
     })
 
-    entry.chat.on('toolError', (payload: any) => {
+    voiceMode.on('toolError', (payload: any) => {
       const name = payload?.name || 'unknown'
       const error = payload?.error
       const message = error instanceof Error ? error.message : String(error)
       console.log(`[voice-service][${entry.assistantName}] toolError ${name} ${message}`)
     })
 
-    return entry.chat
+    entry.assistant = assistant
+    entry.voiceMode = voiceMode
+
+    return { assistant, voiceMode }
   }
 
   private get authorityPort(): number | null {
@@ -478,9 +500,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       }
     }
 
-    // Real-time mic VU via Web Audio + setInterval
-    // Uses setInterval instead of requestAnimationFrame because rAF
-    // is throttled to ~1fps in unfocused/background windows
     async function startMicVU() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -501,7 +520,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       stopVULoop();
       vuTimer = setInterval(() => {
         if (mode !== 'listening' || !analyser) return;
-        // Time-domain waveform: peak amplitude (samples centered at 128)
         analyser.getByteTimeDomainData(tdArray);
         let peak = 0;
         for (let i = 0; i < tdArray.length; i++) {
@@ -510,14 +528,13 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
         }
         const boosted = Math.min(1, (peak / 128) * 2.5);
         applyLevel(boosted);
-      }, 33); // ~30fps, not subject to rAF throttling
+      }, 33);
     }
 
     function stopVULoop() {
       if (vuTimer) { clearInterval(vuTimer); vuTimer = null; }
     }
 
-    // Called from host to set status: 'listening', 'generating', or 'speaking'
     window.setStatus = function(newMode) {
       mode = newMode;
       const labels = { listening: 'Listening', generating: 'Generating', speaking: 'Speaking', done: 'Done' };
@@ -532,7 +549,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       if (mode === 'generating') {
         stopVULoop();
         if (speakingAnim) { clearInterval(speakingAnim); speakingAnim = null; }
-        // Gentle pulsing animation for generating state
         speakingAnim = setInterval(() => {
           const t = Date.now() / 600;
           for (let i = 0; i < barCount; i++) {
@@ -557,7 +573,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       } else if (mode === 'done') {
         stopVULoop();
         if (speakingAnim) { clearInterval(speakingAnim); speakingAnim = null; }
-        // Settle bars to resting height
         for (let i = 0; i < barCount; i++) {
           bars[i].style.height = MIN_H + 'px';
         }
@@ -567,10 +582,8 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       }
     };
 
-    // Also keep setVU as fallback if host sends levels
     window.setVU = function(level) { applyLevel(level); };
 
-    // Cancel button: connect to authority WS and send voice-cancel
     document.getElementById('cancelBtn').addEventListener('click', () => {
       ${wsPort ? `
       try {
@@ -583,7 +596,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       ` : `console.warn('no authority port — cancel unavailable');`}
     });
 
-    // Auto-start mic VU
     startMicVU();
   </script>
 </body>
@@ -637,7 +649,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     await overlay?.close().catch(() => {})
   }
 
-  /** Bound handler for when the overlay window gains focus (user clicked it to cancel) */
   private _onOverlayFocused = (payload: any) => {
     const focusedId = (payload?.windowId || payload?.id || '').toLowerCase()
     const overlayId = this._triggerOverlay?.windowId?.toLowerCase()
@@ -650,7 +661,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     }
   }
 
-  /** Kill any running afplay processes */
   private killAfplay() {
     try {
       this.container.proc.exec('killall afplay')
@@ -659,10 +669,8 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     }
   }
 
-  /** The picker overlay handle (if open). */
   private _pickerOverlay: WindowHandleLike | null = null
 
-  /** Builds the HTML for the assistant picker overlay. */
   private buildAssistantPickerHtml(): string {
     const wsPort = this.authorityPort
     const assistants = this._entries.map(e => e.assistantName)
@@ -832,7 +840,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
         case 'Enter': e.preventDefault(); confirm(); break;
         case 'Escape': e.preventDefault(); cancel(); break;
         default:
-          // Number keys 1-9 for direct selection
           const num = parseInt(e.key);
           if (num >= 1 && num <= assistants.length) {
             selectedIndex = num - 1;
@@ -842,38 +849,32 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     });
 
     render();
-    // Focus the window so keyboard events are captured
     window.focus();
   </script>
 </body>
 </html>`
   }
 
-  /** Pending picker resolve callback, set by showAssistantPicker, resolved by handlePickerSelect/Cancel */
   private _pickerResolve: ((value: string | null) => void) | null = null
   private _pickerTimeout: ReturnType<typeof setTimeout> | null = null
 
-  /** Opens the assistant picker overlay. Returns the selected assistant name, or null if cancelled. */
   async showAssistantPicker(): Promise<string | null> {
-    // Don't show picker if already in a voice interaction
     if (this.listener.state.get('locked')) {
       this.emit('info', 'Picker ignored — voice interaction in progress')
       return null
     }
 
-    // Don't show picker if no assistants
     if (this._entries.length === 0) {
       this.emit('info', 'Picker ignored — no voice assistants discovered')
       return null
     }
 
-    // Close any existing picker
     await this.closeAssistantPicker()
 
     const wm = this.windowManager as any
     const overlayWidth = 360
     const itemHeight = 48
-    const chromeHeight = 100 // header + hint + padding
+    const chromeHeight = 100
     const overlayHeight = Math.min(chromeHeight + this._entries.length * itemHeight, 500)
     const display = wm.getPrimaryDisplay()
     const centeredX = Math.round((display.width - overlayWidth) / 2)
@@ -896,14 +897,12 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     return new Promise<string | null>((resolve) => {
       this._pickerResolve = resolve
 
-      // Auto-cancel after 30s
       this._pickerTimeout = setTimeout(() => {
         this.handlePickerCancel()
       }, 30000)
     })
   }
 
-  /** Called by the command handler when the picker overlay sends a selection. */
   handlePickerSelect(assistant: string) {
     const resolve = this._pickerResolve
     this._pickerResolve = null
@@ -912,7 +911,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     resolve?.(assistant)
   }
 
-  /** Called by the command handler when the picker overlay is cancelled. */
   handlePickerCancel() {
     const resolve = this._pickerResolve
     this._pickerResolve = null
@@ -927,18 +925,14 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     await overlay?.close().catch(() => {})
   }
 
-  /** Resolves a wake word to a voice assistant entry by matching against aliases. */
   private resolveWakeWord(wakeword: string): VoiceAssistantEntry | null {
     const normalized = wakeword.toLowerCase().replace(/_/g, ' ').trim()
 
-    // Direct match
     if (this._aliasMap.has(normalized)) return this._aliasMap.get(normalized)!
 
-    // Strip common wake word prefixes (e.g. "hey_friday" → "friday", "ok_chief" → "chief")
     const stripped = normalized.replace(/^(hey|ok|hi|yo)\s+/, '')
     if (this._aliasMap.has(stripped)) return this._aliasMap.get(stripped)!
 
-    // Partial match: check if any alias is contained in the wake word or vice versa
     for (const [alias, entry] of this._aliasMap) {
       if (normalized.includes(alias) || alias.includes(normalized)) return entry
     }
@@ -946,11 +940,10 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     return null
   }
 
-  /** Handles a wake word trigger: resolves the assistant, records speech, routes to the assistant's chat. */
+  /** Handles a wake word trigger: resolves the assistant, records speech, routes to the assistant. */
   async handleTriggerWord(wakeword: string) {
     const { listener } = this
 
-    // Guard: STT must be available
     if (!listener.state.get('sttAvailable')) {
       this.emit('info', 'Triggered but STT unavailable — cannot transcribe')
       await this.closeTriggerOverlay()
@@ -976,12 +969,15 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     }
     this.container.ui.print.red('MIC IS HOT')
 
-    // Play a short audio acknowledgement so the user knows the assistant heard them
-    const chat = this.getOrCreateChat(entry)
-    if (!chat.isStarted) {
-      await chat.start()
+    // Get or create the assistant + voiceMode pair
+    const { assistant, voiceMode } = this.getOrCreateAssistant(entry)
+
+    if (!(assistant as any).isStarted) {
+      await assistant.start()
     }
-    chat.playPhrase('generic-ack')
+
+    // Play acknowledgement phrase
+    voiceMode.playPhrase('generic-ack')
 
     const seededText = (listener.state.get('initialCommandText') as string || '').trim()
     const text = seededText.length
@@ -1004,7 +1000,7 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     this.emit('info', `User said: ${text}`)
     this.emit('info', `Asking ${entry.assistantName}: ${text}`)
 
-    // Wire up overlay status transitions from VoiceChat events
+    // Wire up overlay status transitions from voiceMode events
     const onGenerating = () => {
       console.log('[voice-service] overlay → generating')
       if (this._triggerOverlay) {
@@ -1017,23 +1013,26 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
         (this._triggerOverlay as any).eval(`setStatus('speaking')`).catch(() => {})
       }
     }
-    const onFinished = () => {
+    const onTurnComplete = () => {
       console.log('[voice-service] overlay → done')
       if (this._triggerOverlay) {
         (this._triggerOverlay as any).eval(`setStatus('done')`).catch(() => {})
       }
     }
-    chat.on('generating', onGenerating)
-    chat.on('speaking', onSpeaking)
-    chat.on('finished', onFinished)
+    voiceMode.on('generating', onGenerating)
+    voiceMode.on('speaking', onSpeaking)
+    voiceMode.on('turnComplete', onTurnComplete)
 
-    console.log('[voice-service] awaiting chat.ask()')
-    await chat.ask(text)
-    console.log('[voice-service] chat.ask() resolved')
+    // Ask the assistant directly — voiceMode handles TTS automatically
+    console.log('[voice-service] awaiting assistant.ask()')
+    await assistant.ask(text)
+    // Wait for speech to finish playing
+    await voiceMode.waitForSpeechDone()
+    console.log('[voice-service] assistant.ask() and speech complete')
 
-    chat.off('generating', onGenerating)
-    chat.off('speaking', onSpeaking)
-    chat.off('finished', onFinished)
+    voiceMode.off('generating', onGenerating)
+    voiceMode.off('speaking', onSpeaking)
+    voiceMode.off('turnComplete', onTurnComplete)
 
     this.emit('info', `${entry.assistantName} finished speaking`)
 

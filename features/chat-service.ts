@@ -4,7 +4,7 @@ import { FeatureOptionsSchema, FeatureStateSchema } from '@soederpop/luca/schema
 import { WebSocketServer, WebSocket } from 'ws'
 import type { Assistant, AssistantsManager } from '@soederpop/luca/agi'
 import type { Server as HttpServer } from 'http'
-import type { VoiceChat } from './voice-chat'
+import type VoiceMode from './voice-mode'
 
 declare module '@soederpop/luca' {
   interface AvailableFeatures {
@@ -15,7 +15,7 @@ declare module '@soederpop/luca' {
 
 // ── Voice mode ──
 
-export type VoiceMode = 'off' | 'always'
+export type VoiceModeState = 'off' | 'always'
 
 // ── Protocol types ──
 
@@ -27,13 +27,13 @@ export type ChatMessageOut =
 	| { type: 'tool_start'; id: string; name: string; startedAt: number }
 	| { type: 'tool_end'; id: string; name: string; ok: boolean; endedAt: number; durationMs: number; summary?: string; error?: string }
 	| { type: 'assistant_message_complete'; messageId: string; text: string }
-	| { type: 'voice_mode_changed'; mode: VoiceMode }
+	| { type: 'voice_mode_changed'; mode: VoiceModeState }
 	| { type: 'error'; message: string }
 
 export type ChatMessageIn =
 	| { type: 'init'; sessionId: string; assistantId?: string }
 	| { type: 'user_message'; text: string; voice?: boolean }
-	| { type: 'set_voice_mode'; mode: VoiceMode }
+	| { type: 'set_voice_mode'; mode: VoiceModeState }
 
 // ── Session ──
 
@@ -86,9 +86,9 @@ export type CustomMessageHandler = (parsed: any, ctx: MessageHandlerContext) => 
  * Manages WebSocket connections, assistant sessions, and the streaming
  * protocol (init → user_message → chunks/tool events → complete).
  *
- * Usage:
- *   const chatService = container.feature('chatService', { threadPrefix: 'my-workflow' })
- *   chatService.attach(httpServer)
+ * Voice is handled via the assistant-native voiceMode feature.
+ * When a voiceMode-attached assistant is set, voice toggling uses
+ * the assistant's ext methods directly — no VoiceChat wrapper needed.
  */
 export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 	static override shortcut = 'features.chatService' as const
@@ -102,30 +102,47 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 	private sessions = new Map<string, ChatSession>()
 	private wss: WebSocketServer | null = null
 	private customHandler: CustomMessageHandler | null = null
-	private _voiceChat: VoiceChat | null = null
-	private _voiceMode: VoiceMode = 'off'
+
+	/** The voice-enabled assistant (has voiceMode attached via assistant.use()) */
+	private _voiceAssistant: Assistant | null = null
+	private _voiceMode: VoiceMode | null = null
+	private _voiceModeState: VoiceModeState = 'off'
 
 	// ── Voice ──
 
 	/**
-	 * Attach a VoiceChat instance for voice responses.
-	 * When set, the service can route messages through voice based on voiceMode.
+	 * Set a voice-capable assistant (one that already has voiceMode attached).
+	 * The chatService will use this assistant's voiceMode for voice toggling.
 	 */
-	setVoiceChat(voiceChat: VoiceChat) {
-		this._voiceChat = voiceChat
+	setVoiceAssistant(assistant: Assistant, voiceMode: VoiceMode) {
+		this._voiceAssistant = assistant
+		this._voiceMode = voiceMode
 		return this
 	}
 
-	get voiceChat(): VoiceChat | null {
-		return this._voiceChat
+	get voiceAssistant(): Assistant | null {
+		return this._voiceAssistant
 	}
 
-	get voiceMode(): VoiceMode {
+	get voiceMode(): VoiceMode | null {
 		return this._voiceMode
 	}
 
-	setVoiceMode(mode: VoiceMode) {
-		this._voiceMode = mode
+	get voiceModeState(): VoiceModeState {
+		return this._voiceModeState
+	}
+
+	setVoiceModeState(mode: VoiceModeState) {
+		this._voiceModeState = mode
+
+		if (this._voiceMode) {
+			if (mode === 'always') {
+				this._voiceMode.enableVoiceMode()
+			} else {
+				this._voiceMode.disableVoiceMode()
+			}
+		}
+
 		this.emit('voiceModeChanged', { mode })
 		return this
 	}
@@ -209,7 +226,7 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 	/**
 	 * Get or create a session for the given sessionId + assistantId combo.
-	 * When a voiceChat is attached, its assistant is used as the session assistant.
+	 * When a voice assistant is set, its assistant is used as the session assistant.
 	 */
 	async getOrCreateSession(sessionId: string, assistantId: string): Promise<ChatSession | null> {
 		const fullName = this.resolveAssistantName(assistantId)
@@ -224,9 +241,9 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 		let assistant: Assistant
 
-		if (this._voiceChat) {
-			// VoiceChat owns the assistant — reuse it so TTS event wiring stays intact
-			assistant = this._voiceChat.assistant
+		if (this._voiceAssistant) {
+			// Reuse the voice-capable assistant so voiceMode event wiring stays intact
+			assistant = this._voiceAssistant
 		} else {
 			assistant = this.assistantsManager.create(fullName, {
 				historyMode: this.options.historyMode,
@@ -300,8 +317,9 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 			callbacks.onToolEnd(callId, toolName, false, endedAt, endedAt - startedAt, error?.message || String(error))
 		}
 
-		const activeAssistant = this._voiceChat && this._voiceMode === 'always'
-			? this._voiceChat.assistant
+		// Use the voice assistant when voice mode is 'always', otherwise session assistant
+		const activeAssistant = this._voiceAssistant && this._voiceModeState === 'always'
+			? this._voiceAssistant
 			: session.assistant
 
 		activeAssistant.on('chunk', onChunk)
@@ -310,9 +328,13 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 		activeAssistant.on('toolError', onToolError)
 
 		try {
-			const response = this._voiceChat && this._voiceMode === 'always'
-				? await this._voiceChat.ask(text)
-				: await activeAssistant.ask(text)
+			const response = await activeAssistant.ask(text)
+
+			// If voice mode is active, wait for speech to finish
+			if (this._voiceMode && this._voiceModeState === 'always') {
+				await this._voiceMode.waitForSpeechDone()
+			}
+
 			callbacks.onComplete(messageId, response)
 			return response
 		} catch (err: any) {
@@ -418,7 +440,7 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 					this.send(ws, { type: 'error', message: `Invalid voice mode: ${mode}. Use "off" or "always".` })
 					return
 				}
-				this.setVoiceMode(mode)
+				this.setVoiceModeState(mode)
 				this.send(ws, { type: 'voice_mode_changed', mode })
 				return
 			}
@@ -440,16 +462,16 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 				isProcessing = true
 
-				// When voiceChat is attached, mute it unless voice is requested
-				const wantVoice = this._voiceChat && (this._voiceMode === 'always' || parsed.voice === true)
+				// When voiceMode is available, toggle mute based on whether voice is requested
+				const wantVoice = this._voiceMode && (this._voiceModeState === 'always' || parsed.voice === true)
 
-				if (this._voiceChat && !wantVoice) this._voiceChat.mute()
-				if (this._voiceChat && wantVoice) this._voiceChat.unmute()
+				if (this._voiceMode && !wantVoice) this._voiceMode.mute()
+				if (this._voiceMode && wantVoice) this._voiceMode.unmute()
 
 				await this.streamResponse(session, text, this.wsCallbacks(ws))
 
 				// Restore unmuted state after text-only response
-				if (this._voiceChat && !wantVoice) this._voiceChat.unmute()
+				if (this._voiceMode && !wantVoice) this._voiceMode.unmute()
 
 				isProcessing = false
 				return
@@ -464,7 +486,6 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 		ws.on('close', () => {
 			this.state.set('connectionCount', Math.max(0, (this.state.get('connectionCount') ?? 1) - 1))
 			this.emit('disconnection')
-			// Session stays in the map for reconnection
 		})
 	}
 

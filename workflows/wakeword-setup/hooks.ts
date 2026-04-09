@@ -407,13 +407,18 @@ export async function onSetup({ app, container, wss }: WorkflowHooksSetupContext
         return res.status(400).json({ error: 'assistantName and text are required' })
       }
 
-      const chat = container.feature('voiceChat', {
-        assistant: assistantName,
-        historyMode: 'lifecycle',
-      }) as any
+      const am = container.feature('assistantsManager') as any
+      const assistant = am.create(assistantName, { historyMode: 'lifecycle' })
 
-      if (!chat.isStarted) {
-        await chat.start()
+      // Read voice config and attach voiceMode
+      const { VoiceMode: VoiceModeClass } = require('../../features/voice-mode')
+      const config = VoiceModeClass.readVoiceConfig(container, assistant)
+      const vmOptions = VoiceModeClass.optionsFromConfig(config)
+      const voiceMode = container.feature('voiceMode', vmOptions) as any
+      assistant.use(voiceMode)
+
+      if (!assistant.isStarted) {
+        await assistant.start()
       }
 
       // Broadcast chat events over WebSocket
@@ -424,11 +429,12 @@ export async function onSetup({ app, container, wss }: WorkflowHooksSetupContext
         })
       }
 
-      chat.assistant.on('chunk', (chunk: string) => {
+      assistant.on('chunk', (chunk: string) => {
         sendWs('chat-chunk', { chunk })
       })
 
-      const response = await chat.say(text)
+      const response = await assistant.ask(text)
+      await voiceMode.waitForSpeechDone()
       sendWs('chat-done', { response })
 
       res.json({ ok: true, response })

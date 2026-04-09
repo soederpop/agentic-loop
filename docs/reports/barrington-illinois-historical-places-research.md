@@ -5,7 +5,7 @@ tags:
   - barrington
   - illinois
   - history
-status: approved
+status: researching
 relatedReports: []
 ---
 
@@ -16,11 +16,12 @@ relatedReports: []
 Research three notable historical places in Barrington, Illinois.
 
 For each place, find:
-- the name of the place
-- why it is historically notable
-- when it was established, built, or became important
-- whether it is still standing or accessible today
-- any especially interesting story, event, or cultural significance tied to it
+
+* the name of the place
+* why it is historically notable
+* when it was established, built, or became important
+* whether it is still standing or accessible today
+* any especially interesting story, event, or cultural significance tied to it
 
 Prioritize reliable local history sources, official sites, preservation groups, museums, park districts, libraries, or reputable historical summaries.
 
