@@ -15,10 +15,12 @@ phrases:
     - Dimmi
     - Eccomi
     - Amore?
+    - Talk to me
   generic-finish:
     - Done
   greeting:
     - Hello
+    - Ciao, bello
   farewell:
     - Check you later
   thinking:
@@ -26,7 +28,17 @@ phrases:
     - Momento
     - Aspetta
     - Looking
-    - I’m a doing this, I’m a doing that
+    - '[thinking] Lemme see what the fuck is going on'
+    - '[muttering] Hang on, I’m digging through this mess'
+    - '[focused] Okay, baby, I’m on it'
+    - '[fast] One sec, I’m pulling this together'
+    - '[annoyed] Jesus, what a pain in the ass—gimme a second'
+    - '[thinking] I’m checking all the little bullshit details'
+    - '[focused] Aspetta, I’m lining it up'
+    - '[dryly] Yeah yeah, I’m doing the smart shit now'
+    - '[thinking] Gimme a minute, I’m connecting the dots'
+    - '[thinking] Almost there, don’t bust my balls'
+    - '[smirking] Let me make this shit behave'
   mistake:
     - Oops
     - Merda

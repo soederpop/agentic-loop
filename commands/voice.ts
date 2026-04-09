@@ -61,7 +61,7 @@ type VoiceSettings = {
 	useSpeakerBoost?: boolean
 }
 
-type AssistantConfigResult = { voice: string; groups: Record<string, string[]>; outputDir: string; voiceSettings?: VoiceSettings }
+type AssistantConfigResult = { voice: string; groups: Record<string, string[]>; outputDir: string; voiceSettings?: VoiceSettings; conversationModePrefix?: string }
 
 function buildResult(assistant: any, cfg: Record<string, any>): AssistantConfigResult {
 	const outputDir = assistant.paths.resolve('generated')
@@ -70,6 +70,7 @@ function buildResult(assistant: any, cfg: Record<string, any>): AssistantConfigR
 		groups: cfg.phrases || {},
 		outputDir,
 		voiceSettings: cfg.voiceSettings || undefined,
+		conversationModePrefix: cfg.conversationModePrefix || undefined,
 	}
 }
 
@@ -97,6 +98,17 @@ function discoverAllVoiceAssistants(container: any): Array<{ name: string; folde
 }
 
 type ManifestEntry = { id: string; text: string; tag: string; voice: string; provider: string; format: string; file: string }
+
+function applyPrefix(prefix: string, text: string): string {
+	const prefixInner = prefix.replace(/^\[|\]$/g, '').trim()
+	const leadingTag = text.match(/^\[([^\]]+)\]\s*/)
+	if (leadingTag) {
+		const tagInner = leadingTag[1].trim()
+		const rest = text.slice(leadingTag[0].length)
+		return `[${prefixInner}, ${tagInner}] ${rest}`
+	}
+	return `[${prefixInner}] ${text}`
+}
 
 async function generateForAssistant(
 	container: any,
@@ -159,10 +171,17 @@ async function generateForAssistant(
 		})
 	}
 
+	if (cfg.conversationModePrefix) {
+		console.log(`[generate-sounds] ${assistantName}: applying conversationModePrefix: ${cfg.conversationModePrefix}`)
+	}
+
 	for (let i = 0; i < phrases.length; i++) {
 		const phrase = phrases[i]
+		const synthesisText = cfg.conversationModePrefix
+			? applyPrefix(cfg.conversationModePrefix, phrase.text)
+			: phrase.text
 		const modelId = cfg.modelId || 'eleven_v3'
-		const cacheKey = `voice-tts:${container.utils.hashObject({ text: phrase.text, voice, provider, format, modelId })}`
+		const cacheKey = `voice-tts:${container.utils.hashObject({ text: synthesisText, voice, provider, format, modelId })}`
 		const textPart = slugify(phrase.text).slice(0, 48)
 		const fileName = `${String(i + 1).padStart(2, '0')}-${slugify(phrase.id)}${textPart ? `-${textPart}` : ''}.${format}`
 		const finalPath = `${outputDir}/${fileName}`
@@ -172,7 +191,7 @@ async function generateForAssistant(
 			const audio = await diskCache.get(cacheKey)
 			await fs.writeFileAsync(finalPath, audio)
 		} else {
-			const audio = await synthesize(phrase.text)
+			const audio = await synthesize(synthesisText)
 			await fs.writeFileAsync(finalPath, audio)
 			await diskCache.set(cacheKey, audio)
 		}
