@@ -52,12 +52,26 @@ export async function onSetup({ app, docs, container, broadcast }: WorkflowHooks
   app.get('/api/assistants', async (_req: any, res: any) => {
     try {
       await assistantsManager.discover()
-      const assistants = (assistantsManager.list?.() || [])
+      const discovered = (assistantsManager.list?.() || [])
         .map((entry: any) => ({
           id: entry.name,
           name: entry.name,
         }))
-        .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+      const builtins = [
+        { id: 'claude', name: 'claude' },
+        { id: 'codex', name: 'codex' },
+      ]
+
+      const assistants = [...builtins, ...discovered]
+        .filter((item: any, index: number, arr: any[]) => arr.findIndex((x: any) => x.id === item.id) === index)
+        .sort((a: any, b: any) => {
+          const order: Record<string, number> = { claude: 0, codex: 1 }
+          const ao = order[a.id] ?? 999
+          const bo = order[b.id] ?? 999
+          return ao === bo ? a.name.localeCompare(b.name) : ao - bo
+        })
+
       res.json({ assistants })
     } catch (err: any) {
       res.status(500).json({ error: err.message })

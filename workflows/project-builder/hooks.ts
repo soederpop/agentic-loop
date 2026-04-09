@@ -10,6 +10,8 @@ let _builders: Map<string, any> | null = null
 let _watcherClient: any = null
 
 export async function onSetup({ app, chatService, docs, container, broadcast, wss }: WorkflowHooksSetupContext) {
+  const assistantsManager = container.feature('assistantsManager') as any
+
   // ── Builder instances keyed by project slug ──────────────────────────────
 
   const builders = new Map<string, any>()
@@ -86,6 +88,36 @@ export async function onSetup({ app, chatService, docs, container, broadcast, ws
         watching: state.watching,
         loaded: state.loaded,
       })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  // ── Assistants API ───────────────────────────────────────────────────────
+
+  app.get('/api/assistants', async (_req: any, res: any) => {
+    try {
+      await assistantsManager.discover()
+      const discovered = (assistantsManager.list?.() || []).map((entry: any) => ({
+        id: entry.name,
+        name: entry.name,
+      }))
+
+      const builtins = [
+        { id: 'claude', name: 'claude' },
+        { id: 'codex', name: 'codex' },
+      ]
+
+      const assistants = [...builtins, ...discovered]
+        .filter((item, index, arr) => arr.findIndex((x) => x.id === item.id) === index)
+        .sort((a, b) => {
+          const order = { claude: 0, codex: 1 } as Record<string, number>
+          const ao = order[a.id] ?? 999
+          const bo = order[b.id] ?? 999
+          return ao === bo ? a.name.localeCompare(b.name) : ao - bo
+        })
+
+      res.json({ assistants, default: assistants[0]?.id || 'claude' })
     } catch (err: any) {
       res.status(500).json({ error: err.message })
     }
