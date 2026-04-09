@@ -3,6 +3,22 @@ import AVFoundation
 @preconcurrency
 import WebKit
 
+/// NSWindow subclass that fixes two issues with borderless WKWebView windows:
+/// 1. Borderless windows don't become key/main by default, so clicks and key
+///    events never reach the web view (broken cancel buttons, no focus).
+/// 2. Arrow keys and other non-text keys trigger NSBeep via the default
+///    keyDown handler even when the web view's JS handles them.
+final class WebViewWindow: NSWindow {
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        // Don't call super — it triggers NSBeep for keys the web view handles
+        // (arrows, escape, etc.). The WKWebView already receives these via the
+        // responder chain before NSWindow.keyDown is called.
+    }
+}
+
 func topLeftYToAppKitY(_ topLeftY: CGFloat, height: CGFloat, screen: NSScreen?) -> CGFloat {
     guard let visibleFrame = screen?.visibleFrame else { return topLeftY }
     return visibleFrame.maxY - topLeftY - height
@@ -47,7 +63,7 @@ final class BrowserWindowController: NSWindowController, NSWindowDelegate, WKNav
             width: initialWidth,
             height: initialHeight
         )
-        let window = NSWindow(
+        let window = WebViewWindow(
             contentRect: frame,
             styleMask: Self.styleMask(for: request.window.decorations),
             backing: .buffered,
