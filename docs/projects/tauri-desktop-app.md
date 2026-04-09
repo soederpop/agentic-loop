@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 goal: have-10-users-of-the-agentic-loop
 ---
 
@@ -11,8 +11,12 @@ The product goal is not just to wrap a web UI in a desktop window. The app shoul
 
 - ship Luca as a bundled sidecar/runtime
 - supervise `luca main` as the long-running local engine
+- run Luca in a user-selected instance workspace/project directory rather than directly in the shared app home
+- install and maintain a shared Agentic Loop helper-pack home at `~/.luca/agentic-loop` for reusable commands, features, templates, and app-managed support files
+- let users create new Agentic Loop instances that bootstrap into their own project directories and discover shared helpers via `luca.cli.ts`
 - present Luca’s current authority state, logs, workflows, and subsystem health in a desktop shell
 - optionally install the same Luca binary into a user-managed PATH location for terminal use
+- verify and repair additional local dependencies required by important subsystems such as voice and native integrations
 - replace the current Swift-native launcher path with a Tauri-native window authority over time
 
 This is a strategic packaging and platform project. It keeps Luca as the engine, but makes the desktop app the primary OS-facing shell for onboarding, installation, updating, native lifecycle, and user trust.
