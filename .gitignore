@@ -35,6 +35,7 @@ assistants/*/generated
 
 # logs
 logs/prompt-outputs
+logs/researcher
 
 # docs/README.md and docs/TOC
 # these change a lot when interacting with the chief, so we're git ignoring them for now.  

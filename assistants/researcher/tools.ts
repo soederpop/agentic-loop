@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { logger } from './logger'
 
 const fileTools = container.feature('fileTools')
 
@@ -83,7 +84,8 @@ function setSources(sources: Source[]) {
 	assistant.state.set('sources', sources)
 }
 
-export function addSource(options: z.infer<typeof schemas.addSource>): string {
+export async function addSource(options: z.infer<typeof schemas.addSource>): Promise<string> {
+	await logger.info('addSource', 'Adding source', { url: options.url, title: options.title })
 	const sources = getSources()
 	const id = String(sources.length + 1)
 
@@ -98,30 +100,33 @@ export function addSource(options: z.infer<typeof schemas.addSource>): string {
 
 	setSources([...sources, source])
 
-	return JSON.stringify({
-		sourceId: id,
-		message: `Source [${id}] registered: "${options.title}"`,
-	})
+	const result = { sourceId: id, message: `Source [${id}] registered: "${options.title}"` }
+	await logger.info('addSource', 'Source added', result)
+	return JSON.stringify(result)
 }
 
-export function removeSource(options: z.infer<typeof schemas.removeSource>): string {
+export async function removeSource(options: z.infer<typeof schemas.removeSource>): Promise<string> {
+	await logger.info('removeSource', 'Removing source', options)
 	const sources = getSources()
 	const source = sources.find(s => s.id === options.sourceId && !s.removed)
 
 	if (!source) {
-		return JSON.stringify({ error: `Source ${options.sourceId} not found or already removed.` })
+		const err = { error: `Source ${options.sourceId} not found or already removed.` }
+		await logger.warn('removeSource', 'Source not found', err)
+		return JSON.stringify(err)
 	}
 
 	source.removed = true
 	source.removedReason = options.reason
 	setSources([...sources])
 
-	return JSON.stringify({
-		message: `Source [${source.id}] removed: "${source.title}"${options.reason ? ` — ${options.reason}` : ''}`,
-	})
+	const result = { message: `Source [${source.id}] removed: "${source.title}"${options.reason ? ` — ${options.reason}` : ''}` }
+	await logger.info('removeSource', 'Source removed', result)
+	return JSON.stringify(result)
 }
 
-export function listSources(options: z.infer<typeof schemas.listSources>): string {
+export async function listSources(options: z.infer<typeof schemas.listSources>): Promise<string> {
+	await logger.debug('listSources', 'Listing sources', { tags: options.tags })
 	const sources = getSources().filter(s => !s.removed)
 
 	const filtered = options.tags?.length
@@ -153,55 +158,79 @@ const effortModels: Record<string, string> = {
 }
 
 export async function createResearchJob(options: z.infer<typeof schemas.createResearchJob>): Promise<string> {
+	await logger.info('createResearchJob', 'Creating research job', {
+		questionCount: options.questions.length,
+		effort: options.effort || 'medium',
+		history: options.history || 'none',
+		questions: options.questions,
+	})
+
 	if (assistant.isFork) {
-		return JSON.stringify({ error: 'Research forks cannot create sub-forks. Answer the question directly.' })
+		const err = { error: 'Research forks cannot create sub-forks. Answer the question directly.' }
+		await logger.warn('createResearchJob', 'Fork attempted to create sub-fork', err)
+		return JSON.stringify(err)
 	}
 
 	const model = effortModels[options.effort || 'medium']
 
 	const outputFolder = assistant.state.get('outputFolder') as string | undefined
-	
+
 	if (outputFolder) {
+		await logger.debug('createResearchJob', 'Ensuring output folder', { outputFolder })
 		await container.fs.ensureFolderAsync(outputFolder)
 	}
 
-	const job = await assistant.createResearchJob(
-		options.prompt,
-		options.questions,
-		{
-			history: options.history === 'full' ? 'full' : 'none',
-			model,
-			forbidTools: ['createResearchJob', 'checkResearchJobs'],
-			onFork: (fork) => {
-				if (outputFolder) {
-					fork.addSystemPromptExtension('output-folder', [
-						'## Output Directory',
-						`Write ALL research output files to: ${outputFolder}/`,
-						'Do NOT write files outside of this directory.',
-						'',
-						'## Incremental Saving',
-						'Save your work to disk incrementally — create your output file early with your first finding, then use editFile to append new sections as you discover more.',
-						'Do NOT wait until you are finished to write. Partial results must survive interruption.',
-					].join('\n'))
-				}
-			},
-		}
-	)
+	try {
+		const job = await assistant.createResearchJob(
+			options.prompt,
+			options.questions,
+			{
+				history: options.history === 'full' ? 'full' : 'none',
+				model,
+				forbidTools: ['createResearchJob', 'checkResearchJobs'],
+				onFork: (fork: any) => {
+					logger.info('createResearchJob', 'Fork spawned', { forkId: fork.id }).catch(() => {})
+					if (outputFolder) {
+						fork.addSystemPromptExtension('output-folder', [
+							'## Output Directory',
+							`Write ALL research output files to: ${outputFolder}/`,
+							'Do NOT write files outside of this directory.',
+							'',
+							'## Incremental Saving',
+							'Save your work to disk incrementally — create your output file early with your first finding, then use editFile to append new sections as you discover more.',
+							'Do NOT wait until you are finished to write. Partial results must survive interruption.',
+						].join('\n'))
+					}
+				},
+			}
+		)
 
-	return JSON.stringify({
-		jobId: job.id,
-		total: options.questions.length,
-		status: 'running',
-		message: `Research job started with ${options.questions.length} parallel forks. Use checkResearchJobs with jobId "${job.id}" to monitor progress.`,
-		questions: options.questions,
-	})
+		const result = {
+			jobId: job.id,
+			total: options.questions.length,
+			status: 'running',
+			message: `Research job started with ${options.questions.length} parallel forks. Use checkResearchJobs with jobId "${job.id}" to monitor progress.`,
+			questions: options.questions,
+		}
+		await logger.info('createResearchJob', 'Job created', { jobId: job.id })
+		return JSON.stringify(result)
+	} catch (err: unknown) {
+		await logger.error('createResearchJob', 'Failed to create research job', {
+			error: err instanceof Error ? { message: err.message, stack: err.stack } : err,
+		})
+		throw err
+	}
 }
 
-export function checkResearchJobs(options: z.infer<typeof schemas.checkResearchJobs>): string {
+export async function checkResearchJobs(options: z.infer<typeof schemas.checkResearchJobs>): Promise<string> {
+	await logger.debug('checkResearchJobs', 'Checking jobs', { jobId: options.jobId || 'all' })
+
 	if (options.jobId) {
 		const job = assistant.researchJobs.get(options.jobId)
 		if (!job) {
-			return JSON.stringify({ error: `No job found with ID "${options.jobId}".` })
+			const err = { error: `No job found with ID "${options.jobId}".` }
+			await logger.warn('checkResearchJobs', 'Job not found', err)
+			return JSON.stringify(err)
 		}
 
 		const state = {
@@ -214,6 +243,11 @@ export function checkResearchJobs(options: z.infer<typeof schemas.checkResearchJ
 			errors: job.state.get('errors'),
 		}
 
+		if (state.errors?.length) {
+			await logger.error('checkResearchJobs', 'Job has errors', { jobId: job.id, errors: state.errors })
+		}
+
+		await logger.debug('checkResearchJobs', 'Job state', state)
 		return JSON.stringify(state)
 	}
 
@@ -230,6 +264,7 @@ export function checkResearchJobs(options: z.infer<typeof schemas.checkResearchJ
 		return JSON.stringify({ jobs: [], message: 'No research jobs have been created.' })
 	}
 
+	await logger.debug('checkResearchJobs', 'All jobs summary', { count: jobs.length, jobs })
 	return JSON.stringify({
 		count: jobs.length,
 		jobs,
