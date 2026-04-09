@@ -52,3 +52,7 @@ apps/desktop/src-tauri/gen
 apps/desktop/src-tauri/target
 
 MUTE
+
+
+# The reports are not relevant to the repo i'm sharing
+docs/reports/*
