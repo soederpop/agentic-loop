@@ -514,6 +514,15 @@
 
   const FALLBACK_COLOR = '#c084fc'
 
+  // ── Profile image positions (from 4-panel gallery image) ──
+  // Each value is the object-position for the gallery sprite
+  const PORTRAIT_POSITIONS = {
+    researcher:   '0% 0%',       // top-left
+    lucaCoder:    '100% 0%',     // top-right
+    rocket:       '0% 100%',     // bottom-left
+    chiefOfStaff: '100% 100%',   // bottom-right
+  }
+
   // ── State ──
   let assistants = []
   let currentIndex = 0
@@ -595,16 +604,24 @@
       ? aliases.map(w => `"${w}"`).join(', ')
       : ''
 
-    return `
-    <div class="card-slot">
-      <div class="card ${index === currentIndex ? 'active' : ''}" data-id="${a.id}" style="--card-color: ${color}">
-        <div class="portrait-area">
-          <div class="portrait-placeholder" id="portrait-${a.id}">
+    const pos = PORTRAIT_POSITIONS[a.id]
+    // Gallery image is 967x773 (2x2 grid). Use background-size:200% 200% so each
+    // quadrant fills the circle, then background-position selects which quadrant.
+    const portraitHtml = pos
+      ? `<div class="portrait-img" id="portrait-img-${a.id}"
+             style="display:block; background:url('profile-gallery.png') ${pos} / 200% 200% no-repeat;"></div>`
+      : `<div class="portrait-placeholder" id="portrait-${a.id}">
             <span class="icon">&#9679;</span>
             <span>character portrait</span>
             <span style="font-size:9px;color:var(--text-faint)">drop image here</span>
           </div>
-          <img class="portrait-img" id="portrait-img-${a.id}" alt="${a.name}" />
+          <img class="portrait-img" id="portrait-img-${a.id}" alt="${a.name}" />`
+
+    return `
+    <div class="card-slot">
+      <div class="card ${index === currentIndex ? 'active' : ''}" data-id="${a.id}" style="--card-color: ${color}">
+        <div class="portrait-area">
+          ${portraitHtml}
         </div>
         <div class="card-body">
           <div class="card-name">
