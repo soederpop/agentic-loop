@@ -80,38 +80,6 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     }
   }
 
-  async function checkRustpotter() {
-    const bin = await whichBin('rustpotter')
-    return {
-      capability: 'rustpotter', group: 'voice', title: 'Rustpotter',
-      description: 'Wake word detection engine',
-      status: bin.found ? 'ok' : 'missing',
-      details: bin.found ? `Found at ${bin.path}` : 'rustpotter not found in PATH',
-      action: bin.found ? undefined : 'Install rustpotter: see https://github.com/GiviMAD/rustpotter',
-    }
-  }
-
-  async function checkWakeWordModels() {
-    const modelsDir = container.paths.resolve('voice', 'wakeword', 'models')
-    const dirExists = fs.existsSync(modelsDir)
-    if (!dirExists) {
-      return {
-        capability: 'wakeword_models', group: 'voice', title: 'Wake Word Models',
-        description: '.rpw model files for wake word detection',
-        status: 'missing', details: 'voice/wakeword/models/ directory not found',
-        action: 'Create voice/wakeword/models/ and add .rpw files',
-      }
-    }
-    const files = fs.readdirSync(modelsDir).filter((f: string) => f.endsWith('.rpw'))
-    return {
-      capability: 'wakeword_models', group: 'voice', title: 'Wake Word Models',
-      description: '.rpw model files for wake word detection',
-      status: files.length > 0 ? 'ok' : 'missing',
-      details: files.length > 0 ? `${files.length} model(s): ${files.join(', ')}` : 'No .rpw files found',
-      action: files.length > 0 ? undefined : 'Add .rpw wake word model files to voice/wakeword/models/',
-    }
-  }
-
   async function checkSox() {
     const bin = await whichBin('sox')
     return {
@@ -222,7 +190,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
   async function getAllCapabilities() {
     return Promise.all([
       checkBun(), checkOpenAIKey(), checkContentModel(),
-      checkRustpotter(), checkWakeWordModels(), checkSox(),
+      checkSox(),
       checkMlxWhisper(), checkElevenLabsKey(), checkVoiceAssistants(),
       checkNativeApp(), checkXcode(), checkAuthority(),
     ])
@@ -289,7 +257,7 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
               const raw = (fs.readFileSync(voicePath, 'utf-8') as any).toString('utf-8') as string
               const parsed = yaml.parse(raw)
               voiceId = parsed?.voiceId || parsed?.voice_id
-              aliases = parsed?.aliases || parsed?.wakeWords
+              aliases = parsed?.aliases
             } catch {}
           }
           assistants.push({ name: d, hasVoice, voiceId, aliases })
@@ -301,20 +269,4 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
     }
   })
 
-  app.get('/api/wake-words', async (_req: any, res: any) => {
-    try {
-      const rustpotter = await whichBin('rustpotter')
-      const modelsDir = container.paths.resolve('voice', 'wakeword', 'models')
-      let models: { file: string; name: string }[] = []
-      if (fs.existsSync(modelsDir)) {
-        models = fs
-          .readdirSync(modelsDir)
-          .filter((f: string) => f.endsWith('.rpw'))
-          .map((f: string) => ({ file: f, name: f.replace('.rpw', '').replace(/_/g, ' ') }))
-      }
-      res.json({ models, rustpotterAvailable: rustpotter.found })
-    } catch (err: any) {
-      res.status(500).json({ error: err.message })
-    }
-  })
 }

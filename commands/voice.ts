@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
 
-export const description = 'Voice service — wake word detection, STT, and assistant voice chat'
+export const description = 'Voice service — STT trigger phrases, hotkey activation, and assistant voice chat'
 
 export const argsSchema = CommandOptionsSchema.extend({
 	check: z.boolean().default(false).describe('Check voice capability status without starting the service'),
@@ -302,7 +302,6 @@ export async function startVoiceService(
 
 	const st = voiceService.state
 	const modes: string[] = []
-	if (st.get('wakeWordAvailable')) modes.push('wake-word')
 	if (st.get('sttAvailable')) modes.push('STT')
 	if (st.get('ttsAvailable')) modes.push('TTS/LLM')
 
@@ -344,7 +343,6 @@ async function checkCapabilities(container: any): Promise<void> {
 	console.log('')
 	console.log('  Voice Capability Check')
 	console.log('  ──────────────────────')
-	console.log(`  ${mark(listener.state.get('wakeWordAvailable'))} Wake word   rustpotter + .rpw models`)
 	console.log(`  ${mark(listener.state.get('sttAvailable'))}  STT         sox + mlx_whisper`)
 	console.log(`  ${mark(ttsCaps.available)}  TTS/LLM     ELEVENLABS_API_KEY + voice.yaml`)
 	console.log('')

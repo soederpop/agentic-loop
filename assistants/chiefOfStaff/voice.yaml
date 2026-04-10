@@ -40,5 +40,3 @@ phrases:
     - Peace
 provider: elevenlabs
 modelId: eleven_v3
-wakeWordThreshold: 0.47
-wakeWordModel: yo_chief.rpw

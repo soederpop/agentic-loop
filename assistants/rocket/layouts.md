@@ -4,7 +4,7 @@ When the user asks you to spawn a "Layout" , e.g "Rocket, spawn, launch, pop ope
 
 ### Setup Layout
 
-For this you need the following workflows to be launched: `setup`, `comms`, `wakeword-setup`, `voice-designer`
+For this you need the following workflows to be launched: `setup`, `comms`, `voice-designer`
 
 ```json
 [
@@ -21,13 +21,6 @@ For this you need the following workflows to be launched: `setup`, `comms`, `wak
     "y": 9,
     "width": 629,
     "height": 494
-  },
-  {
-    "url": "http://localhost:7700/workflows/wakeword-setup/",
-    "x": 1127,
-    "y": 10,
-    "width": 648,
-    "height": 509
   },
   {
     "url": "http://localhost:7700/workflows/voice-designer/",

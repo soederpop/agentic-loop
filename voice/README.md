@@ -1,12 +1,10 @@
 # Voice System
 
-The voice system is driven by three components:
+The voice system is driven by two components:
 
-1) A Wakeword system based on `rustpotter` -- purely offline, trained models, "Hey Siri" like experience.  There is a [setup-wakeword.sh](./setup-wakeword.sh) script you can use to train a model.  Each voice-enabled assistant can define wake word aliases in its `voice.yaml`. The VoiceService maps detected wake words to the matching assistant automatically.
+1) Whisper MLX for transcription — continuous listening with trigger phrase detection, or hotkey-based assistant picker
 
-2) Whisper MLX for transcription
-
-3) Elevenlabs for Text-To-Speech that sounds human and can have expressive elements
+2) Elevenlabs for Text-To-Speech that sounds human and can have expressive elements
 
 ## Voice Snippet Generation
 

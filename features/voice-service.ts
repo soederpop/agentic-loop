@@ -15,12 +15,11 @@ declare module '@soederpop/luca' {
 export const VoiceServiceStateSchema = FeatureStateSchema.extend({
   running: z.boolean().default(false),
   socketPath: z.string().default(''),
-  wakeWordAvailable: z.boolean().default(false),
   sttAvailable: z.boolean().default(false),
   ttsAvailable: z.boolean().default(false),
   capabilityMissing: z.array(z.string()).default([]),
   assistantCount: z.number().default(0),
-  inputMode: z.enum(['wakeword', 'continuous', 'off']).default('off'),
+  inputMode: z.enum(['continuous', 'off']).default('off'),
 })
 export type VoiceServiceState = z.infer<typeof VoiceServiceStateSchema>
 
@@ -125,19 +124,16 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     }
 
     this.state.setState({
-      wakeWordAvailable: listener.state.get('wakeWordAvailable') as boolean,
       sttAvailable: listener.state.get('sttAvailable') as boolean,
       inputMode: listener.inputMode,
     })
 
     // 3. Log startup summary
-    const wakewordReason = listener.state.get('wakeWordAvailable') ? 'available' : `UNAVAILABLE (${((listenerCaps.missing as string[]) || []).filter(m => m.includes('rustpotter') || m.includes('.rpw')).join(', ') || 'missing dependencies'})`
-    const continuousReason = listener.state.get('sttAvailable') ? 'available' : `UNAVAILABLE (${((listenerCaps.missing as string[]) || []).filter(m => m.includes('sox') || m.includes('mlx_whisper')).join(', ') || 'missing dependencies'})`
+    const sttReason = listener.state.get('sttAvailable') ? 'available' : `UNAVAILABLE (${((listenerCaps.missing as string[]) || []).filter(m => m.includes('sox') || m.includes('mlx_whisper')).join(', ') || 'missing dependencies'})`
     this.emit('info', '── Voice capability check ──')
-    this.emit('info', `  Wake word mode: ${wakewordReason}`)
-    this.emit('info', `  Continuous mode: ${continuousReason}`)
-    this.emit('info', `  Active mode:     ${listener.inputMode}`)
-    this.emit('info', `  TTS/LLM:         ${ttsAvailable ? 'available' : 'UNAVAILABLE'}`)
+    this.emit('info', `  STT (continuous): ${sttReason}`)
+    this.emit('info', `  Active mode:      ${listener.inputMode}`)
+    this.emit('info', `  TTS/LLM:          ${ttsAvailable ? 'available' : 'UNAVAILABLE'}`)
     this.emit('info', `  Assistants: ${this._entries.map(e => `${e.assistantName} [${e.aliases.join(', ')}]`).join(', ') || 'none'}`)
 
     // 4. Wire up input listener
@@ -161,9 +157,7 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       })
     })
 
-    if (listener.inputMode === 'wakeword') {
-      listener.waitForTriggerWord()
-    } else if (listener.inputMode === 'continuous') {
+    if (listener.inputMode === 'continuous') {
       listener.startContinuousListening()
     } else {
       this.emit('info', 'Voice input disabled — no available input mode')
@@ -189,8 +183,7 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
   async stop() {
     if (!this.state.get('running')) return this
 
-    await this.listener.stopWaitingForTriggerWord()
-    await (this.listener as any).stopContinuousListening?.()
+    await this.listener.stopContinuousListening()
 
     this.state.set('running', false)
 

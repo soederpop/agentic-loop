@@ -21,10 +21,6 @@ config.yml
 # Finder (MacOS) folder config
 .DS_Store
 
-# Voice System
-voice/wakeword/models/*.rpw
-voice/wakeword/samples/*.wav
-
 # Claude Stuff
 .claude/settings.local.json
 .claude/skills/luca-framework/references/examples

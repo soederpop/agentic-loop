@@ -67,7 +67,7 @@ luca serve
 
 This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.
 
-Wake words are mapped to voice-enabled assistants via their `voice.yaml` aliases. When a wake word is detected, VoiceService routes speech to the matching assistant's VoiceMode instance.
+Voice-enabled assistants are activated via trigger phrases (spoken through continuous STT) or the hotkey assistant picker. VoiceService routes speech to the matching assistant's VoiceMode instance.
 
 ### Voice Setup
 
@@ -75,18 +75,6 @@ Running the following will tell you if your system supports it:
 
 ```shell
 luca voice --check
-```
-
-Each voice-enabled assistant can have wake word aliases in its `voice.yaml`. Record samples and build wake word models with:
-
-```shell
-./voice/wakeword/setup-wakeword.sh
-```
-
-This walks you through recording 5 samples of each wake word and builds the detection models. You can also set up a single wake word directly:
-
-```shell
-./voice/wakeword/setup-wakeword.sh "yo chief"
 ```
 
 
@@ -146,7 +134,7 @@ The chief has the ability to make anything happen.
 
 ## The `yo` command
 
-The yo command is a way to simulate the voice wakeword + transcription when your system doesn't support it, but it has some cool uses as well that you can't get with the wakeword flow.
+The yo command is a quick way to talk to an assistant from the terminal.
 
 ```shell
 luca yo chief im giving a demo please say something funny for the boys

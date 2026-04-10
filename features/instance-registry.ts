@@ -254,3 +254,5 @@ export class InstanceRegistry extends Feature<
     }
   }
 }
+
+export default InstanceRegistry

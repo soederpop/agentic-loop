@@ -56,27 +56,6 @@ else
   info "mlx-whisper installed"
 fi
 
-# ---------- Rust / Cargo ----------
-step "Checking Rust toolchain"
-if command -v cargo >/dev/null 2>&1; then
-  info "cargo already installed ($(cargo --version))"
-else
-  warn "Installing Rust via rustup..."
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-  source "$HOME/.cargo/env"
-  info "Rust installed ($(cargo --version))"
-fi
-
-# ---------- rustpotter ----------
-step "Checking rustpotter (wake word detection)"
-if command -v rustpotter >/dev/null 2>&1; then
-  info "rustpotter already installed ($(rustpotter --version))"
-else
-  warn "Installing rustpotter via cargo (this may take a few minutes)..."
-  cargo install rustpotter-cli
-  info "rustpotter installed ($(rustpotter --version))"
-fi
-
 # ---------- Swift toolchain ----------
 step "Checking Swift toolchain (needed for presenter-windows app)"
 if command -v swift >/dev/null 2>&1; then
@@ -142,7 +121,6 @@ echo ""
 echo "  Installed:"
 echo "    - sox                (audio recording)"
 echo "    - mlx-whisper        (speech-to-text, Apple Silicon)"
-echo "    - rustpotter         (wake word detection)"
 echo "    - bun                (JavaScript runtime)"
 echo "    - LucaVoiceLauncher  (presenter-windows app)"
 echo "    - gws (optional)     (Google Workspace CLI)"
@@ -150,6 +128,5 @@ echo ""
 echo "  To verify, run:"
 echo "    sox --version"
 echo "    mlx_whisper --help"
-echo "    rustpotter --version"
 echo "    bun --version"
 echo ""

@@ -72,8 +72,7 @@ Be friendly, concise, and conversational. This person is your boss's boss — be
 Here is your setup checklist. Walk through each step interactively, confirming success before moving on:
 
 ## Step 1: Install core dependencies
-Run `scripts/install.sh` and watch for errors. If anything fails, help troubleshoot.  If there are any issues with rustpotter, you can download the pre-built binary for their os.  
-We want 3.0.2. 
+Run `scripts/install.sh` and watch for errors. If anything fails, help troubleshoot.
 
 ## Step 2: Environment variables
 Check if a `.env` file exists in the project root. If not, create one.
@@ -114,23 +113,11 @@ If yes:
 If no, that is fine — Google Workspace access can be added later with `bun add -g @googleworkspace/cli`.
 
 ## Step 4: Voice mode (optional)
-Ask the user: "Would you like to set up voice mode? This lets you talk to the assistant using a wake word — like saying Hey Siri but for your own AI assistant."
+Ask the user: "Would you like to set up voice mode? This lets you talk to the assistant using trigger phrases and hotkeys."
 
 If yes:
 
-### 4a: Wake word training
-First, check if wake word models already exist by looking for .rpw files in `voice/wakeword/models/`. Run `ls voice/wakeword/models/*.rpw 2>/dev/null`.
-
-If .rpw files already exist, tell the user you found existing wake word models and skip training. List the models you found.
-
-If NO .rpw files exist, the user needs to train a wake word:
-1. Ask them what they want their wake word to be. It should be 2-3 syllables and easy to say naturally. Give a few fun examples like "hey jarvis", "yo chief", "ok boss", "hey friday". Let them pick whatever they want.
-2. Do NOT run the wake word script yourself — it is interactive and needs a real terminal. Instead, tell the user to open a separate terminal window and run this single command (replacing the wake word with their choice):
-   cd PROJECT_ROOT/voice/wakeword && bash setup-wakeword.sh "their wake word"
-   This script handles everything: records 5 samples, builds the model, and tests detection.
-3. Tell them to come back here when they are done and let you know how it went. If something failed, help them debug.
-
-### 4b: Generate voice sounds
+### 4a: Generate voice sounds
 Check if `ELEVENLABS_API_KEY` is set in the `.env` file. If it is, run `luca voice --generate-sounds` to generate the assistant's TTS voice responses. This uses the ElevenLabs API to produce high-quality audio.
 
 If there is no ElevenLabs key, skip this step and let the user know they can generate sounds later by adding an `ELEVENLABS_API_KEY` to `.env` and running `luca voice --generate-sounds`.
@@ -163,4 +150,4 @@ echo ""
 echo "I just cloned the Agentic Loop repo and I am ready to set it up. Walk me through it." | claude \
   --append-system-prompt "$SYSTEM_PROMPT" \
   --model sonnet \
-  --allowedTools "Bash(scripts/*),Bash(brew *),Bash(bun *),Bash(cnotes *),Bash(luca *),Bash(rustpotter *),Bash(which *),Bash(cat .env*),Bash(test *),Bash(ls *),Bash(swift *),Bash(xcode-select *),Bash(bash apps/*),Bash(bun add -g *),Bash(gws *),Read,Write(.env),Edit(.env)"
+  --allowedTools "Bash(scripts/*),Bash(brew *),Bash(bun *),Bash(cnotes *),Bash(luca *),Bash(which *),Bash(cat .env*),Bash(test *),Bash(ls *),Bash(swift *),Bash(xcode-select *),Bash(bash apps/*),Bash(bun add -g *),Bash(gws *),Read,Write(.env),Edit(.env)"
