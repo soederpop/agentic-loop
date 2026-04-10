@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
-import { resolve } from 'path'
 
 export const argsSchema = CommandOptionsSchema.extend({
   docsPath: z.string().default('./docs').describe('Path to the docs folder containing contentbase models'),
@@ -113,9 +112,7 @@ async function runInteractiveUI(container: any, slug: string, options: z.infer<t
   await builder.startServer()
 
   try {
-    const { default: runApp } = await import(
-      resolve(import.meta.dir, 'project-builder/app.tsx')
-    )
+    const { default: runApp } = await import('./project-builder-app.tsx')
 
     await runApp(container, { projectSlug: slug, docsPath: options.docsPath })
   } finally {

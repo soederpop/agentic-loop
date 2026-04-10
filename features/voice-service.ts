@@ -43,7 +43,7 @@ type WindowHandleLike = {
  * Orchestrates the voice subsystem: wake word detection, STT, and assistant routing.
  * Maps wake words to assistants via voice.yaml aliases discovered through assistantsManager.
  *
- * Each voice-enabled assistant gets a VoiceMode attached directly — no VoiceChat wrapper.
+ * Each voice-enabled assistant gets a VoiceMode attached directly.
  */
 export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions> {
   static override shortcut = 'features.voiceService' as const

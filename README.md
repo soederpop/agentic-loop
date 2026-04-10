@@ -67,7 +67,7 @@ luca serve
 
 This project [contains a Native OSX App](./apps/presenter-windows/) whose only role is to open up browser windows, or terminal commands inside a pretty terminal window.  Assistants can "present" URLs to you.
 
-Wake words are mapped to voice-enabled assistants via their `voice.yaml` aliases. When a wake word is detected, VoiceService routes speech to the matching assistant's VoiceChat instance.
+Wake words are mapped to voice-enabled assistants via their `voice.yaml` aliases. When a wake word is detected, VoiceService routes speech to the matching assistant's VoiceMode instance.
 
 ### Voice Setup
 

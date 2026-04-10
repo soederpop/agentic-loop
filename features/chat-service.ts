@@ -88,7 +88,7 @@ export type CustomMessageHandler = (parsed: any, ctx: MessageHandlerContext) => 
  *
  * Voice is handled via the assistant-native voiceMode feature.
  * When a voiceMode-attached assistant is set, voice toggling uses
- * the assistant's ext methods directly — no VoiceChat wrapper needed.
+ * the assistant's ext methods directly.
  */
 export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 	static override shortcut = 'features.chatService' as const

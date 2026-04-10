@@ -12,8 +12,8 @@ import type { AGIContainer, NodeContainer, Assistant } from '@soederpop/luca/agi
  * and manages the full TTS pipeline: buffering streamed chunks,
  * splitting into speech-friendly segments, synthesizing, and playing.
  *
- * Unlike the old VoiceChat wrapper, VoiceMode is assistant-native:
- * any assistant becomes voice-capable by calling `assistant.use(voiceMode)`.
+ * VoiceMode is assistant-native: any assistant becomes voice-capable
+ * by calling `assistant.use(voiceMode)`.
  *
  * Key concepts:
  *   - **enabled/disabled** controls whether the assistant writes for speech
