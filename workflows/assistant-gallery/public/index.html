@@ -649,7 +649,7 @@
           <div class="card-actions">
             ${a.hasVoice ? `<button class="btn btn-voice" onclick="startVoice('${a.id}')">&#9835; voice chat</button>` : ''}
             <button class="btn btn-chat" onclick="launchChat('${a.id}', this)">&#9654; open chat</button>
-            <button class="btn btn-edit" onclick="editAssistant('${a.id}')">&#9998; edit</button>
+            <button class="btn btn-edit" onclick="editAssistant('${a.id}', this)">&#9998; edit</button>
           </div>
         </div>
       </div>
@@ -713,8 +713,29 @@
   window.addEventListener('resize', () => updateCarousel())
 
   // ── Edit in designer ──
-  window.editAssistant = function(assistantId) {
-    window.location.href = '/workflows/assistant-designer/#' + assistantId
+  window.editAssistant = async function(assistantId, btn) {
+    if (btn) {
+      btn.classList.add('launching')
+      btn.textContent = 'opening...'
+    }
+    try {
+      const res = await fetch('/api/workflows/assistant-gallery/launch-designer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assistant: assistantId }),
+      })
+      const data = await res.json()
+      if (!data.ok) throw new Error(data.error || 'launch failed')
+    } catch (err) {
+      console.error('designer launch error:', err)
+    } finally {
+      if (btn) {
+        setTimeout(() => {
+          btn.classList.remove('launching')
+          btn.innerHTML = '&#9998; edit'
+        }, 2000)
+      }
+    }
   }
 
   // ── Launch web-chat ──

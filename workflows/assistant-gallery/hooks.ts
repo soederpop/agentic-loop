@@ -67,4 +67,29 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       res.status(500).json({ error: err.message })
     }
   })
+
+  // Open assistant designer window for a given assistant
+  app.post('/api/workflows/assistant-gallery/launch-designer', async (req: any, res: any) => {
+    try {
+      const { assistant } = req.body || {}
+      if (!assistant) return res.status(400).json({ error: 'assistant name required' })
+
+      const port = (req.socket?.localPort) || 7700
+      const designerUrl = `http://localhost:${port}/workflows/assistant-designer/#${assistant}`
+
+      const wm = container.feature('windowManager')
+      try {
+        await Promise.race([
+          wm.spawn({ url: designerUrl }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6500)),
+        ])
+      } catch {
+        container.feature('opener').open(designerUrl)
+      }
+
+      res.json({ ok: true, assistant, url: designerUrl })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
 }
