@@ -763,7 +763,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
   try {
     windowManager = container.feature('windowManager')
-    windowManager.listen()
+    await windowManager.listen()
 
     windowManager.on('clientDisconnected', () => {
       log('windowManager', 'native app disconnected')

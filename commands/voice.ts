@@ -310,7 +310,7 @@ export async function startVoiceService(
 		const missing = (st.get('capabilityMissing') as string[]) ?? []
 		if (missing.length) log('voice', `missing: ${missing.join(', ')}`)
 	} else {
-		log('voice', `listening — active: ${modes.join(', ')} | ${voiceService.voiceAssistants.length} assistants`)
+		log('voice', `ready (hotkey) — capabilities: ${modes.join(', ')} | ${voiceService.voiceAssistants.length} assistants`)
 	}
 
 	return voiceService

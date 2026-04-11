@@ -1,8 +1,8 @@
 ---
 agent: claude
 schedule: every-ten-minutes
-running: true
-lastRanAt: 1775275538767
+running: false
+lastRanAt: 1775873724661
 ---
 
 # Turn one of my ideas into a Project Plan
