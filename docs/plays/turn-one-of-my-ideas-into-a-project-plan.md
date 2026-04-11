@@ -1,7 +1,7 @@
 ---
 agent: claude
 schedule: every-ten-minutes
-running: false
+running: true
 lastRanAt: 1775275538767
 ---
 

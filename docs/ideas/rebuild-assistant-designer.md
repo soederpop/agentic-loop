@@ -6,7 +6,7 @@ tags:
   - ui
   - workflows
   - hot-reload
-status: ready
+status: promoted
 ---
 
 # Rebuild Assistant Designer
