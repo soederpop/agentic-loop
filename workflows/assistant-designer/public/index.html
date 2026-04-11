@@ -4,2864 +4,1348 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Assistant Designer</title>
+<link rel="stylesheet" href="/shared/base.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css">
-<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/typescript.min.js"></script>
-<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/languages/markdown.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: 'IBM Plex Mono', 'SF Mono', monospace;
+    font-size: 12px;
+    overflow: hidden;
+  }
 
-:root {
-  --bg: #131320;
-  --surface: #1a1a26;
-  --surface-2: #212130;
-  --surface-3: #282838;
-  --border: #2c2c40;
-  --border-light: #383850;
-  --text: #c8c8d8;
-  --text-dim: #7e7e98;
-  --text-faint: #505068;
-  --accent: #4ade80;
-  --accent-dim: #4ade8018;
-  --accent-glow: #4ade8030;
-  --warn: #fbbf24;
-  --warn-dim: #fbbf2418;
-  --error: #f87171;
-  --error-dim: #f8717118;
-  --blue: #60a5fa;
-  --blue-dim: #60a5fa18;
-  --purple: #a78bfa;
-  --purple-dim: #a78bfa18;
-  --orange: #fb923c;
-  --mono: 'IBM Plex Mono', monospace;
-  --sans: 'IBM Plex Sans', sans-serif;
-  --radius: 3px;
-}
+  body {
+    display: flex;
+    flex-direction: column;
+  }
 
-html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 12px; line-height: 1.6; }
-body { display: flex; flex-direction: column; overflow: hidden; }
+  /* ── Header ─────────────────────────────────────────────────── */
+  .header {
+    height: 42px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    z-index: 100;
+  }
 
-/* ── Header ─────────────────────── */
-.header {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 10px;
-  background: var(--surface);
-  flex-shrink: 0;
-  flex-wrap: wrap;
-}
-.header h1 { font-size: 14px; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; margin: 0; }
-.header .sep { width: 1px; height: 14px; background: var(--border-light); }
-.header .spacer { flex: 1; }
+  .header h1 {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
 
-.assistant-name-input {
-  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 12px; font-weight: 600;
-  padding: 3px 8px; width: 140px; outline: none;
-}
-.assistant-name-input:focus { border-color: var(--accent); }
+  .header .sep { width: 1px; height: 16px; background: var(--border); flex-shrink: 0; }
+  .header .spacer { flex: 1; }
 
-.model-select {
-  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 3px 6px; outline: none;
-}
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--error);
+    flex-shrink: 0;
+    transition: background .3s;
+  }
+  .status-dot.active { background: var(--success); box-shadow: 0 0 6px var(--success); }
 
-.badge {
-  font-size: 9px; padding: 2px 6px; border-radius: 2px; font-weight: 600;
-  letter-spacing: 0.5px; text-transform: uppercase;
-}
-.badge-deployed { background: var(--accent-dim); color: var(--accent); }
-.badge-draft { background: var(--warn-dim); color: var(--warn); }
+  .status-label {
+    font-size: 11px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 180px;
+  }
 
-.btn {
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 3px 10px;
-  cursor: pointer; transition: all 0.1s; white-space: nowrap;
-}
-.btn:hover { border-color: var(--border-light); background: var(--surface-3); }
-.btn-deploy {
-  background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600;
-}
-.btn-deploy:hover { background: var(--accent-glow); }
-.btn-deploy.deploying { opacity: 0.5; pointer-events: none; }
-.btn-sm { font-size: 10px; padding: 2px 7px; }
-.btn-danger { color: var(--error); border-color: var(--error); }
-.btn-danger:hover { background: var(--error-dim); }
+  .hdr-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 3px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .15s;
+    white-space: nowrap;
+  }
+  .hdr-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .hdr-btn.primary { border-color: var(--accent); color: var(--accent); }
+  .hdr-btn.danger { border-color: var(--error); color: var(--error); }
+  .hdr-btn.danger:hover { background: var(--error-dim); }
 
-.local-toggle { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--text-dim); }
-.local-toggle input { accent-color: var(--orange); }
+  /* ── Main layout ────────────────────────────────────────────── */
+  .main {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
 
-/* ── Workspace Nav ──────────────── */
-.workspace-nav {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  flex-shrink: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.workspace-nav::-webkit-scrollbar { display: none; }
+  /* ── Sidebar ────────────────────────────────────────────────── */
+  .sidebar {
+    width: 220px;
+    min-width: 180px;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: width .2s;
+  }
+  .sidebar.collapsed { width: 0; min-width: 0; overflow: hidden; border-right: none; }
 
-.ws-tab {
-  padding: 7px 14px;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  white-space: nowrap;
-  transition: color 0.1s, border-color 0.1s;
-}
-.ws-tab:hover { color: var(--text); }
-.ws-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .sidebar-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .sidebar-header span {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    flex: 1;
+  }
 
-/* ── Workspace Container ────────── */
-.workspace-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-}
+  .sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 0;
+  }
 
-.workspace-view {
-  display: none;
-  flex: 1;
-  flex-direction: column;
-  overflow: hidden;
-  position: absolute;
-  inset: 0;
-}
-.workspace-view.active {
-  display: flex;
-  position: relative;
-}
+  .assistant-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all .15s;
+  }
+  .assistant-item:hover { background: var(--surface-2); }
+  .assistant-item.active {
+    background: var(--accent-dim);
+    border-left-color: var(--accent);
+  }
+  .assistant-item .name {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  .assistant-item.active .name { color: var(--accent); }
+  .assistant-item .about {
+    font-size: 10px;
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
 
-/* ── File Editor ─────────────────── */
-.file-header {
-  padding: 4px 10px; font-size: 10px; color: var(--text-dim);
-  background: var(--surface); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px;
-  flex-shrink: 0;
-}
-.file-header .filename { color: var(--blue); font-weight: 600; }
-.file-header .path { color: var(--text-faint); }
+  .new-assistant-btn {
+    margin: 8px 12px;
+    padding: 6px 10px;
+    background: none;
+    border: 1px dashed var(--border);
+    color: var(--text-dim);
+    border-radius: 3px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    text-align: center;
+    transition: all .15s;
+  }
+  .new-assistant-btn:hover { border-color: var(--accent); color: var(--accent); }
 
-.editor {
-  flex: 1; width: 100%; background: var(--bg); color: var(--text);
-  font-family: var(--mono); font-size: 12px; line-height: 1.7;
-  padding: 10px 12px; border: none; outline: none; resize: none;
-  tab-size: 2;
-}
-.editor::placeholder { color: var(--text-faint); }
+  /* ── Center: Editor ─────────────────────────────────────────── */
+  .editor-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 300px;
+    overflow: hidden;
+  }
 
-/* ── Tool List + Editor ──────────── */
-.tools-panel { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; }
+  .tab-bar {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
 
-.tool-list-item {
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  margin-bottom: 6px; padding: 8px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px;
-  transition: border-color 0.1s;
-}
-.tool-list-item:hover { border-color: var(--accent); background: var(--surface-2); }
-.tool-list-name { color: var(--accent); font-weight: 600; font-size: 12px; }
-.tool-list-meta { color: var(--text-faint); font-size: 10px; flex: 1; }
-.tool-list-params { color: var(--text-dim); font-size: 10px; }
+  .tab {
+    padding: 6px 14px;
+    font: inherit;
+    font-size: 11px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all .15s;
+    position: relative;
+  }
+  .tab:hover { color: var(--text); background: var(--surface-2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--surface-2); }
+  .tab.modified::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    right: 4px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--warning);
+  }
 
-.add-tool-btn {
-  width: 100%; padding: 8px; background: var(--surface); border: 1px dashed var(--border-light);
-  border-radius: var(--radius); color: var(--text-dim); font-family: var(--mono);
-  font-size: 11px; cursor: pointer; text-align: center; flex-shrink: 0;
-}
-.add-tool-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+  .editor-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  .editor-toolbar .file-label {
+    font-size: 10px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .editor-toolbar .spacer { flex: 1; }
 
-/* ── Tool Edit View (stacked for narrow) ── */
-.tool-edit-view { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.tool-edit-header {
-  padding: 6px 10px; display: flex; align-items: center; gap: 8px;
-  background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0;
-}
-.tool-edit-back {
-  background: none; border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text-dim); font-family: var(--mono); font-size: 11px; padding: 2px 8px; cursor: pointer;
-}
-.tool-edit-back:hover { color: var(--text); border-color: var(--border-light); }
-.tool-edit-name {
-  background: transparent; border: 1px solid transparent; border-radius: var(--radius);
-  color: var(--accent); font-family: var(--mono); font-size: 13px; font-weight: 600;
-  padding: 2px 6px; outline: none; flex: 1; min-width: 0;
-}
-.tool-edit-name:hover, .tool-edit-name:focus { border-color: var(--border); background: var(--bg); }
-.tool-edit-desc {
-  width: 100%; background: var(--bg); border: none; border-bottom: 1px solid var(--border);
-  color: var(--text-dim); font-family: var(--mono); font-size: 11px; padding: 5px 10px; outline: none;
-  flex-shrink: 0;
-}
-.tool-edit-desc::placeholder { color: var(--text-faint); }
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .toggle-label input[type="checkbox"] {
+    accent-color: var(--accent);
+  }
 
-/* Stacked vertical layout for tool editing */
-.tool-edit-body {
-  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
-}
+  .editor-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
 
-.tool-edit-schema {
-  flex-shrink: 0;
-  max-height: 200px;
-  overflow-y: auto;
-  border-bottom: 1px solid var(--border);
-}
+  .editor-area textarea {
+    width: 100%;
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    padding: 12px 16px;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.7;
+    resize: none;
+    outline: none;
+    tab-size: 2;
+  }
+  .editor-area textarea::placeholder { color: var(--text-faint); }
 
-.tool-edit-code {
-  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
-}
+  .editor-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-faint);
+    font-size: 12px;
+    padding: 20px;
+    text-align: center;
+    line-height: 2;
+  }
 
-/* ── Schema Builder ─────────────── */
-.schema-section {
-  overflow-y: auto;
-}
-.schema-section-header {
-  padding: 4px 10px; font-size: 9px; color: var(--text-faint); text-transform: uppercase;
-  letter-spacing: 1px; font-weight: 600; background: var(--surface); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 1;
-}
-.schema-section-header .spacer { flex: 1; }
+  .line-numbers {
+    position: absolute;
+    top: 0; left: 0;
+    width: 40px;
+    height: 100%;
+    overflow: hidden;
+    padding: 12px 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    text-align: right;
+    font-size: 11px;
+    line-height: 1.7;
+    color: var(--text-faint);
+    user-select: none;
+    pointer-events: none;
+  }
+  .line-numbers span { display: block; padding-right: 8px; }
 
-.field-row {
-  display: grid; grid-template-columns: 1fr 70px 28px; gap: 0;
-  border-bottom: 1px solid var(--border); font-size: 11px; align-items: stretch;
-}
-.field-row > * {
-  padding: 4px 6px; border-right: 1px solid var(--border);
-}
-.field-row > *:last-child { border-right: none; }
-.field-row-header { background: var(--surface-2); color: var(--text-faint); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+  .editor-area.has-lines textarea { padding-left: 52px; }
 
-.field-input {
-  background: transparent; border: none; color: var(--text); font-family: var(--mono);
-  font-size: 11px; outline: none; width: 100%; padding: 4px 6px;
-}
-.field-input::placeholder { color: var(--text-faint); }
-.field-select {
-  background: transparent; border: none; color: var(--text); font-family: var(--mono);
-  font-size: 11px; outline: none; width: 100%; padding: 4px 2px;
-}
-.field-select option { background: var(--surface-2); }
+  /* ── Right panel ────────────────────────────────────────────── */
+  .right-panel {
+    width: 380px;
+    min-width: 280px;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    transition: width .2s;
+  }
+  .right-panel.collapsed { width: 0; min-width: 0; overflow: hidden; border-left: none; }
 
-.field-remove {
-  background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: 14px;
-  font-family: var(--mono); display: flex; align-items: center; justify-content: center;
-}
-.field-remove:hover { color: var(--error); }
+  /* ── Chat panel ─────────────────────────────────────────────── */
+  .chat-panel {
+    flex: 6;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
 
-.add-field-btn {
-  width: 100%; padding: 4px; background: none; border: none; border-bottom: 1px solid var(--border);
-  color: var(--text-faint); font-family: var(--mono); font-size: 10px; cursor: pointer; text-align: center;
-}
-.add-field-btn:hover { color: var(--accent); background: var(--accent-dim); }
+  .chat-header {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .chat-header .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    flex: 1;
+  }
 
-.field-detail-row {
-  display: flex; gap: 6px; padding: 3px 8px; border-bottom: 1px solid var(--border);
-  background: var(--surface); font-size: 10px; align-items: center; flex-wrap: wrap;
-}
-.field-detail-row label { color: var(--text-faint); white-space: nowrap; }
-.field-detail-row input[type="number"] {
-  width: 50px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 10px; padding: 1px 4px; outline: none;
-}
-.field-detail-row input[type="checkbox"] { accent-color: var(--accent); }
-.field-detail-row input[type="text"] {
-  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 10px; padding: 1px 4px; outline: none;
-}
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
 
-.raw-schema-badge {
-  font-size: 8px; padding: 1px 5px; border-radius: 2px; background: var(--warn-dim); color: var(--warn);
-  font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
-}
+  .msg {
+    max-width: 95%;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.6;
+    animation: slideUp .2s ease-out;
+    word-break: break-word;
+  }
+  .msg.user {
+    align-self: flex-end;
+    background: var(--surface-3);
+    color: var(--text);
+    border: 1px solid var(--border);
+  }
+  .msg.assistant {
+    align-self: flex-start;
+    background: var(--assistant-dim);
+    border: 1px solid #c084fc22;
+    color: var(--text);
+  }
+  .msg.assistant p { margin: 0 0 6px; }
+  .msg.assistant p:last-child { margin: 0; }
+  .msg.assistant code {
+    background: var(--surface-3);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .msg.assistant pre {
+    background: var(--bg);
+    padding: 8px 10px;
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 6px 0;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .msg.assistant pre code { background: none; padding: 0; }
+  .msg.system {
+    align-self: center;
+    color: var(--text-faint);
+    font-size: 10px;
+    font-style: italic;
+    padding: 4px;
+    animation: fadeIn .3s;
+  }
 
-/* ── Tool Body Editor (Monaco) ──── */
-.tool-body-section {
-  flex: 1; display: flex; flex-direction: column; overflow: hidden; min-height: 0;
-}
-.tool-body-header {
-  padding: 4px 10px; font-size: 9px; color: var(--text-faint); text-transform: uppercase;
-  letter-spacing: 1px; font-weight: 600; background: var(--surface); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-}
-.tool-body-header .spacer { flex: 1; }
-#toolMonacoContainer { flex: 1; min-height: 0; }
-/* Read-only signature/closing brace lines in Monaco */
-.readonly-line { opacity: 0.4; }
-.readonly-line-hidden { opacity: 0.25; }
+  .tool-event {
+    font-size: 10px;
+    padding: 4px 8px;
+    margin: 2px 0;
+    border-radius: 3px;
+    background: var(--surface-2);
+    border-left: 2px solid var(--blue);
+    color: var(--text-dim);
+    animation: slideIn .2s ease-out;
+  }
+  .tool-event.error { border-left-color: var(--error); }
+  .tool-event.complete { border-left-color: var(--success); }
+  .tool-event .tool-name { color: var(--blue); font-weight: 600; }
 
-/* ── Tool Test Panel ────────────── */
-.tool-test-panel {
-  flex-shrink: 0; border-top: 1px solid var(--border); height: 160px; min-height: 80px;
-  display: flex; flex-direction: column; overflow: hidden;
-}
-.tool-test-header {
-  padding: 4px 10px; font-size: 9px; color: var(--text-faint); text-transform: uppercase;
-  letter-spacing: 1px; font-weight: 600; background: var(--surface); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
-}
-.tool-test-header .spacer { flex: 1; }
-.tool-test-body { display: flex; flex: 1; overflow: hidden; min-height: 0; }
-.tool-test-args {
-  width: 50%; background: var(--bg); color: var(--text); font-family: var(--mono);
-  font-size: 11px; padding: 6px 8px; border: none; outline: none; resize: none;
-  border-right: 1px solid var(--border); overflow-y: auto;
-}
-.tool-test-output {
-  width: 50%; padding: 6px 8px; font-family: var(--mono); font-size: 11px;
-  color: var(--text-dim); overflow-y: auto; white-space: pre-wrap; word-break: break-word;
-  background: var(--bg);
-}
-.tool-test-output.error { color: var(--error); }
-.btn-test { background: var(--blue-dim); border-color: var(--blue); color: var(--blue); font-weight: 600; }
-.btn-test:hover { background: #60a5fa30; }
-.btn-test.running { opacity: 0.5; pointer-events: none; }
+  .streaming-cursor {
+    display: inline-block;
+    width: 6px;
+    height: 13px;
+    background: var(--accent);
+    animation: pulse 1s infinite;
+    vertical-align: text-bottom;
+    margin-left: 2px;
+  }
 
-/* ── Hooks Builder ──────────────── */
-.hook-chip {
-  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px;
-  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius);
-  font-family: var(--mono); font-size: 10px; color: var(--text); cursor: pointer;
-  transition: all 0.1s;
-}
-.hook-chip:hover { border-color: var(--accent); color: var(--accent); }
-.hook-chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-.hook-chip-remove {
-  font-size: 12px; color: var(--text-faint); cursor: pointer; margin-left: 2px;
-}
-.hook-chip-remove:hover { color: var(--error); }
-.hook-chip-add {
-  display: inline-flex; align-items: center; gap: 3px; padding: 2px 6px;
-  background: none; border: 1px dashed var(--border); border-radius: var(--radius);
-  font-family: var(--mono); font-size: 9px; color: var(--text-faint); cursor: pointer;
-}
-.hook-chip-add:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-#hookMonacoContainer { flex: 1; min-height: 0; }
+  .chat-input-row {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
 
-/* ── Chat ────────────────────────── */
-.chat-messages {
-  flex: 1; overflow-y: auto; padding: 12px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.msg { padding: 6px 10px; border-radius: var(--radius); font-size: 12px; max-width: 90%; }
-.msg-user {
-  align-self: flex-end; background: var(--surface-3); border: 1px solid var(--border-light);
-}
-.msg-assistant { align-self: flex-start; background: var(--surface); border: 1px solid var(--border); }
-.msg-assistant pre { white-space: pre-wrap; word-break: break-word; }
-.msg-tool {
-  align-self: flex-start; background: var(--blue-dim); border: 1px solid var(--blue);
-  font-size: 11px; color: var(--blue);
-}
-.msg-error { align-self: center; background: var(--error-dim); border: 1px solid var(--error); color: var(--error); font-size: 11px; }
-.msg-label { font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-faint); margin-bottom: 2px; font-weight: 600; }
+  .chat-input-row textarea {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 12px;
+    resize: none;
+    outline: none;
+    max-height: 80px;
+    line-height: 1.5;
+  }
+  .chat-input-row textarea:focus { border-color: var(--accent); }
 
-.chat-input-area {
-  padding: 8px; border-top: 1px solid var(--border); display: flex; gap: 6px;
-}
-.chat-input {
-  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 10px;
-  outline: none; resize: none; min-height: 32px; max-height: 120px;
-}
-.chat-input:focus { border-color: var(--accent); }
+  .chat-send-btn {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 6px 12px;
+    border-radius: 3px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all .15s;
+  }
+  .chat-send-btn:hover { background: var(--accent); color: var(--bg); }
+  .chat-send-btn:disabled { opacity: .4; cursor: default; }
 
-.not-deployed {
-  flex: 1; display: flex; align-items: center; justify-content: center;
-  color: var(--text-faint); font-size: 12px; text-align: center; padding: 20px;
-}
+  /* ── Resize handle ──────────────────────────────────────────── */
+  .resize-handle-h {
+    width: 100%;
+    height: 4px;
+    cursor: row-resize;
+    background: var(--border);
+    flex-shrink: 0;
+    transition: background .15s;
+  }
+  .resize-handle-h:hover { background: var(--accent); }
 
-/* ── REPL ────────────────────────── */
-.repl-output { flex: 1; overflow-y: auto; padding: 8px 10px; font-size: 11px; }
-.repl-entry { margin-bottom: 6px; }
-.repl-input-line { color: var(--accent); }
-.repl-input-line::before { content: '> '; color: var(--text-faint); }
-.repl-result { color: var(--text-dim); white-space: pre-wrap; word-break: break-word; }
-.repl-error { color: var(--error); white-space: pre-wrap; }
+  /* ── REPL panel ─────────────────────────────────────────────── */
+  .repl-panel {
+    flex: 4;
+    display: flex;
+    flex-direction: column;
+    min-height: 120px;
+  }
 
-.repl-input-area { padding: 6px 8px; border-top: 1px solid var(--border); display: flex; gap: 6px; }
-.repl-input {
-  flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 8px;
-  outline: none; resize: none; min-height: 24px; max-height: 80px;
-}
-.repl-input:focus { border-color: var(--accent); }
+  .repl-header {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .repl-header .label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--text-dim);
+    flex: 1;
+  }
 
-/* ── Prompt Workspace ───────────── */
-.prompt-editor-toolbar {
-  padding: 6px 10px; border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px; background: var(--surface);
-  flex-shrink: 0;
-}
-.prompt-filename-input {
-  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 3px 8px;
-  outline: none; width: 180px;
-}
-.prompt-filename-input:focus { border-color: var(--purple); }
+  .repl-input-area {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .repl-input-area textarea {
+    flex: 1;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 6px 10px;
+    font: inherit;
+    font-size: 11px;
+    resize: none;
+    outline: none;
+    min-height: 32px;
+    max-height: 60px;
+    line-height: 1.5;
+  }
+  .repl-input-area textarea:focus { border-color: var(--accent); }
 
-#promptMonacoContainer { flex: 1; min-height: 0; }
+  .repl-run-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 3px;
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all .15s;
+  }
+  .repl-run-btn:hover { border-color: var(--success); color: var(--success); }
 
-.prompt-actions {
-  padding: 8px 10px; border-top: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px; background: var(--surface);
-  flex-shrink: 0;
-}
-.btn-run {
-  background: var(--purple-dim); border-color: var(--purple); color: var(--purple); font-weight: 600;
-}
-.btn-run:hover { background: #a78bfa30; }
-.btn-run.running { opacity: 0.5; pointer-events: none; }
+  .repl-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    color: var(--text-dim);
+    background: var(--bg);
+  }
+  .repl-output .repl-ok { color: var(--success); }
+  .repl-output .repl-err { color: var(--error); }
+  .repl-output .repl-entry { margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .repl-output .repl-entry:last-child { border-bottom: none; }
+  .repl-prompt { color: var(--accent); }
 
-.prompt-output-area {
-  height: 35%; min-height: 100px; max-height: 50%;
-  border-top: 1px solid var(--border);
-  display: flex; flex-direction: column; overflow: hidden;
-  flex-shrink: 0;
-}
-.prompt-output-header {
-  padding: 4px 10px; font-size: 9px; color: var(--text-faint);
-  text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
-  background: var(--surface); border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 8px;
-  flex-shrink: 0;
-}
-.prompt-output-header .spacer { flex: 1; }
-.prompt-output {
-  flex: 1; overflow-y: auto; padding: 8px 10px; font-family: var(--mono);
-  font-size: 11px; line-height: 1.6; color: var(--text-dim);
-  white-space: pre-wrap; word-break: break-word; background: var(--bg);
-}
+  /* ── Toast ──────────────────────────────────────────────────── */
+  .toast-container {
+    position: fixed;
+    top: 50px;
+    right: 16px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
 
-.saved-prompts-dropdown { position: relative; display: inline-block; }
-.saved-prompts-menu {
-  display: none; position: absolute; bottom: 100%; left: 0; z-index: 100;
-  background: var(--surface-2); border: 1px solid var(--border-light); border-radius: var(--radius);
-  min-width: 200px; max-height: 200px; overflow-y: auto; margin-bottom: 2px;
-}
-.saved-prompts-menu.open { display: block; }
+  .toast {
+    padding: 8px 14px;
+    background: var(--surface-3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text);
+    animation: slideIn .2s ease-out;
+    max-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  }
+  .toast.success { border-left: 3px solid var(--success); }
+  .toast.error { border-left: 3px solid var(--error); }
+  .toast.info { border-left: 3px solid var(--accent); }
 
-/* ── Code Preview ────────────────── */
-.preview-panel { flex: 1; overflow-y: auto; padding: 10px; }
-.preview-file { margin-bottom: 12px; }
-.preview-file-header {
-  font-size: 10px; color: var(--blue); font-weight: 600; padding: 4px 0;
-  border-bottom: 1px solid var(--border); margin-bottom: 4px;
-}
-.preview-code {
-  background: var(--surface) !important; border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 8px 10px !important; font-size: 11px !important; white-space: pre-wrap; word-break: break-word;
-  color: var(--text-dim); line-height: 1.6; max-height: 500px; overflow-y: auto;
-  font-family: var(--mono) !important;
-}
-.preview-code .hljs { background: transparent !important; padding: 0 !important; }
+  /* ── History modal ──────────────────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.open { display: flex; }
 
-/* ── Loader Select ───────────────── */
-.loader-dropdown {
-  position: relative; display: inline-block;
-}
-.loader-menu {
-  display: none; position: absolute; top: 100%; left: 0; z-index: 100;
-  background: var(--surface-2); border: 1px solid var(--border-light); border-radius: var(--radius);
-  min-width: 180px; max-height: 200px; overflow-y: auto; margin-top: 2px;
-}
-.loader-menu.open { display: block; }
-.loader-item {
-  padding: 5px 10px; font-family: var(--mono); font-size: 11px; color: var(--text);
-  cursor: pointer; border: none; background: none; width: 100%; text-align: left;
-}
-.loader-item:hover { background: var(--accent-dim); color: var(--accent); }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 480px;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    animation: slideUp .2s ease-out;
+  }
+  .modal-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-header h3 {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .modal-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 2px 6px;
+  }
+  .modal-close:hover { color: var(--text); }
+  .modal-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+  }
+  .modal-body .empty { color: var(--text-faint); font-style: italic; font-size: 11px; }
 
-/* ── Scrollbar ───────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  .history-item {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all .15s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .history-item:hover { border-color: var(--accent); background: var(--accent-dim); }
+  .history-item .thread-id { font-size: 11px; color: var(--text); }
+  .history-item .meta { font-size: 10px; color: var(--text-faint); }
 
-/* ── Streaming indicator ─────────── */
-.streaming-indicator { display: none; }
-.streaming-indicator.active { display: inline; }
-.streaming-dot {
-  display: inline-block; width: 4px; height: 4px; border-radius: 50%;
-  background: var(--accent); margin-left: 4px;
-  animation: pulse 1s ease-in-out infinite;
-}
-@keyframes pulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+  /* ── Create assistant dialog ────────────────────────────────── */
+  .create-input {
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--text);
+    padding: 8px 12px;
+    font: inherit;
+    font-size: 12px;
+    width: 100%;
+    outline: none;
+    margin-bottom: 12px;
+  }
+  .create-input:focus { border-color: var(--accent); }
+
+  .create-btn {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 6px 16px;
+    border-radius: 3px;
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .15s;
+  }
+  .create-btn:hover { background: var(--accent); color: var(--bg); }
 </style>
 </head>
 <body>
 
-<!-- ── Header ────────────────────── -->
+<!-- Header -->
 <div class="header">
   <h1>Assistant Designer</h1>
-  <span class="sep"></span>
-
-  <div class="loader-dropdown">
-    <button class="btn btn-sm" id="loadBtn">Load</button>
-    <div class="loader-menu" id="loaderMenu"></div>
-  </div>
-
-  <input class="assistant-name-input" id="assistantName" value="my-assistant"
-    placeholder="assistant-name">
-
-  <span class="sep"></span>
-
-  <label class="local-toggle">
-    <input type="checkbox" id="localToggle"> local
-  </label>
-  <select class="model-select" id="modelSelect">
-    <option value="">loading...</option>
-  </select>
-
-  <span class="spacer"></span>
-
-  <span class="badge" id="statusBadge">
-    <span class="badge-draft">draft</span>
-  </span>
-
-  <span class="streaming-indicator" id="streamingIndicator">
-    <span class="streaming-dot"></span>
-  </span>
-
-  <button class="btn btn-deploy" id="deployBtn">Deploy</button>
+  <div class="sep"></div>
+  <div class="status-dot" id="statusDot"></div>
+  <span class="status-label" id="statusLabel">No assistant selected</span>
+  <div class="spacer"></div>
+  <button class="hdr-btn" id="toggleSidebar" title="Toggle sidebar">sidebar</button>
+  <button class="hdr-btn" id="toggleRight" title="Toggle chat panel">chat</button>
+  <div class="sep"></div>
+  <button class="hdr-btn" id="historyBtn">history</button>
+  <button class="hdr-btn primary" id="reloadBtn">reload</button>
 </div>
 
-<!-- ── Workspace Nav ─────────────── -->
-<div class="workspace-nav">
-  <button class="ws-tab active" data-ws="chat">Chat</button>
-  <button class="ws-tab" data-ws="repl">REPL</button>
-  <button class="ws-tab" data-ws="prompt">Prompt</button>
-  <button class="ws-tab" data-ws="core">CORE.md</button>
-  <button class="ws-tab" data-ws="tools">Tools</button>
-  <button class="ws-tab" data-ws="hooks">Hooks</button>
-  <button class="ws-tab" data-ws="preview">Preview</button>
+<!-- Main layout -->
+<div class="main">
+
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span>Assistants</span>
+    </div>
+    <div class="sidebar-list" id="assistantList"></div>
+    <button class="new-assistant-btn" id="newAssistantBtn">+ New Assistant</button>
+  </div>
+
+  <!-- Editor -->
+  <div class="editor-panel" id="editorPanel">
+    <div class="tab-bar" id="tabBar"></div>
+    <div class="editor-toolbar" id="editorToolbar">
+      <span class="file-label" id="fileLabel">No file open</span>
+      <div class="spacer"></div>
+      <label class="toggle-label">
+        <input type="checkbox" id="hotReloadToggle"> Hot Reload
+      </label>
+      <button class="hdr-btn primary" id="saveBtn" style="display:none">Save</button>
+    </div>
+    <div class="editor-area" id="editorArea">
+      <div class="editor-empty" id="editorEmpty">
+        Select an assistant from the sidebar to begin editing.
+      </div>
+      <div class="line-numbers" id="lineNumbers" style="display:none"></div>
+      <textarea id="editorTextarea" style="display:none" spellcheck="false"></textarea>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="right-panel" id="rightPanel">
+
+    <!-- Chat -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span class="label">Chat</span>
+        <button class="hdr-btn danger" id="clearChatBtn" style="font-size:10px;padding:2px 8px">clear</button>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-row">
+        <textarea id="chatInput" rows="1" placeholder="Send a message..."></textarea>
+        <button class="chat-send-btn" id="chatSendBtn">Send</button>
+      </div>
+    </div>
+
+    <div class="resize-handle-h" id="resizeHandleH"></div>
+
+    <!-- REPL -->
+    <div class="repl-panel">
+      <div class="repl-header">
+        <span class="label">REPL</span>
+        <button class="hdr-btn" id="clearReplBtn" style="font-size:10px;padding:2px 8px">clear</button>
+      </div>
+      <div class="repl-input-area">
+        <textarea id="replInput" rows="1" placeholder="container.utils.uuid()"></textarea>
+        <button class="repl-run-btn" id="replRunBtn">Run</button>
+      </div>
+      <div class="repl-output" id="replOutput"></div>
+    </div>
+
+  </div>
 </div>
 
-<!-- ── Workspace Container ───────── -->
-<div class="workspace-container">
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
 
-  <!-- Chat workspace -->
-  <div class="workspace-view active" id="ws-chat">
-    <div class="chat-messages" id="chatMessages">
-      <div class="not-deployed" id="notDeployedMsg">
-        Design your assistant, then click <strong style="color:var(--accent)">Deploy</strong> to start chatting.
-      </div>
+<!-- History modal -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Conversation History</h3>
+      <button class="modal-close" id="historyClose">&times;</button>
     </div>
-    <div class="chat-input-area">
-      <textarea class="chat-input" id="chatInput" placeholder="Send a message..."
-        rows="1"></textarea>
-      <button class="btn" id="sendBtn">Send</button>
+    <div class="modal-body" id="historyBody">
+      <div class="empty">Loading...</div>
     </div>
   </div>
-
-  <!-- REPL workspace -->
-  <div class="workspace-view" id="ws-repl">
-    <div class="repl-output" id="replOutput">
-      <div style="color:var(--text-faint);font-size:10px;margin-bottom:6px;">
-        // REPL — evaluate JS expressions<br>
-        // `state` — the designer state<br>
-        // `assistant` — the deployed assistant instance<br>
-        // `container` — the Luca container<br>
-      </div>
-    </div>
-    <div class="repl-input-area">
-      <textarea class="repl-input" id="replInput" placeholder="assistant.availableTools"
-        rows="1"></textarea>
-      <button class="btn btn-sm" id="replRunBtn">Run</button>
-    </div>
-  </div>
-
-  <!-- Prompt workspace -->
-  <div class="workspace-view" id="ws-prompt">
-    <div class="prompt-editor-toolbar">
-      <input class="prompt-filename-input" id="promptFilename" value="build-assistant" placeholder="filename (no extension)">
-      <span style="color:var(--text-faint);font-size:10px;">.md</span>
-      <span style="flex:1"></span>
-      <div class="saved-prompts-dropdown">
-        <button class="btn btn-sm" id="loadPromptBtn">Saved</button>
-        <div class="saved-prompts-menu" id="savedPromptsMenu"></div>
-      </div>
-    </div>
-    <div id="promptMonacoContainer" style="flex:1;min-height:0;"></div>
-    <div class="prompt-actions">
-      <button class="btn btn-run" id="runPromptBtn">Run</button>
-      <button class="btn btn-sm" id="stopPromptBtn" style="display:none;color:var(--error);border-color:var(--error);">Stop</button>
-      <span id="promptStatus" style="font-size:10px;color:var(--text-faint);"></span>
-      <span style="flex:1"></span>
-      <button class="btn btn-sm" id="clearOutputBtn">Clear Output</button>
-    </div>
-    <div class="prompt-output-area">
-      <div class="prompt-output-header">
-        <span>output</span>
-        <span class="spacer"></span>
-        <span id="promptExitCode" style="font-size:9px;"></span>
-      </div>
-      <div class="prompt-output" id="promptOutput"></div>
-    </div>
-  </div>
-
-  <!-- CORE.md workspace -->
-  <div class="workspace-view" id="ws-core">
-    <div class="file-header">
-      <span class="filename">CORE.md</span>
-      <span class="path">assistants/<span id="pathName">my-assistant</span>/</span>
-    </div>
-    <div id="coreMonacoContainer" style="flex:1;min-height:0;"></div>
-  </div>
-
-  <!-- Tools workspace -->
-  <div class="workspace-view" id="ws-tools">
-    <div class="file-header">
-      <span class="filename">tools.ts</span>
-      <span class="path">assistants/<span id="pathName2">my-assistant</span>/</span>
-      <span class="spacer" style="flex:1"></span>
-      <span id="toolCountBadge" style="font-size:9px;color:var(--text-faint);"></span>
-    </div>
-    <!-- List view -->
-    <div class="tools-panel" id="toolsListView">
-      <div id="toolsList"></div>
-      <button class="add-tool-btn" id="addToolBtn">+ add tool</button>
-    </div>
-    <!-- Edit view (hidden by default) -->
-    <div class="tool-edit-view" id="toolEditView" style="display:none;">
-      <div class="tool-edit-header">
-        <button class="tool-edit-back" id="toolEditBack">&larr; tools</button>
-        <input class="tool-edit-name" id="toolEditName" placeholder="toolName">
-        <button class="btn btn-sm btn-danger" id="toolEditDelete">delete</button>
-      </div>
-      <input class="tool-edit-desc" id="toolEditDesc" placeholder="Tool description (shown to the LLM)...">
-      <!-- Stacked: schema, then code+test -->
-      <div class="tool-edit-body">
-        <div class="tool-edit-schema">
-          <div class="schema-section" id="schemaSection">
-            <div class="schema-section-header">
-              <span>parameters</span>
-              <span id="rawSchemaBadge" class="raw-schema-badge" style="display:none;">raw mode</span>
-              <span class="spacer"></span>
-              <button class="btn btn-sm" id="toggleRawSchemaBtn" style="font-size:9px;padding:1px 6px;">raw</button>
-            </div>
-            <div id="schemaBuilderFields"></div>
-            <textarea id="rawSchemaEditor" class="field-input" style="display:none;min-height:80px;padding:8px 10px;resize:vertical;width:100%;background:var(--bg);border-bottom:1px solid var(--border);" placeholder="z.object({ ... })"></textarea>
-            <button class="add-field-btn" id="addFieldBtn">+ add parameter</button>
-          </div>
-        </div>
-        <div class="tool-edit-code">
-          <!-- Function body -->
-          <div class="tool-body-section">
-            <div class="tool-body-header">
-              <span>function body</span>
-              <span class="spacer"></span>
-              <label class="local-toggle" style="font-size:9px;"><input type="checkbox" id="silenceDiagnosticsToggle"> quiet</label>
-            </div>
-            <div id="toolMonacoContainer"></div>
-          </div>
-          <!-- Test panel -->
-          <div class="tool-test-panel">
-            <div class="tool-test-header">
-              <span>test</span>
-              <span class="spacer"></span>
-              <button class="btn btn-sm btn-test" id="runToolTestBtn">&#9654; run</button>
-            </div>
-            <div class="tool-test-body">
-              <textarea class="tool-test-args" id="toolTestArgs" placeholder='{ "key": "value" }'>{}</textarea>
-              <div class="tool-test-output" id="toolTestOutput">// output appears here</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Hooks workspace -->
-  <div class="workspace-view" id="ws-hooks">
-    <div class="file-header">
-      <span class="filename">hooks.ts</span>
-      <span class="path">assistants/<span id="pathName3">my-assistant</span>/</span>
-      <span style="flex:1"></span>
-      <button class="btn btn-sm" id="hooksToggleRawBtn" style="font-size:9px;padding:1px 6px;">raw</button>
-    </div>
-    <!-- Guided hooks view -->
-    <div id="hooksGuidedView" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
-      <div style="padding:6px 10px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;">
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:4px;">active hooks</div>
-        <div id="activeHooksList"></div>
-      </div>
-      <div style="padding:6px 10px;border-bottom:1px solid var(--border);flex-shrink:0;">
-        <div style="font-size:9px;color:var(--text-faint);text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:4px;">add hook</div>
-        <div id="availableHooksList" style="display:flex;flex-wrap:wrap;gap:4px;"></div>
-      </div>
-      <div id="hookEditorArea" style="flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;">
-        <div id="hookEditorHeader" style="padding:4px 10px;font-size:10px;color:var(--text-dim);background:var(--surface);border-bottom:1px solid var(--border);display:none;flex-shrink:0;">
-          Editing: <span id="hookEditorName" style="color:var(--accent);font-weight:600;"></span>
-          <span style="flex:1"></span>
-        </div>
-        <div id="hookMonacoContainer" style="flex:1;min-height:0;"></div>
-      </div>
-    </div>
-    <!-- Raw hooks view (hidden by default) -->
-    <textarea class="editor" id="hooksEditor" style="display:none;" placeholder="import type { Assistant } from '@soederpop/luca/agi'&#10;&#10;export function created() {&#10;  // called when assistant is created&#10;}"></textarea>
-  </div>
-
-  <!-- Preview workspace -->
-  <div class="workspace-view" id="ws-preview">
-    <div class="file-header">
-      <span class="filename">generated files</span>
-      <span class="spacer" style="flex:1"></span>
-      <button class="btn btn-sm" id="refreshPreviewBtn">refresh</button>
-    </div>
-    <div class="preview-panel" id="previewPanel"></div>
-  </div>
-
 </div>
 
-<script type="module">
-// ── Luca Browser Container ─────────
-const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
-const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+<!-- Create assistant modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Assistant</h3>
+      <button class="modal-close" id="createClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input class="create-input" id="createNameInput" placeholder="assistant-name" autofocus>
+      <button class="create-btn" id="createSubmitBtn">Create</button>
+    </div>
+  </div>
+</div>
 
-const API = window.location.origin
+<script>
+// ── API Base ──────────────────────────────────────────────────────────────────
+const API = '/api/workflows/assistant-designer';
 
-// ── Utility ─────────────────────────
-function esc(s) {
-  if (typeof s !== 'string') s = String(s ?? '')
-  const d = document.createElement('div')
-  d.textContent = s
-  return d.innerHTML
+// ── State ─────────────────────────────────────────────────────────────────────
+const state = {
+  assistants: [],
+  activeId: null,
+  files: {},           // filename -> content (from disk)
+  activeFile: null,
+  modified: new Set(),  // filenames with unsaved changes
+  editBuffers: {},     // filename -> current textarea content
+  isStreaming: false,
+  hotReload: false,
+};
+
+// ── DOM refs ──────────────────────────────────────────────────────────────────
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => document.querySelectorAll(sel);
+
+const dom = {
+  statusDot: $('#statusDot'),
+  statusLabel: $('#statusLabel'),
+  assistantList: $('#assistantList'),
+  tabBar: $('#tabBar'),
+  fileLabel: $('#fileLabel'),
+  editorTextarea: $('#editorTextarea'),
+  editorEmpty: $('#editorEmpty'),
+  editorArea: $('#editorArea'),
+  lineNumbers: $('#lineNumbers'),
+  saveBtn: $('#saveBtn'),
+  chatMessages: $('#chatMessages'),
+  chatInput: $('#chatInput'),
+  chatSendBtn: $('#chatSendBtn'),
+  replInput: $('#replInput'),
+  replOutput: $('#replOutput'),
+  toastContainer: $('#toastContainer'),
+  hotReloadToggle: $('#hotReloadToggle'),
+  historyBody: $('#historyBody'),
+};
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function toast(msg, type = 'info') {
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  dom.toastContainer.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }, 3000);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Feature: ApiClient — wraps all fetch() calls to backend endpoints
-// ═══════════════════════════════════════════════════════════════════════════
-class ApiClient extends Feature {
-  static shortcut = 'features.apiClient'
+// ── Fetch helpers ─────────────────────────────────────────────────────────────
+async function api(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  return res.json();
+}
 
-  static stateSchema = {
-    lastError: { type: 'string', default: null, describe: 'Last API error message' },
+// ── Load assistants list ──────────────────────────────────────────────────────
+async function loadAssistants() {
+  const data = await api('/assistants');
+  state.assistants = data.assistants || [];
+  renderSidebar();
+  if (data.active && !state.activeId) {
+    selectAssistant(data.active);
+  }
+}
+
+function renderSidebar() {
+  dom.assistantList.innerHTML = state.assistants.map(a => {
+    const aboutLine = (a.about || '').split('\n').find(l => l.trim() && !l.startsWith('#')) || '';
+    const active = a.id === state.activeId ? ' active' : '';
+    return `<div class="assistant-item${active}" data-id="${a.id}">
+      <div class="name">${a.id}</div>
+      <div class="about">${aboutLine.trim().slice(0, 60)}</div>
+    </div>`;
+  }).join('');
+
+  dom.assistantList.querySelectorAll('.assistant-item').forEach(el => {
+    el.addEventListener('click', () => selectAssistant(el.dataset.id));
+  });
+}
+
+// ── Select assistant ──────────────────────────────────────────────────────────
+async function selectAssistant(id) {
+  if (state.activeId === id) return;
+  state.activeId = id;
+  state.files = {};
+  state.editBuffers = {};
+  state.modified.clear();
+  state.activeFile = null;
+
+  renderSidebar();
+  updateStatus('Loading...');
+
+  // Get full assistant info
+  const info = await api(`/assistants/${id}`);
+  const files = (info.files || []).filter(f => !f.startsWith('.'));
+
+  // Load all file contents in parallel
+  const results = await Promise.all(
+    files.map(async (filename) => {
+      try {
+        const data = await api(`/assistants/${id}/files/${filename}`);
+        return { filename, content: data.content || '' };
+      } catch {
+        return { filename, content: '' };
+      }
+    })
+  );
+
+  for (const { filename, content } of results) {
+    state.files[filename] = content;
+    state.editBuffers[filename] = content;
   }
 
-  static optionsSchema = {
-    apiBase: { type: 'string', default: '', describe: 'Base URL for API calls' },
+  // Render tabs and open first file
+  renderTabs();
+  const firstFile = files.includes('CORE.md') ? 'CORE.md' : files[0];
+  if (firstFile) openFile(firstFile);
+
+  // Load assistant runtime
+  try {
+    await api(`/assistants/${id}/reload`, { method: 'POST' });
+    updateStatus(id, true);
+    toast(`Loaded ${id}`, 'success');
+  } catch (err) {
+    updateStatus(id, false);
+    toast(`Failed to load ${id}`, 'error');
   }
 
-  static eventsSchema = {
-    'error': { args: ['error'], describe: 'Fired on any API error' },
+  // Start file watching if hot reload is on
+  if (state.hotReload) {
+    api(`/watch/${id}`, { method: 'POST' });
   }
 
-  static { Feature.register(this, 'apiClient') }
+  // Add system message to chat
+  addChatMessage('system', `Connected to ${id}`);
+}
 
-  get base() { return this.options?.apiBase || API }
+function updateStatus(label, active) {
+  dom.statusLabel.textContent = label;
+  dom.statusDot.classList.toggle('active', !!active);
+}
 
-  /** Fetch current designer state from server */
-  async getState() {
-    const res = await fetch(`${this.base}/api/state`)
-    return res.json()
+// ── File tabs ─────────────────────────────────────────────────────────────────
+function renderTabs() {
+  const files = Object.keys(state.files);
+  dom.tabBar.innerHTML = files.map(f => {
+    const active = f === state.activeFile ? ' active' : '';
+    const modified = state.modified.has(f) ? ' modified' : '';
+    return `<button class="tab${active}${modified}" data-file="${f}">${f}</button>`;
+  }).join('');
+
+  dom.tabBar.querySelectorAll('.tab').forEach(el => {
+    el.addEventListener('click', () => openFile(el.dataset.file));
+  });
+}
+
+function openFile(filename) {
+  state.activeFile = filename;
+  const content = state.editBuffers[filename] ?? state.files[filename] ?? '';
+
+  dom.editorEmpty.style.display = 'none';
+  dom.editorTextarea.style.display = 'block';
+  dom.editorTextarea.value = content;
+  dom.saveBtn.style.display = 'inline-block';
+  dom.fileLabel.textContent = filename;
+
+  // Line numbers
+  const showLines = filename.endsWith('.ts') || filename.endsWith('.md') || filename.endsWith('.yaml');
+  dom.lineNumbers.style.display = showLines ? 'block' : 'none';
+  dom.editorArea.classList.toggle('has-lines', showLines);
+  updateLineNumbers();
+
+  renderTabs();
+}
+
+function updateLineNumbers() {
+  const lines = dom.editorTextarea.value.split('\n').length;
+  const nums = [];
+  for (let i = 1; i <= lines; i++) nums.push(`<span>${i}</span>`);
+  dom.lineNumbers.innerHTML = nums.join('');
+}
+
+// ── Editor events ─────────────────────────────────────────────────────────────
+dom.editorTextarea.addEventListener('input', () => {
+  if (!state.activeFile) return;
+  state.editBuffers[state.activeFile] = dom.editorTextarea.value;
+  const isModified = dom.editorTextarea.value !== state.files[state.activeFile];
+  if (isModified) state.modified.add(state.activeFile);
+  else state.modified.delete(state.activeFile);
+  renderTabs();
+  updateLineNumbers();
+});
+
+dom.editorTextarea.addEventListener('scroll', () => {
+  dom.lineNumbers.scrollTop = dom.editorTextarea.scrollTop;
+});
+
+// Tab key inserts spaces
+dom.editorTextarea.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = dom.editorTextarea.selectionStart;
+    const end = dom.editorTextarea.selectionEnd;
+    dom.editorTextarea.value = dom.editorTextarea.value.substring(0, start) + '  ' + dom.editorTextarea.value.substring(end);
+    dom.editorTextarea.selectionStart = dom.editorTextarea.selectionEnd = start + 2;
+    dom.editorTextarea.dispatchEvent(new Event('input'));
   }
+});
 
-  /** Sync designer state to server */
-  async putState(data) {
-    const res = await fetch(`${this.base}/api/state`, {
+// Cmd+S to save
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    saveCurrentFile();
+  }
+});
+
+async function saveCurrentFile() {
+  if (!state.activeId || !state.activeFile) return;
+  const content = state.editBuffers[state.activeFile] ?? dom.editorTextarea.value;
+  try {
+    await api(`/assistants/${state.activeId}/files/${state.activeFile}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    })
-    return res.json()
-  }
-
-  /** Fetch available models */
-  async getModels() {
-    const res = await fetch(`${this.base}/api/models`)
-    return res.json()
-  }
-
-  /** Deploy the current assistant config */
-  async deploy() {
-    const res = await fetch(`${this.base}/api/deploy`, { method: 'POST' })
-    return res.json()
-  }
-
-  /** Send a chat message — returns the raw Response for SSE streaming */
-  async chat(message) {
-    return fetch(`${this.base}/api/workflows/assistant-designer/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }),
-    })
-  }
-
-  /** Evaluate a REPL expression */
-  async eval(code) {
-    const res = await fetch(`${this.base}/api/workflows/assistant-designer/eval`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    })
-    return res.json()
-  }
-
-  /** Evaluate a tool function body with test args */
-  async evalTool(handler, testArgs) {
-    const res = await fetch(`${this.base}/api/eval-tool`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ handler, testArgs }),
-    })
-    return res.json()
-  }
-
-  /** Export assistant files for preview */
-  async exportFiles() {
-    const res = await fetch(`${this.base}/api/export`)
-    return res.json()
-  }
-
-  /** List available assistants */
-  async listAssistants() {
-    const res = await fetch(`${this.base}/api/load`)
-    return res.json()
-  }
-
-  /** Load an existing assistant by name */
-  async loadAssistant(name) {
-    const res = await fetch(`${this.base}/api/load`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name }),
-    })
-    return res.json()
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Feature: DesignerStore — manages designer state, models, sync
-// ═══════════════════════════════════════════════════════════════════════════
-class DesignerStore extends Feature {
-  static shortcut = 'features.designerStore'
-
-  static stateSchema = {
-    assistantName: { type: 'string', default: 'my-assistant', describe: 'Current assistant name' },
-    systemPrompt: { type: 'string', default: '', describe: 'System prompt (CORE.md content)' },
-    tools: { type: 'array', default: [], describe: 'Tool definitions array (fields-based)' },
-    toolsImports: { type: 'array', default: [], describe: 'Extra import lines from tools.ts' },
-    hooksSource: { type: 'string', default: '', describe: 'Hooks file source code' },
-    model: { type: 'string', default: 'gpt-4o', describe: 'Selected model ID' },
-    provider: { type: 'string', default: 'openai', describe: 'Active provider (openai|lm-studio)' },
-    maxTokens: { type: 'number', default: 4096, describe: 'Max tokens setting' },
-    temperature: { type: 'number', default: 1, describe: 'Temperature setting' },
-    deployed: { type: 'boolean', default: false, describe: 'Whether assistant is deployed' },
-    models: { type: 'array', default: [], describe: 'All available models' },
-    assistants: { type: 'array', default: [], describe: 'Available assistants for loading' },
-  }
-
-  static eventsSchema = {
-    'state:loaded':       { args: [],              describe: 'Initial state loaded from server' },
-    'state:synced':       { args: [],              describe: 'State synced to server' },
-    'models:loaded':      { args: ['models'],      describe: 'Models fetched from server' },
-    'deployed':           { args: ['result'],      describe: 'Assistant deployed successfully' },
-    'deploy:failed':      { args: ['error'],       describe: 'Deployment failed' },
-    'assistant:loaded':   { args: ['data'],        describe: 'An existing assistant was loaded' },
-    'assistants:listed':  { args: ['assistants'],  describe: 'Available assistants list refreshed' },
-    'tools:changed':      { args: [],              describe: 'Tools array was modified (add/remove)' },
-    'tool:fieldsChanged': { args: ['toolIndex'],   describe: 'A tools schema fields were modified' },
-    'name:changed':       { args: ['name'],        describe: 'Assistant name changed' },
-    'provider:changed':   { args: ['provider'],    describe: 'Provider toggled' },
-    'error':              { args: ['error'],        describe: 'Store error' },
-  }
-
-  static { Feature.register(this, 'designerStore') }
-
-  _syncTimer = null
-
-  get api() { return this.container.feature('apiClient') }
-
-  /** Load state + models from server */
-  async start() {
-    try {
-      const data = await this.api.getState()
-      for (const key of ['assistantName', 'systemPrompt', 'tools', 'toolsImports', 'hooksSource', 'model', 'provider', 'maxTokens', 'temperature', 'deployed']) {
-        if (data[key] !== undefined) this.state.set(key, data[key])
-      }
-      this.emit('state:loaded')
-    } catch {}
-
-    try {
-      const data = await this.api.getModels()
-      this.state.set('models', data.models || [])
-      this.emit('models:loaded', data.models || [])
-    } catch {}
-
-    await this.refreshAssistantList()
-  }
-
-  /** Debounced sync to server */
-  scheduleSync() {
-    clearTimeout(this._syncTimer)
-    this._syncTimer = setTimeout(() => this.sync(), 500)
-  }
-
-  /** Immediate sync to server */
-  async sync() {
-    clearTimeout(this._syncTimer)
-    const s = this.state
-    await this.api.putState({
-      assistantName: s.get('assistantName'),
-      systemPrompt: s.get('systemPrompt'),
-      tools: s.get('tools'),
-      toolsImports: s.get('toolsImports'),
-      hooksSource: s.get('hooksSource'),
-      model: s.get('model'),
-      provider: s.get('provider'),
-      maxTokens: s.get('maxTokens'),
-      temperature: s.get('temperature'),
-    })
-    this.emit('state:synced')
-  }
-
-  /** Update assistant name (sanitized) */
-  setName(val) {
-    const clean = val.replace(/[^a-zA-Z0-9_-]/g, '')
-    this.state.set('assistantName', clean)
-    this.emit('name:changed', clean)
-    this.scheduleSync()
-  }
-
-  /** Update system prompt */
-  setSystemPrompt(val) {
-    this.state.set('systemPrompt', val)
-    this.scheduleSync()
-  }
-
-  /** Update hooks source */
-  setHooksSource(val) {
-    this.state.set('hooksSource', val)
-    this.scheduleSync()
-  }
-
-  /** Set model + provider */
-  setModel(modelId, provider) {
-    this.state.set('model', modelId)
-    if (provider) this.state.set('provider', provider)
-    this.scheduleSync()
-  }
-
-  /** Toggle provider */
-  setProvider(provider) {
-    this.state.set('provider', provider)
-    this.emit('provider:changed', provider)
-    this.scheduleSync()
-  }
-
-  /** Add a new tool */
-  addTool() {
-    const tools = [...this.state.get('tools')]
-    tools.push({ name: 'newTool', description: '', fields: [], handler: "return { result: 'not implemented' }" })
-    this.state.set('tools', tools)
-    this.emit('tools:changed')
-    this.scheduleSync()
-  }
-
-  /** Remove a tool by index */
-  removeTool(index) {
-    const tools = [...this.state.get('tools')]
-    tools.splice(index, 1)
-    this.state.set('tools', tools)
-    this.emit('tools:changed')
-    this.scheduleSync()
-  }
-
-  /** Update a single property on a tool */
-  updateTool(index, field, value) {
-    const tools = [...this.state.get('tools')]
-    tools[index] = { ...tools[index], [field]: value }
-    this.state.set('tools', tools)
-    this.scheduleSync()
-  }
-
-  /** Add a field to a tool's schema */
-  addField(toolIndex) {
-    const tools = [...this.state.get('tools')]
-    const tool = { ...tools[toolIndex] }
-    tool.fields = [...(tool.fields || []), { name: 'newParam', type: 'string', description: '', required: true }]
-    // Clear rawSchema when adding fields via builder
-    delete tool.rawSchema
-    tools[toolIndex] = tool
-    this.state.set('tools', tools)
-    this.emit('tool:fieldsChanged', toolIndex)
-    this.scheduleSync()
-  }
-
-  /** Remove a field from a tool's schema */
-  removeField(toolIndex, fieldIndex) {
-    const tools = [...this.state.get('tools')]
-    const tool = { ...tools[toolIndex] }
-    tool.fields = [...(tool.fields || [])]
-    tool.fields.splice(fieldIndex, 1)
-    delete tool.rawSchema
-    tools[toolIndex] = tool
-    this.state.set('tools', tools)
-    this.emit('tool:fieldsChanged', toolIndex)
-    this.scheduleSync()
-  }
-
-  /** Update a field property */
-  updateField(toolIndex, fieldIndex, prop, value) {
-    const tools = [...this.state.get('tools')]
-    const tool = { ...tools[toolIndex] }
-    tool.fields = [...(tool.fields || [])]
-    tool.fields[fieldIndex] = { ...tool.fields[fieldIndex], [prop]: value }
-    delete tool.rawSchema
-    tools[toolIndex] = tool
-    this.state.set('tools', tools)
-    this.emit('tool:fieldsChanged', toolIndex)
-    this.scheduleSync()
-  }
-
-  /** Deploy the assistant */
-  async deploy() {
-    await this.sync()
-    try {
-      const data = await this.api.deploy()
-      if (data.ok) {
-        this.state.set('deployed', true)
-        this.emit('deployed', data)
-      } else {
-        this.emit('deploy:failed', data.error)
-      }
-      return data
-    } catch (err) {
-      this.emit('deploy:failed', err.message)
-      return { ok: false, error: err.message }
-    }
-  }
-
-  /** Load an existing assistant */
-  async loadAssistant(name) {
-    try {
-      const data = await this.api.loadAssistant(name)
-      if (data.ok) {
-        this.state.set('assistantName', data.assistantName)
-        this.state.set('systemPrompt', data.systemPrompt)
-        this.state.set('tools', data.tools || [])
-        this.state.set('toolsImports', data.toolsImports || [])
-        this.state.set('hooksSource', data.hooksSource || '')
-        this.state.set('deployed', false)
-        this.emit('assistant:loaded', data)
-      }
-      return data
-    } catch (err) {
-      this.emit('error', err.message)
-      return { ok: false, error: err.message }
-    }
-  }
-
-  /** Refresh the assistants list */
-  async refreshAssistantList() {
-    try {
-      const data = await this.api.listAssistants()
-      this.state.set('assistants', data.assistants || [])
-      this.emit('assistants:listed', data.assistants || [])
-    } catch {}
-  }
-
-  /** Get filtered models for current provider */
-  get filteredModels() {
-    const provider = this.state.get('provider')
-    const providers = provider === 'lm-studio' ? ['lm-studio'] : ['openai']
-    return (this.state.get('models') || []).filter(m => providers.includes(m.provider))
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Feature: ChatManager — chat messaging with SSE streaming
-// ═══════════════════════════════════════════════════════════════════════════
-class ChatManager extends Feature {
-  static shortcut = 'features.chatManager'
-
-  static stateSchema = {
-    streaming: { type: 'boolean', default: false, describe: 'True while streaming a response' },
-    messageCount: { type: 'number', default: 0, describe: 'Number of messages in chat' },
-  }
-
-  static eventsSchema = {
-    'message':        { args: ['type', 'text'],  describe: 'A message to display (user, assistant, tool, error, system)' },
-    'stream:start':   { args: [],                describe: 'SSE stream started' },
-    'stream:chunk':   { args: ['text'],          describe: 'Text chunk received' },
-    'stream:tool':    { args: ['data'],          describe: 'Tool call event received' },
-    'stream:end':     { args: [],                describe: 'SSE stream ended' },
-    'error':          { args: ['error'],         describe: 'Chat error' },
-  }
-
-  static { Feature.register(this, 'chatManager') }
-
-  get api() { return this.container.feature('apiClient') }
-  get store() { return this.container.feature('designerStore') }
-
-  /**
-   * Send a chat message and stream the response
-   * @param {string} message - The user message
-   */
-  async send(message) {
-    if (!message || this.state.get('streaming')) return
-    this.emit('message', 'user', message)
-    this.state.set('messageCount', this.state.get('messageCount') + 1)
-
-    if (!this.store.state.get('deployed')) {
-      this.emit('message', 'error', 'Deploy the assistant first.')
-      return
-    }
-
-    this.state.set('streaming', true)
-    this.emit('stream:start')
-
-    try {
-      const response = await this.api.chat(message)
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let eventType = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) { eventType = line.slice(7).trim(); continue }
-          if (!line.startsWith('data: ')) continue
-
-          let data
-          try { data = JSON.parse(line.slice(6)) } catch { continue }
-
-          if (eventType === 'chunk') {
-            this.emit('stream:chunk', data.text)
-          } else if (eventType === 'tool_start') {
-            this.emit('stream:tool', { type: 'start', name: data.name, args: data.args })
-          } else if (eventType === 'tool_result') {
-            this.emit('stream:tool', { type: 'result', name: data.name, result: data.result })
-          } else if (eventType === 'tool_error') {
-            this.emit('stream:tool', { type: 'error', name: data.name, error: data.error })
-          } else if (eventType === 'done') {
-            this.emit('stream:end')
-          } else if (eventType === 'error') {
-            this.emit('message', 'error', data.message)
-          }
-        }
-      }
-    } catch (err) {
-      this.emit('message', 'error', err.message)
-    } finally {
-      this.state.set('streaming', false)
-      this.emit('stream:end')
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Feature: ReplManager — REPL evaluation and history
-// ═══════════════════════════════════════════════════════════════════════════
-class ReplManager extends Feature {
-  static shortcut = 'features.replManager'
-
-  static stateSchema = {
-    historyIndex: { type: 'number', default: -1, describe: 'Current position in history navigation' },
-  }
-
-  static eventsSchema = {
-    'result': { args: ['code', 'output', 'ok'], describe: 'REPL eval completed. ok=true for success, false for error' },
-  }
-
-  static { Feature.register(this, 'replManager') }
-
-  _history = []
-
-  get api() { return this.container.feature('apiClient') }
-
-  /**
-   * Evaluate a code expression
-   * @param {string} code - The JS expression to evaluate
-   */
-  async eval(code) {
-    if (!code) return
-    this._history.push(code)
-    this.state.set('historyIndex', this._history.length)
-
-    try {
-      const data = await this.api.eval(code)
-      this.emit('result', code, data.ok ? data.output : data.error, data.ok)
-    } catch (err) {
-      this.emit('result', code, err.message, false)
-    }
-  }
-
-  /** Navigate history up — returns the code string or null */
-  historyUp() {
-    if (this._history.length === 0) return null
-    const idx = Math.max(0, this.state.get('historyIndex') - 1)
-    this.state.set('historyIndex', idx)
-    return this._history[idx] || ''
-  }
-
-  /** Navigate history down — returns the code string or null */
-  historyDown() {
-    const idx = Math.min(this._history.length, this.state.get('historyIndex') + 1)
-    this.state.set('historyIndex', idx)
-    return this._history[idx] || ''
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Feature: AppController — central orchestrator
-// ═══════════════════════════════════════════════════════════════════════════
-class AppController extends Feature {
-  static shortcut = 'features.appController'
-
-  static stateSchema = {
-    ready: { type: 'boolean', default: false, describe: 'True after all sub-features initialized' },
-    activeWorkspace: { type: 'string', default: 'chat', describe: 'Active workspace id' },
-  }
-
-  static eventsSchema = {
-    'ready':              { args: [],             describe: 'All features initialized and data loaded' },
-    'workspace:changed':  { args: ['workspaceId'], describe: 'Active workspace switched' },
-  }
-
-  static { Feature.register(this, 'appController') }
-
-  get store() { return this.container.feature('designerStore') }
-  get chat() { return this.container.feature('chatManager') }
-  get repl() { return this.container.feature('replManager') }
-  get api() { return this.container.feature('apiClient') }
-
-  /**
-   * Initialize all features and load data
-   */
-  async start() {
-    await this.store.start()
-    this.state.set('ready', true)
-    this.emit('ready')
-  }
-
-  /**
-   * Switch workspace
-   * @param {string} workspaceId - The workspace to activate
-   */
-  switchWorkspace(workspaceId) {
-    this.state.set('activeWorkspace', workspaceId)
-    this.emit('workspace:changed', workspaceId)
-  }
-
-  /**
-   * Deploy the assistant
-   */
-  async deploy() {
-    return this.store.deploy()
-  }
-
-  /**
-   * Send a chat message
-   * @param {string} message - The message text
-   */
-  async sendMessage(message) {
-    return this.chat.send(message)
-  }
-
-  /**
-   * Evaluate a REPL expression
-   * @param {string} code - The code to evaluate
-   */
-  async evalRepl(code) {
-    return this.repl.eval(code)
-  }
-
-  /**
-   * Load an existing assistant by name
-   * @param {string} name - The assistant name
-   */
-  async loadAssistant(name) {
-    return this.store.loadAssistant(name)
-  }
-
-  /**
-   * Get a preview of exported files
-   */
-  async getPreview() {
-    return this.api.exportFiles()
-  }
-
-  /**
-   * Get the full state snapshot
-   * @returns {object} Current state across all features
-   */
-  snapshot() {
-    return {
-      ready: this.state.get('ready'),
-      activeWorkspace: this.state.get('activeWorkspace'),
-      store: this.store.state.current,
-      chat: this.chat.state.current,
-      repl: { historyIndex: this.repl.state.get('historyIndex'), historyLength: this.repl._history.length },
-    }
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// UI Wiring — bind DOM events to features, features events to DOM updates
-// ═══════════════════════════════════════════════════════════════════════════
-const app = container.feature('appController')
-const store = app.store
-const chat = app.chat
-const repl = app.repl
-
-// ── DOM refs ──
-const $name = document.getElementById('assistantName')
-let _coreMonacoEditor = null
-let _coreMonacoReady = false
-const $hooks = document.getElementById('hooksEditor')
-const $modelSelect = document.getElementById('modelSelect')
-const $localToggle = document.getElementById('localToggle')
-const $statusBadge = document.getElementById('statusBadge')
-const $deployBtn = document.getElementById('deployBtn')
-const $chatMessages = document.getElementById('chatMessages')
-const $chatInput = document.getElementById('chatInput')
-const $sendBtn = document.getElementById('sendBtn')
-const $replInput = document.getElementById('replInput')
-const $replOutput = document.getElementById('replOutput')
-const $streamingIndicator = document.getElementById('streamingIndicator')
-const $previewPanel = document.getElementById('previewPanel')
-const $loaderMenu = document.getElementById('loaderMenu')
-const $notDeployedMsg = document.getElementById('notDeployedMsg')
-
-// ── Workspace switching ──
-const $wsNavBtns = document.querySelectorAll('.ws-tab[data-ws]')
-const $wsViews = document.querySelectorAll('.workspace-view')
-
-function switchWorkspace(wsId) {
-  $wsNavBtns.forEach(btn => btn.classList.toggle('active', btn.dataset.ws === wsId))
-  $wsViews.forEach(v => {
-    const isActive = v.id === `ws-${wsId}`
-    v.classList.toggle('active', isActive)
-  })
-  app.switchWorkspace(wsId)
-
-  // Trigger view-specific actions
-  if (wsId === 'preview') refreshPreview()
-  if (wsId === 'core') initCoreMonaco()
-  if (wsId === 'prompt') initPromptMonaco()
-}
-
-$wsNavBtns.forEach(btn => {
-  btn.addEventListener('click', () => switchWorkspace(btn.dataset.ws))
-})
-
-// ── Header controls ──
-$name.addEventListener('input', () => store.setName($name.value))
-$hooks.addEventListener('input', () => store.setHooksSource($hooks.value))
-
-$modelSelect.addEventListener('change', () => {
-  const val = $modelSelect.value
-  const opt = $modelSelect.querySelector(`option[value="${CSS.escape(val)}"]`)
-  store.setModel(val, opt?.dataset?.provider)
-})
-
-$localToggle.addEventListener('change', () => {
-  store.setProvider($localToggle.checked ? 'lm-studio' : 'openai')
-})
-
-// ── Deploy button ──
-$deployBtn.addEventListener('click', async () => {
-  $deployBtn.classList.add('deploying')
-  $deployBtn.textContent = 'Deploying...'
-  try {
-    const data = await app.deploy()
-    if (data.ok) {
-      appendMessage('system', `Deployed "${store.state.get('assistantName')}" with ${(data.tools || []).length} tools.`)
-    } else {
-      appendMessage('error', `Deploy failed: ${data.error}`)
-    }
+      body: { content },
+    });
+    state.files[state.activeFile] = content;
+    state.modified.delete(state.activeFile);
+    renderTabs();
+    toast(`Saved ${state.activeFile}`, 'success');
+
+    // Auto-reload
+    await api(`/assistants/${state.activeId}/reload`, { method: 'POST' });
+    toast('Assistant reloaded', 'info');
   } catch (err) {
-    appendMessage('error', `Deploy error: ${err.message}`)
-  } finally {
-    $deployBtn.classList.remove('deploying')
-    $deployBtn.textContent = 'Deploy'
-  }
-})
-
-// ── Add tool button ──
-document.getElementById('addToolBtn').addEventListener('click', () => store.addTool())
-
-// ── Load dropdown ──
-document.getElementById('loadBtn').addEventListener('click', () => {
-  $loaderMenu.classList.toggle('open')
-  if ($loaderMenu.classList.contains('open')) {
-    store.refreshAssistantList()
-    setTimeout(() => document.addEventListener('click', () => $loaderMenu.classList.remove('open'), { once: true }), 0)
-  }
-})
-
-// ── Chat input ──
-$chatInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat() }
-})
-$sendBtn.addEventListener('click', sendChat)
-
-async function sendChat() {
-  const msg = $chatInput.value.trim()
-  if (!msg) return
-  $chatInput.value = ''
-  $chatInput.style.height = 'auto'
-  await app.sendMessage(msg)
-}
-
-// ── REPL input ──
-$replInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runRepl() }
-  if (e.key === 'ArrowUp') { e.preventDefault(); const v = repl.historyUp(); if (v !== null) $replInput.value = v }
-  if (e.key === 'ArrowDown') { e.preventDefault(); const v = repl.historyDown(); if (v !== null) $replInput.value = v }
-})
-document.getElementById('replRunBtn').addEventListener('click', runRepl)
-
-async function runRepl() {
-  const code = $replInput.value.trim()
-  if (!code) return
-  $replInput.value = ''
-  await app.evalRepl(code)
-}
-
-// ── Preview ──
-document.getElementById('refreshPreviewBtn').addEventListener('click', refreshPreview)
-
-async function refreshPreview() {
-  try {
-    const data = await app.getPreview()
-    let html = ''
-    for (const [name, content] of Object.entries(data.files || {})) {
-      const lang = name.endsWith('.ts') ? 'typescript' : name.endsWith('.md') ? 'markdown' : 'plaintext'
-      html += `<div class="preview-file">
-        <div class="preview-file-header">assistants/${esc(data.assistantName)}/${esc(name)}</div>
-        <pre class="preview-code"><code class="language-${lang}">${esc(content)}</code></pre>
-      </div>`
-    }
-    $previewPanel.innerHTML = html
-    // Apply syntax highlighting
-    if (window.hljs) {
-      $previewPanel.querySelectorAll('pre code').forEach(el => window.hljs.highlightElement(el))
-    }
-  } catch (err) {
-    $previewPanel.innerHTML = `<div style="color:var(--error)">${esc(err.message)}</div>`
+    toast(`Save failed: ${err.message}`, 'error');
   }
 }
 
-// ── Auto-resize textareas ──
-document.querySelectorAll('.chat-input, .repl-input').forEach(el => {
-  el.addEventListener('input', function() {
-    this.style.height = 'auto'
-    this.style.height = Math.min(this.scrollHeight, parseInt(getComputedStyle(this).maxHeight)) + 'px'
-  })
-})
+$('#saveBtn').addEventListener('click', saveCurrentFile);
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Feature → DOM bindings (react to feature events)
-// ═══════════════════════════════════════════════════════════════════════════
-
-// ── Store: state loaded → populate UI ──
-store.on('state:loaded', () => {
-  $name.value = store.state.get('assistantName')
-  if (_coreMonacoEditor) _coreMonacoEditor.setValue(store.state.get('systemPrompt') || '')
-  $hooks.value = store.state.get('hooksSource')
-  updatePathNames()
-  renderTools()
-  updateStatusBadge()
-})
-
-// ── Store: models loaded → render model select ──
-store.on('models:loaded', () => renderModelSelect())
-store.on('provider:changed', () => renderModelSelect())
-
-// ── Store: name changed → update path labels ──
-store.on('name:changed', () => updatePathNames())
-
-// ── Store: deployed → update badge ──
-store.on('deployed', () => {
-  updateStatusBadge()
-  $notDeployedMsg.style.display = 'none'
-})
-
-// ── Store: tools changed → re-render ──
-store.on('tools:changed', () => renderTools())
-
-// ── Store: assistant loaded → refresh UI ──
-store.on('assistant:loaded', () => {
-  $name.value = store.state.get('assistantName')
-  if (_coreMonacoEditor) _coreMonacoEditor.setValue(store.state.get('systemPrompt') || '')
-  $hooks.value = store.state.get('hooksSource')
-  updatePathNames()
-  // Reset tool editor to list view when loading a different assistant
-  _editingToolIndex = -1
-  $toolEditView.style.display = 'none'
-  $toolsListView.style.display = 'flex'
-  renderTools()
-  updateStatusBadge()
-})
-
-// ── Store: assistants listed → render loader menu ──
-store.on('assistants:listed', (assistants) => {
-  $loaderMenu.innerHTML = (assistants || []).map(a =>
-    `<button class="loader-item" data-name="${esc(a.name)}">${esc(a.name)}</button>`
-  ).join('')
-  $loaderMenu.querySelectorAll('.loader-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      $loaderMenu.classList.remove('open')
-      app.loadAssistant(btn.dataset.name)
-    })
-  })
-})
-
-// ── Chat: messages ──
-let _streamDiv = null
-let _streamText = ''
-
-chat.on('message', (type, text) => appendMessage(type, text))
-
-chat.on('stream:start', () => {
-  _streamDiv = null
-  _streamText = ''
-  $streamingIndicator.classList.add('active')
-  $sendBtn.disabled = true
-})
-
-chat.on('stream:chunk', (text) => {
-  if (!_streamDiv) {
-    _streamDiv = document.createElement('div')
-    _streamDiv.className = 'msg msg-assistant streaming'
-    _streamDiv.innerHTML = '<div class="msg-label">assistant</div><pre class="msg-body"></pre>'
-    $chatMessages.appendChild(_streamDiv)
-  }
-  _streamText += text
-  _streamDiv.querySelector('.msg-body').textContent = _streamText
-  scrollChat()
-})
-
-chat.on('stream:tool', (data) => {
-  if (data.type === 'start') {
-    if (_streamDiv) { _streamDiv.classList.remove('streaming'); _streamDiv = null; _streamText = '' }
-    appendMessage('tool', `→ ${data.name}(${JSON.stringify(data.args || {}).slice(0, 100)})`)
-  } else if (data.type === 'result') {
-    const preview = typeof data.result === 'string' ? data.result.slice(0, 200) : JSON.stringify(data.result).slice(0, 200)
-    appendMessage('tool', `← ${data.name}: ${preview}`)
-  } else if (data.type === 'error') {
-    appendMessage('error', `Tool error (${data.name}): ${data.error}`)
-  }
-})
-
-chat.on('stream:end', () => {
-  if (_streamDiv) { _streamDiv.classList.remove('streaming'); _streamDiv = null; _streamText = '' }
-  $streamingIndicator.classList.remove('active')
-  $sendBtn.disabled = false
-})
-
-// ── REPL: results ──
-repl.on('result', (code, output, ok) => {
-  const entry = document.createElement('div')
-  entry.className = 'repl-entry'
-  entry.innerHTML = `<div class="repl-input-line">${esc(code)}</div>`
-  entry.innerHTML += ok
-    ? `<div class="repl-result">${esc(output)}</div>`
-    : `<div class="repl-error">${esc(output)}</div>`
-  $replOutput.appendChild(entry)
-  $replOutput.scrollTop = $replOutput.scrollHeight
-})
-
-// ═══════════════════════════════════════════════════════════════════════════
-// DOM helpers (used by feature → DOM bindings)
-// ═══════════════════════════════════════════════════════════════════════════
-function updatePathNames() {
-  const name = store.state.get('assistantName')
-  document.querySelectorAll('[id^="pathName"]').forEach(el => el.textContent = name)
-}
-
-function updateStatusBadge() {
-  if (store.state.get('deployed')) {
-    $statusBadge.innerHTML = '<span class="badge badge-deployed">deployed</span>'
+// ── Chat ──────────────────────────────────────────────────────────────────────
+function addChatMessage(role, content) {
+  const el = document.createElement('div');
+  el.className = `msg ${role}`;
+  if (role === 'assistant') {
+    try { el.innerHTML = marked.parse(content); } catch { el.textContent = content; }
   } else {
-    $statusBadge.innerHTML = '<span class="badge badge-draft">draft</span>'
+    el.textContent = content;
   }
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+  return el;
 }
 
-function renderModelSelect() {
-  const filtered = store.filteredModels
-  if (filtered.length === 0) {
-    $modelSelect.innerHTML = '<option value="">No models</option>'
-    return
-  }
-  const groups = {}
-  for (const m of filtered) {
-    if (!groups[m.provider]) groups[m.provider] = []
-    groups[m.provider].push(m)
-  }
-  let html = ''
-  for (const [provider, models] of Object.entries(groups)) {
-    const label = provider === 'lm-studio' ? 'LM Studio' : 'OpenAI'
-    html += `<optgroup label="${label}">`
-    for (const m of models) {
-      html += `<option value="${esc(m.id)}" data-provider="${esc(m.provider)}">${esc(m.name)}</option>`
-    }
-    html += '</optgroup>'
-  }
-  $modelSelect.innerHTML = html
-  const currentModel = store.state.get('model')
-  if (filtered.find(m => m.id === currentModel)) {
-    $modelSelect.value = currentModel
-  } else {
-    $modelSelect.value = filtered[0].id
-    store.setModel(filtered[0].id, filtered[0].provider)
-  }
+function addToolEvent(type, name, detail) {
+  const el = document.createElement('div');
+  el.className = `tool-event ${type === 'tool_error' ? 'error' : type === 'tool_result' ? 'complete' : ''}`;
+  const label = type === 'tool_start' ? 'calling' : type === 'tool_result' ? 'result' : 'error';
+  el.innerHTML = `<span class="tool-name">${name}</span> <span style="opacity:.6">${label}</span>`;
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
 }
 
-// ── Tool Editor State ──
-let _editingToolIndex = -1
-let _toolMonacoEditor = null
-let _toolMonacoReady = false
-const $toolsList = document.getElementById('toolsList')
-const $toolsListView = document.getElementById('toolsListView')
-const $toolEditView = document.getElementById('toolEditView')
-const $toolEditName = document.getElementById('toolEditName')
-const $toolEditDesc = document.getElementById('toolEditDesc')
-const $toolEditBack = document.getElementById('toolEditBack')
-const $toolEditDelete = document.getElementById('toolEditDelete')
-const $schemaBuilderFields = document.getElementById('schemaBuilderFields')
-const $addFieldBtn = document.getElementById('addFieldBtn')
-const $rawSchemaEditor = document.getElementById('rawSchemaEditor')
-const $rawSchemaBadge = document.getElementById('rawSchemaBadge')
-const $toggleRawSchemaBtn = document.getElementById('toggleRawSchemaBtn')
-const $runToolTestBtn = document.getElementById('runToolTestBtn')
-const $toolTestArgs = document.getElementById('toolTestArgs')
-const $toolTestOutput = document.getElementById('toolTestOutput')
-const $toolCountBadge = document.getElementById('toolCountBadge')
+async function sendChatMessage() {
+  const text = dom.chatInput.value.trim();
+  if (!text || state.isStreaming || !state.activeId) return;
 
-function renderToolsList() {
-  const tools = store.state.get('tools') || []
-  $toolCountBadge.textContent = tools.length ? `${tools.length} tool${tools.length > 1 ? 's' : ''}` : ''
-  $toolsList.innerHTML = ''
-  tools.forEach((tool, i) => {
-    const item = document.createElement('div')
-    item.className = 'tool-list-item'
-    const fieldNames = (tool.fields || []).map(f => f.name).join(', ')
-    const paramCount = (tool.fields || []).length
-    const rawBadge = tool.rawSchema ? ' <span class="raw-schema-badge">raw</span>' : ''
-    item.innerHTML = `
-      <span class="tool-list-name">${esc(tool.name)}</span>
-      <span class="tool-list-meta">${esc(tool.description || '').slice(0, 60)}${rawBadge}</span>
-      <span class="tool-list-params">${paramCount ? `${paramCount}p: ${esc(fieldNames)}` : 'no params'}</span>
-    `
-    item.addEventListener('click', () => openToolEditor(i))
-    $toolsList.appendChild(item)
-  })
-}
+  addChatMessage('user', text);
+  dom.chatInput.value = '';
+  state.isStreaming = true;
+  dom.chatSendBtn.disabled = true;
 
-function openToolEditor(index) {
-  _editingToolIndex = index
-  const tools = store.state.get('tools') || []
-  const tool = tools[index]
-  if (!tool) return
+  // Create streaming assistant message
+  const msgEl = addChatMessage('assistant', '');
+  const cursor = document.createElement('span');
+  cursor.className = 'streaming-cursor';
+  msgEl.appendChild(cursor);
 
-  $toolsListView.style.display = 'none'
-  $toolEditView.style.display = 'flex'
-
-  $toolEditName.value = tool.name
-  $toolEditDesc.value = tool.description || ''
-
-  // Determine if raw schema mode
-  const isRaw = !!tool.rawSchema
-  renderSchemaBuilder(tool, isRaw)
-
-  // Set up Monaco with full function wrapper
-  const fullValue = buildMonacoValue(tool)
-  if (_toolMonacoEditor) {
-    _toolMonacoEditor.setValue(fullValue)
-    applySignatureDecoration()
-    // Position cursor on first body line
-    _toolMonacoEditor.setPosition({ lineNumber: PREAMBLE_LINES + 2, column: 3 })
-    _toolMonacoEditor.focus()
-  } else {
-    initToolMonaco(fullValue)
-  }
-
-  // Reset test output
-  $toolTestOutput.textContent = '// output appears here'
-  $toolTestOutput.classList.remove('error')
-  // Pre-fill test args from fields
-  const argObj = {}
-  for (const f of (tool.fields || [])) {
-    if (f.type === 'string') argObj[f.name] = ''
-    else if (f.type === 'number') argObj[f.name] = 0
-    else if (f.type === 'boolean') argObj[f.name] = false
-    else if (f.type === 'enum' && f.enumValues?.length) argObj[f.name] = f.enumValues[0]
-  }
-  $toolTestArgs.value = JSON.stringify(argObj, null, 2)
-}
-
-function closeToolEditor() {
-  // Save current Monaco content back to tool (extract body only)
-  if (_editingToolIndex >= 0 && _toolMonacoEditor) {
-    store.updateTool(_editingToolIndex, 'handler', extractHandlerFromMonaco())
-  }
-  _editingToolIndex = -1
-  $toolEditView.style.display = 'none'
-  $toolsListView.style.display = 'flex'
-  renderToolsList()
-}
-
-function renderSchemaBuilder(tool, isRaw) {
-  const $fields = $schemaBuilderFields
-  const $rawEditor = $rawSchemaEditor
-
-  if (isRaw) {
-    $fields.style.display = 'none'
-    $rawEditor.style.display = 'block'
-    $rawEditor.value = tool.rawSchema || ''
-    $rawSchemaBadge.style.display = ''
-    $addFieldBtn.style.display = 'none'
-    $toggleRawSchemaBtn.textContent = 'visual'
-  } else {
-    $fields.style.display = 'block'
-    $rawEditor.style.display = 'none'
-    $rawSchemaBadge.style.display = 'none'
-    $addFieldBtn.style.display = ''
-    $toggleRawSchemaBtn.textContent = 'raw'
-    renderFields(tool.fields || [])
-  }
-}
-
-function renderFields(fields) {
-  const $fields = $schemaBuilderFields
-  $fields.innerHTML = ''
-
-  if (fields.length === 0) {
-    $fields.innerHTML = '<div style="padding:8px 10px;color:var(--text-faint);font-size:10px;">No parameters — click "+ add parameter" below</div>'
-    return
-  }
-
-  // Header row
-  const header = document.createElement('div')
-  header.className = 'field-row field-row-header'
-  header.innerHTML = '<span>name</span><span>type</span><span></span>'
-  $fields.appendChild(header)
-
-  fields.forEach((field, fi) => {
-    // Main row: name + type + remove
-    const row = document.createElement('div')
-    row.className = 'field-row'
-
-    const nameInput = document.createElement('input')
-    nameInput.className = 'field-input'
-    nameInput.value = field.name
-    nameInput.placeholder = 'paramName'
-    nameInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'name', nameInput.value))
-
-    const typeSelect = document.createElement('select')
-    typeSelect.className = 'field-select'
-    for (const t of ['string', 'number', 'boolean', 'enum']) {
-      const opt = document.createElement('option')
-      opt.value = t; opt.textContent = t
-      if (t === field.type) opt.selected = true
-      typeSelect.appendChild(opt)
-    }
-    typeSelect.addEventListener('change', () => store.updateField(_editingToolIndex, fi, 'type', typeSelect.value))
-
-    const removeBtn = document.createElement('button')
-    removeBtn.className = 'field-remove'
-    removeBtn.textContent = '×'
-    removeBtn.addEventListener('click', () => store.removeField(_editingToolIndex, fi))
-
-    const nameCell = document.createElement('div'); nameCell.appendChild(nameInput)
-    const typeCell = document.createElement('div'); typeCell.appendChild(typeSelect)
-    const removeCell = document.createElement('div'); removeCell.appendChild(removeBtn)
-
-    row.appendChild(nameCell)
-    row.appendChild(typeCell)
-    row.appendChild(removeCell)
-    $fields.appendChild(row)
-
-    // Description row (full width)
-    const descRow = document.createElement('div')
-    descRow.style.cssText = 'border-bottom:1px solid var(--border);'
-    const descInput = document.createElement('input')
-    descInput.className = 'field-input'
-    descInput.value = field.description || ''
-    descInput.placeholder = 'Description for LLM...'
-    descInput.style.cssText = 'width:100%;color:var(--text-dim);font-size:10px;padding:2px 8px;'
-    descInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'description', descInput.value))
-    descRow.appendChild(descInput)
-    $fields.appendChild(descRow)
-
-    // Detail row (validation options)
-    const detail = document.createElement('div')
-    detail.className = 'field-detail-row'
-
-    const reqLabel = document.createElement('label')
-    reqLabel.innerHTML = `<input type="checkbox" ${field.required !== false ? 'checked' : ''}> req`
-    reqLabel.querySelector('input').addEventListener('change', (e) => store.updateField(_editingToolIndex, fi, 'required', e.target.checked))
-    detail.appendChild(reqLabel)
-
-    if (field.type === 'string' || field.type === 'number') {
-      const minLabel = document.createElement('label')
-      minLabel.textContent = 'min:'
-      const minInput = document.createElement('input')
-      minInput.type = 'number'
-      minInput.value = field.min ?? ''
-      minInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'min', minInput.value ? Number(minInput.value) : undefined))
-      detail.appendChild(minLabel)
-      detail.appendChild(minInput)
-
-      const maxLabel = document.createElement('label')
-      maxLabel.textContent = 'max:'
-      const maxInput = document.createElement('input')
-      maxInput.type = 'number'
-      maxInput.value = field.max ?? ''
-      maxInput.addEventListener('input', () => store.updateField(_editingToolIndex, fi, 'max', maxInput.value ? Number(maxInput.value) : undefined))
-      detail.appendChild(maxLabel)
-      detail.appendChild(maxInput)
-    }
-
-    if (field.type === 'number') {
-      const intLabel = document.createElement('label')
-      intLabel.innerHTML = `<input type="checkbox" ${field.integer ? 'checked' : ''}> int`
-      intLabel.querySelector('input').addEventListener('change', (e) => store.updateField(_editingToolIndex, fi, 'integer', e.target.checked))
-      detail.appendChild(intLabel)
-    }
-
-    if (field.type === 'enum') {
-      const enumLabel = document.createElement('label')
-      enumLabel.textContent = 'values:'
-      const enumInput = document.createElement('input')
-      enumInput.type = 'text'
-      enumInput.value = (field.enumValues || []).join(', ')
-      enumInput.placeholder = 'val1, val2'
-      enumInput.addEventListener('input', () => {
-        const vals = enumInput.value.split(',').map(v => v.trim()).filter(Boolean)
-        store.updateField(_editingToolIndex, fi, 'enumValues', vals)
-      })
-      detail.appendChild(enumLabel)
-      detail.appendChild(enumInput)
-    }
-
-    $fields.appendChild(detail)
-  })
-}
-
-function getSignatureLine(tool) {
-  const name = tool?.name || 'toolName'
-  return `async function ${name}(options: z.infer<typeof schemas.${name}>) {`
-}
-
-function buildMonacoValue(tool) {
-  const sig = getSignatureLine(tool)
-  const body = (tool.handler || '').split('\n').map(l => '  ' + l).join('\n')
-  return `${sig}\n${body || '  '}\n}`
-}
-
-// Number of preamble lines before the function body (just the signature line)
-const PREAMBLE_LINES = 0
-
-function extractHandlerFromMonaco() {
-  if (!_toolMonacoEditor) return ''
-  const lines = _toolMonacoEditor.getValue().split('\n')
-  // Strip preamble lines, signature line, and closing brace
-  const bodyLines = lines.slice(PREAMBLE_LINES + 1, -1)
-  return bodyLines.map(l => l.startsWith('  ') ? l.slice(2) : l).join('\n')
-}
-
-/** Make preamble, signature, and closing brace lines read-only and dimmed */
-let _signatureDecorations = []
-function applySignatureDecoration() {
-  if (!_toolMonacoEditor || !window.monaco) return
-  const model = _toolMonacoEditor.getModel()
-  const lineCount = model.getLineCount()
-  const sigLine = 1 // the function signature is always line 1
-  const decos = []
-  // Dim signature line
-  decos.push({ range: new window.monaco.Range(sigLine, 1, sigLine, model.getLineMaxColumn(sigLine)), options: { inlineClassName: 'readonly-line', isWholeLine: true } })
-  // Dim closing brace
-  decos.push({ range: new window.monaco.Range(lineCount, 1, lineCount, model.getLineMaxColumn(lineCount)), options: { inlineClassName: 'readonly-line', isWholeLine: true } })
-  _signatureDecorations = _toolMonacoEditor.deltaDecorations(_signatureDecorations, decos)
-}
-
-/** Refresh the signature line when name/fields change without losing cursor position */
-function refreshMonacoSignature(tool) {
-  if (!_toolMonacoEditor || !window.monaco) return
-  const model = _toolMonacoEditor.getModel()
-  const sigLineNum = 1
-  const newSig = getSignatureLine(tool)
-  const currentSigLine = model.getLineContent(sigLineNum)
-  if (currentSigLine !== newSig) {
-    const range = new window.monaco.Range(sigLineNum, 1, sigLineNum, currentSigLine.length + 1)
-    _toolMonacoEditor.executeEdits('signature-refresh', [{ range, text: newSig }])
-    applySignatureDecoration()
-  }
-}
-
-/** Configure Monaco TypeScript with global type declarations — called once */
-let _monacoTsConfigured = false
-function configureMonacoTs(monaco) {
-  if (_monacoTsConfigured) return
-  _monacoTsConfigured = true
-
-  const tsDefaults = monaco.languages.typescript.typescriptDefaults
-  tsDefaults.setCompilerOptions({
-    target: monaco.languages.typescript.ScriptTarget.ESNext,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
-    allowJs: true,
-    strict: false,
-    noEmit: true,
-    allowNonTsExtensions: true,
-  })
-  tsDefaults.setDiagnosticsOptions({
-    noSemanticValidation: false,
-    noSyntaxValidation: false,
-  })
-  tsDefaults.addExtraLib(`
-    /** @soederpop/luca/agi — Assistant feature */
-    declare interface Assistant {
-      /** Register a plugin function or feature helper */
-      use(fnOrHelper: ((assistant: Assistant) => void | Promise<void>) | any): Assistant;
-      /** Send a message and get a response */
-      ask(message: string, options?: { tools?: Record<string, any>; maxTokens?: number }): Promise<string>;
-      /** Start the assistant (loads prompt, tools, hooks) */
-      start(): Promise<void>;
-      /** Reload tools, hooks, and prompt from disk */
-      reload(): Promise<void>;
-      /** Listen to an assistant event */
-      on(event: 'created' | 'started' | 'turnStart' | 'turnEnd' | 'chunk' | 'response' | 'toolCall' | 'toolResult' | 'toolError' | 'reloaded' | string, handler: (...args: any[]) => void): void;
-      /** Remove an event listener */
-      off(event: string, handler: (...args: any[]) => void): void;
-      /** Register an interceptor for tool call lifecycle */
-      intercept(point: 'beforeToolCall' | 'afterToolCall', fn: (ctx: any, next: () => Promise<void>) => Promise<void>): this;
-      /** Add a tool at runtime */
-      addTool(name: string, handler: (...args: any[]) => any, schema?: any): this;
-      /** Remove a tool at runtime */
-      removeTool(nameOrHandler: string | ((...args: any[]) => any)): this;
-      /** Add a system prompt extension by key */
-      addSystemPromptExtension(key: string, value: string): this;
-      /** Remove a system prompt extension by key */
-      removeSystemPromptExtension(key: string): this;
-      /** The content database for this assistant's docs folder */
-      readonly contentDb: any;
-      /** The conversation messages array */
-      readonly messages: any[];
-      /** The raw system prompt from CORE.md */
-      readonly systemPrompt: string;
-      /** The effective system prompt including extensions */
-      readonly effectiveSystemPrompt: string;
-      /** System prompt extensions map */
-      readonly systemPromptExtensions: Record<string, string>;
-      /** List of available tool names */
-      readonly availableTools: string[];
-      /** The underlying conversation instance */
-      readonly conversation: any;
-      /** Whether the assistant has been started */
-      readonly isStarted: boolean;
-      /** The assistant name */
-      readonly name: string | undefined;
-      /** Resolved folder path */
-      readonly resolvedFolder: string;
-      /** The parent container */
-      readonly container: AGIContainer;
-      /** Arbitrary metadata */
-      readonly meta: Record<string, any>;
-      /** Path helpers scoped to the assistant folder */
-      readonly paths: { resolve(...args: string[]): string; join(...args: string[]): string };
-      [key: string]: any;
-    }
-
-    /** @soederpop/luca — AGI Container */
-    declare interface AGIContainer {
-      /** Get a feature by name */
-      feature(name: 'fs'): { readFile(path: string, enc?: string): Promise<string | Buffer>; writeFile(path: string, data: string | Buffer): Promise<void>; readFileAsync(path: string, enc?: string): Promise<Buffer>; writeFileAsync(path: string, data: string | Buffer): Promise<void>; readdir(path: string): Promise<string[]>; mkdirp(path: string): Promise<void>; exists(path: string): Promise<boolean>; [key: string]: any };
-      feature(name: 'proc'): { exec(cmd: string, options?: any): Promise<string>; spawnAndCapture(cmd: string, args?: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }>; [key: string]: any };
-      feature(name: 'ui'): { colors: any; asciiArt(text: string): string; print: { info(...args: any[]): void; warn(...args: any[]): void; error(...args: any[]): void; success(...args: any[]): void }; [key: string]: any };
-      feature(name: 'yaml'): { parse(str: string): any; stringify(obj: any): string };
-      feature(name: 'sqlite'): any;
-      feature(name: 'vm'): { createContext(globals?: Record<string, any>): any; run(code: string, ctx?: any): Promise<any>; [key: string]: any };
-      feature(name: 'grep'): { search(opts: any): Promise<any>; codeAnnotations(opts?: any): Promise<any> };
-      feature(name: 'contentDb'): any;
-      feature(name: string, options?: any): any;
-      /** Get a client by name */
-      client(name: 'rest', options?: { baseURL: string }): { get(path: string): Promise<any>; post(path: string, body?: any): Promise<any>; put(path: string, body?: any): Promise<any>; delete(path: string): Promise<any> };
-      client(name: 'openai', options?: any): any;
-      client(name: string, options?: any): any;
-      /** Path utilities */
-      paths: { resolve(...parts: string[]): string; join(...parts: string[]): string; dirname(p: string): string; basename(p: string): string; extname(p: string): string };
-      /** Common utilities */
-      utils: { uuid(): string; lodash: any; stringUtils: { camelCase(s: string): string; kebabCase(s: string): string; pluralize(s: string): string; singularize(s: string): string; [key: string]: any }; [key: string]: any };
-      /** Alias for contentDb feature */
-      docs: any;
-      /** Current working directory */
-      cwd: string;
-      [key: string]: any;
-    }
-
-    declare var assistant: Assistant;
-    declare var container: AGIContainer;
-  `, 'ts:globals.d.ts')
-  tsDefaults.addExtraLib('declare module "zod" { export const z: any; export type ZodType = any; }', 'ts:zod.d.ts')
-  tsDefaults.addExtraLib('declare const z: any;\ndeclare const schemas: Record<string, any>;', 'ts:tool-env.d.ts')
-}
-
-function initToolMonaco(value) {
-  if (_toolMonacoReady) return
-  const doInit = (monaco) => {
-    configureMonacoTs(monaco)
-    try {
-      monaco.editor.defineTheme('assistant-designer', {
-        base: 'vs-dark', inherit: true,
-        rules: [
-          { token: 'comment', foreground: '505068' },
-          { token: 'keyword', foreground: 'a78bfa' },
-          { token: 'string', foreground: '4ade80' },
-          { token: 'number', foreground: 'fb923c' },
-          { token: 'type', foreground: '60a5fa' },
-        ],
-        colors: {
-          'editor.background': '#131320',
-          'editor.foreground': '#c8c8d8',
-          'editor.lineHighlightBackground': '#1a1a26',
-          'editor.selectionBackground': '#2c2c40',
-          'editorCursor.foreground': '#a78bfa',
-          'editorLineNumber.foreground': '#505068',
-          'editorLineNumber.activeForeground': '#7e7e98',
-          'editor.inactiveSelectionBackground': '#212130',
-        }
-      })
-    } catch {}
-
-    _toolMonacoEditor = monaco.editor.create(document.getElementById('toolMonacoContainer'), {
-      value,
-      language: 'typescript',
-      theme: 'assistant-designer',
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      lineHeight: 1.7 * 12,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      wordWrap: 'on',
-      padding: { top: 8, bottom: 8 },
-      renderLineHighlight: 'line',
-      lineNumbers: 'on',
-      glyphMargin: false,
-      folding: true,
-      automaticLayout: true,
-      tabSize: 2,
-    })
-    _toolMonacoReady = true
-    applySignatureDecoration()
-
-    // Strip diagnostic markers from signature and closing brace lines
-    const toolModel = _toolMonacoEditor.getModel()
-    monaco.editor.onDidChangeMarkers(([uri]) => {
-      if (!toolModel || uri.toString() !== toolModel.uri.toString()) return
-      const markers = monaco.editor.getModelMarkers({ resource: toolModel.uri })
-      const lineCount = toolModel.getLineCount()
-      const filtered = markers.filter(m => m.startLineNumber !== 1 && m.startLineNumber !== lineCount)
-      if (filtered.length !== markers.length) {
-        monaco.editor.setModelMarkers(toolModel, 'typescript', filtered)
-      }
-    })
-
-    // Prevent editing preamble, signature, and closing brace lines
-    _toolMonacoEditor.onKeyDown((e) => {
-      const model = _toolMonacoEditor.getModel()
-      const pos = _toolMonacoEditor.getPosition()
-      const lineCount = model.getLineCount()
-      const protectedTop = PREAMBLE_LINES + 1 // preamble + signature
-      const navKeys = ['ArrowDown','ArrowRight','ArrowLeft','ArrowUp','End','Home','PageDown','PageUp']
-      // Block typing on preamble and signature lines
-      if (pos.lineNumber <= protectedTop && !e.ctrlKey && !e.metaKey) {
-        if (!navKeys.includes(e.code)) {
-          if (!(e.code === 'Enter' && pos.lineNumber === protectedTop)) {
-            e.preventDefault(); e.stopPropagation()
-          }
-        }
-      }
-      // Block typing on last line (closing brace), except Enter
-      if (pos.lineNumber === lineCount && !e.ctrlKey && !e.metaKey) {
-        if (!navKeys.includes(e.code) && e.code !== 'Enter') {
-          e.preventDefault(); e.stopPropagation()
-        }
-      }
-    })
-
-    // Re-enforce signature after any edit (in case paste/undo mangled it)
-    let saveTimer
-    _toolMonacoEditor.onDidChangeModelContent(() => {
-      clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => {
-        if (_editingToolIndex >= 0) {
-          // Re-apply decoration
-          applySignatureDecoration()
-          // Extract body and save
-          store.updateTool(_editingToolIndex, 'handler', extractHandlerFromMonaco())
-        }
-      }, 400)
-    })
-
-    // Cmd+Enter to run test
-    _toolMonacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      runToolTest()
-    })
-  }
-
-  if (window.monaco) {
-    doInit(window.monaco)
-  } else if (window.require && window.require.config) {
-    window.require(['vs/editor/editor.main'], (monaco) => { window.monaco = monaco; doInit(monaco) })
-  } else {
-    const loaderScript = document.createElement('script')
-    loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
-    loaderScript.onload = () => {
-      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
-      window.require(['vs/editor/editor.main'], (monaco) => { window.monaco = monaco; doInit(monaco) })
-    }
-    document.head.appendChild(loaderScript)
-  }
-}
-
-async function runToolTest() {
-  if (_editingToolIndex < 0) return
-  const tool = (store.state.get('tools') || [])[_editingToolIndex]
-  if (!tool) return
-
-  const handler = _toolMonacoEditor ? extractHandlerFromMonaco() : tool.handler
-  let testArgs = {}
-  try { testArgs = JSON.parse($toolTestArgs.value) } catch (e) {
-    $toolTestOutput.textContent = `Invalid JSON in test args: ${e.message}`
-    $toolTestOutput.classList.add('error')
-    return
-  }
-
-  $runToolTestBtn.classList.add('running')
-  $runToolTestBtn.textContent = 'running...'
-  $toolTestOutput.textContent = ''
-  $toolTestOutput.classList.remove('error')
+  let fullText = '';
 
   try {
-    const data = await app.api.evalTool(handler, testArgs)
-    if (data.ok) {
-      $toolTestOutput.textContent = data.output
-      $toolTestOutput.classList.remove('error')
-    } else {
-      $toolTestOutput.textContent = data.error
-      $toolTestOutput.classList.add('error')
-    }
-  } catch (err) {
-    $toolTestOutput.textContent = err.message
-    $toolTestOutput.classList.add('error')
-  } finally {
-    $runToolTestBtn.classList.remove('running')
-    $runToolTestBtn.textContent = '▶ run'
-  }
-}
-
-// ── Tool editor event bindings ──
-$toolEditBack.addEventListener('click', closeToolEditor)
-$toolEditName.addEventListener('input', () => {
-  if (_editingToolIndex < 0) return
-  const clean = $toolEditName.value.replace(/[^a-zA-Z0-9_]/g, '')
-  store.updateTool(_editingToolIndex, 'name', clean)
-  refreshMonacoSignature(store.state.get('tools')[_editingToolIndex])
-})
-$toolEditDesc.addEventListener('input', () => {
-  if (_editingToolIndex < 0) return
-  store.updateTool(_editingToolIndex, 'description', $toolEditDesc.value)
-})
-$toolEditDelete.addEventListener('click', () => {
-  if (_editingToolIndex < 0) return
-  const idx = _editingToolIndex
-  closeToolEditor()
-  store.removeTool(idx)
-})
-$addFieldBtn.addEventListener('click', () => {
-  if (_editingToolIndex < 0) return
-  store.addField(_editingToolIndex)
-})
-$toggleRawSchemaBtn.addEventListener('click', () => {
-  if (_editingToolIndex < 0) return
-  const tool = store.state.get('tools')[_editingToolIndex]
-  if (tool.rawSchema) {
-    // Switch to visual - clear rawSchema
-    store.updateTool(_editingToolIndex, 'rawSchema', undefined)
-    renderSchemaBuilder(store.state.get('tools')[_editingToolIndex], false)
-  } else {
-    // Switch to raw - generate raw from fields
-    const rawSchema = generateZodFromFields(tool.fields || [])
-    store.updateTool(_editingToolIndex, 'rawSchema', rawSchema)
-    renderSchemaBuilder(store.state.get('tools')[_editingToolIndex], true)
-  }
-})
-$rawSchemaEditor.addEventListener('input', () => {
-  if (_editingToolIndex < 0) return
-  store.updateTool(_editingToolIndex, 'rawSchema', $rawSchemaEditor.value)
-})
-$runToolTestBtn.addEventListener('click', runToolTest)
-
-// Silence diagnostics toggle
-document.getElementById('silenceDiagnosticsToggle').addEventListener('change', (e) => {
-  if (!window.monaco) return
-  const quiet = e.target.checked
-  window.monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-    noSemanticValidation: quiet,
-    noSyntaxValidation: false,
-  })
-})
-
-// Helper: generate zod string from fields (client-side mirror of backend)
-function generateZodFromFields(fields) {
-  if (!fields.length) return 'z.object({})'
-  const lines = fields.map(f => {
-    let chain
-    if (f.type === 'enum' && f.enumValues?.length) {
-      chain = `z.enum([${f.enumValues.map(v => JSON.stringify(v)).join(', ')}])`
-    } else {
-      chain = `z.${f.type}()`
-    }
-    if (f.type === 'number' && f.integer) chain += '.int()'
-    if (f.min != null) chain += `.min(${f.min})`
-    if (f.max != null) chain += `.max(${f.max})`
-    if (!f.required) chain += '.optional()'
-    if (f.description) chain += `.describe(${JSON.stringify(f.description)})`
-    return `    ${f.name}: ${chain},`
-  })
-  return `z.object({\n${lines.join('\n')}\n  })`
-}
-
-// Re-render fields when they change
-store.on('tool:fieldsChanged', (toolIndex) => {
-  if (toolIndex === _editingToolIndex) {
-    const tool = store.state.get('tools')[toolIndex]
-    renderFields(tool.fields || [])
-    refreshMonacoSignature(tool)
-    // Update test args template
-    const argObj = {}
-    for (const f of (tool.fields || [])) {
-      if (f.type === 'string') argObj[f.name] = ''
-      else if (f.type === 'number') argObj[f.name] = 0
-      else if (f.type === 'boolean') argObj[f.name] = false
-      else if (f.type === 'enum' && f.enumValues?.length) argObj[f.name] = f.enumValues[0]
-    }
-    $toolTestArgs.value = JSON.stringify(argObj, null, 2)
-  }
-})
-
-function renderTools() {
-  if (_editingToolIndex >= 0) {
-    // If we're in edit mode, check if the tool still exists
-    const tools = store.state.get('tools') || []
-    if (_editingToolIndex < tools.length) {
-      openToolEditor(_editingToolIndex)
-    } else {
-      closeToolEditor()
-    }
-  } else {
-    renderToolsList()
-  }
-}
-
-function appendMessage(type, text) {
-  const el = document.createElement('div')
-  const cls = type === 'user' ? 'msg-user' : type === 'tool' ? 'msg-tool' : type === 'error' ? 'msg-error' : 'msg-assistant'
-  el.className = `msg ${cls}`
-  if (type === 'system') {
-    el.style.cssText = 'align-self:center;color:var(--text-dim);font-size:10px;background:var(--surface);border:1px solid var(--border);'
-  }
-  el.innerHTML = type === 'assistant' || type === 'system'
-    ? `<div class="msg-label">${type}</div><pre class="msg-body">${esc(text)}</pre>`
-    : esc(text)
-  $chatMessages.appendChild(el)
-  scrollChat()
-}
-
-function scrollChat() {
-  $chatMessages.scrollTop = $chatMessages.scrollHeight
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Hooks Builder — guided hook creation with Monaco editor per hook
-// ═══════════════════════════════════════════════════════════════════════════
-
-const HOOK_EVENTS = [
-  { name: 'created', desc: 'Called when assistant loads prompt, tools, hooks', sig: '()', boilerplate: '// Set up features, use assistant.use(...)\n' },
-  { name: 'started', desc: 'Called after assistant fully initialized', sig: '()', boilerplate: '// Post-init setup\n' },
-  { name: 'formatSystemPrompt', desc: 'Modify system prompt before each turn', sig: '(assistant, prompt)', boilerplate: '// Modify and return the prompt\nreturn prompt\n', returns: true },
-  { name: 'turnStart', desc: 'New completion turn begins', sig: '(turn, isFollowUp)', boilerplate: '' },
-  { name: 'turnEnd', desc: 'Completion turn ends', sig: '(hasToolCalls)', boilerplate: '' },
-  { name: 'chunk', desc: 'Streaming text chunk received', sig: '(text)', boilerplate: '' },
-  { name: 'response', desc: 'Final response text', sig: '(text)', boilerplate: '' },
-  { name: 'toolCall', desc: 'A tool is called', sig: '(toolName, args)', boilerplate: '' },
-  { name: 'toolResult', desc: 'A tool returns a result', sig: '(toolName, result)', boilerplate: '' },
-  { name: 'toolError', desc: 'A tool call fails', sig: '(toolName, error)', boilerplate: '' },
-  { name: 'reloaded', desc: 'Tools, hooks, prompt reloaded from disk', sig: '()', boilerplate: '' },
-]
-
-let _hooksRawMode = false
-let _hookMonacoEditor = null
-let _hookMonacoReady = false
-let _editingHookName = null
-// parsed hooks: { [hookName]: bodyString }
-let _parsedHooks = {}
-
-const $hooksGuidedView = document.getElementById('hooksGuidedView')
-const $hooksToggleRawBtn = document.getElementById('hooksToggleRawBtn')
-const $activeHooksList = document.getElementById('activeHooksList')
-const $availableHooksList = document.getElementById('availableHooksList')
-const $hookEditorArea = document.getElementById('hookEditorArea')
-const $hookEditorHeader = document.getElementById('hookEditorHeader')
-const $hookEditorName = document.getElementById('hookEditorName')
-
-/** Parse hooks source into { hookName: bodyString } */
-function parseHooksSource(source) {
-  const hooks = {}
-  const fnRegex = /export\s+(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)\s*\{/g
-  let m
-  while ((m = fnRegex.exec(source)) !== null) {
-    const name = m[1]
-    const braceStart = source.indexOf('{', m.index + m[0].length - 1)
-    // Simple brace-balanced extraction
-    let depth = 0, i = braceStart
-    while (i < source.length) {
-      if (source[i] === '{') depth++
-      else if (source[i] === '}') { depth--; if (depth === 0) break }
-      else if (source[i] === "'" || source[i] === '"' || source[i] === '`') {
-        const q = source[i]; i++
-        while (i < source.length && source[i] !== q) { if (source[i] === '\\') i++; i++ }
-      }
-      i++
-    }
-    const body = source.slice(braceStart + 1, i)
-    // Dedent
-    const lines = body.split('\n')
-    if (lines.length && lines[0].trim() === '') lines.shift()
-    while (lines.length && lines[lines.length - 1].trim() === '') lines.pop()
-    let minIndent = Infinity
-    for (const l of lines) { if (l.trim()) { const lead = l.match(/^(\s*)/); minIndent = Math.min(minIndent, lead[1].length) } }
-    if (minIndent === Infinity) minIndent = 0
-    hooks[name] = lines.map(l => l.slice(minIndent)).join('\n')
-  }
-  return hooks
-}
-
-/** Generate hooks source from parsed hooks */
-function generateHooksSource(hooks) {
-  const lines = [
-    `import type { Assistant, AGIContainer } from '@soederpop/luca/agi'`,
-    '',
-    'declare global {',
-    '\tvar assistant: Assistant',
-    '\tvar container: AGIContainer',
-    '}',
-    '',
-  ]
-  for (const [name, body] of Object.entries(hooks)) {
-    const evt = HOOK_EVENTS.find(h => h.name === name)
-    const sig = evt?.sig || '()'
-    const isAsync = (body || '').includes('await ') || evt?.returns
-    lines.push(`export ${isAsync ? 'async ' : ''}function ${name}${sig} {`)
-    for (const line of (body || '').split('\n')) lines.push(`\t${line}`)
-    lines.push('}', '')
-  }
-  return lines.join('\n')
-}
-
-function renderHooksBuilder() {
-  // Parse current hooks source
-  const source = store.state.get('hooksSource') || ''
-  _parsedHooks = parseHooksSource(source)
-
-  // Render active hooks
-  const activeNames = Object.keys(_parsedHooks)
-  $activeHooksList.innerHTML = ''
-  if (activeNames.length === 0) {
-    $activeHooksList.innerHTML = '<div style="color:var(--text-faint);font-size:10px;">No hooks defined</div>'
-  } else {
-    for (const name of activeNames) {
-      const chip = document.createElement('span')
-      chip.className = 'hook-chip' + (name === _editingHookName ? ' active' : '')
-      chip.innerHTML = `${esc(name)} <span class="hook-chip-remove" data-hook="${esc(name)}">&times;</span>`
-      chip.addEventListener('click', (e) => {
-        if (e.target.classList.contains('hook-chip-remove')) {
-          delete _parsedHooks[name]
-          syncHooksToStore()
-          if (_editingHookName === name) { _editingHookName = null; $hookEditorHeader.style.display = 'none' }
-          renderHooksBuilder()
-        } else {
-          editHook(name)
-        }
-      })
-      $activeHooksList.appendChild(chip)
-    }
-  }
-
-  // Render available hooks (not yet active)
-  $availableHooksList.innerHTML = ''
-  for (const evt of HOOK_EVENTS) {
-    if (_parsedHooks[evt.name]) continue
-    const btn = document.createElement('button')
-    btn.className = 'hook-chip-add'
-    btn.title = evt.desc
-    btn.textContent = `+ ${evt.name}`
-    btn.addEventListener('click', () => {
-      _parsedHooks[evt.name] = evt.boilerplate || '// ' + evt.desc + '\n'
-      syncHooksToStore()
-      renderHooksBuilder()
-      editHook(evt.name)
-    })
-    $availableHooksList.appendChild(btn)
-  }
-}
-
-function editHook(name) {
-  _editingHookName = name
-  $hookEditorHeader.style.display = 'flex'
-  $hookEditorName.textContent = name
-
-  const evt = HOOK_EVENTS.find(h => h.name === name)
-  const sig = evt?.sig || '()'
-  const isAsync = (_parsedHooks[name] || '').includes('await ') || evt?.returns
-  const fullFn = `export ${isAsync ? 'async ' : ''}function ${name}${sig} {\n  ${(_parsedHooks[name] || '').split('\n').join('\n  ')}\n}`
-
-  if (_hookMonacoEditor) {
-    _hookMonacoEditor.setValue(fullFn)
-    _hookMonacoEditor.revealLine(2)
-  } else {
-    initHookMonaco(fullFn)
-  }
-
-  // Highlight active chip
-  $activeHooksList.querySelectorAll('.hook-chip').forEach(c => c.classList.remove('active'))
-  const chips = $activeHooksList.querySelectorAll('.hook-chip')
-  chips.forEach(c => { if (c.textContent.trim().startsWith(name)) c.classList.add('active') })
-}
-
-function extractHookBody() {
-  if (!_hookMonacoEditor) return ''
-  const lines = _hookMonacoEditor.getValue().split('\n')
-  const bodyLines = lines.slice(1, -1)
-  return bodyLines.map(l => l.startsWith('  ') ? l.slice(2) : (l.startsWith('\t') ? l.slice(1) : l)).join('\n')
-}
-
-function syncHooksToStore() {
-  const source = generateHooksSource(_parsedHooks)
-  store.setHooksSource(source)
-  $hooks.value = source
-}
-
-function initHookMonaco(value) {
-  if (_hookMonacoReady) return
-  const doInit = (monaco) => {
-    configureMonacoTs(monaco)
-    try {
-      monaco.editor.defineTheme('assistant-designer', {
-        base: 'vs-dark', inherit: true,
-        rules: [
-          { token: 'comment', foreground: '505068' },
-          { token: 'keyword', foreground: 'a78bfa' },
-          { token: 'string', foreground: '4ade80' },
-          { token: 'number', foreground: 'fb923c' },
-          { token: 'type', foreground: '60a5fa' },
-        ],
-        colors: {
-          'editor.background': '#131320', 'editor.foreground': '#c8c8d8',
-          'editor.lineHighlightBackground': '#1a1a26', 'editor.selectionBackground': '#2c2c40',
-          'editorCursor.foreground': '#a78bfa', 'editorLineNumber.foreground': '#505068',
-          'editorLineNumber.activeForeground': '#7e7e98', 'editor.inactiveSelectionBackground': '#212130',
-        }
-      })
-    } catch {}
-
-    _hookMonacoEditor = monaco.editor.create(document.getElementById('hookMonacoContainer'), {
-      value, language: 'typescript', theme: 'assistant-designer',
-      fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, lineHeight: 1.7 * 12,
-      minimap: { enabled: false }, scrollBeyondLastLine: false, wordWrap: 'on',
-      padding: { top: 8, bottom: 8 }, renderLineHighlight: 'line', lineNumbers: 'on',
-      glyphMargin: false, folding: true, automaticLayout: true, tabSize: 2,
-    })
-    _hookMonacoReady = true
-
-    let saveTimer
-    _hookMonacoEditor.onDidChangeModelContent(() => {
-      clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => {
-        if (_editingHookName) {
-          _parsedHooks[_editingHookName] = extractHookBody()
-          syncHooksToStore()
-        }
-      }, 400)
-    })
-  }
-
-  if (window.monaco) doInit(window.monaco)
-  else if (window.require && window.require.config) {
-    window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
-  } else {
-    const s = document.createElement('script')
-    s.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
-    s.onload = () => {
-      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
-      window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
-    }
-    document.head.appendChild(s)
-  }
-}
-
-// Toggle raw/guided mode
-$hooksToggleRawBtn.addEventListener('click', () => {
-  _hooksRawMode = !_hooksRawMode
-  if (_hooksRawMode) {
-    $hooksGuidedView.style.display = 'none'
-    $hooks.style.display = 'block'
-    $hooks.value = store.state.get('hooksSource') || ''
-    $hooksToggleRawBtn.textContent = 'guided'
-  } else {
-    $hooks.style.display = 'none'
-    $hooksGuidedView.style.display = 'flex'
-    renderHooksBuilder()
-    $hooksToggleRawBtn.textContent = 'raw'
-  }
-})
-
-// Re-render hooks builder when state changes
-store.on('state:loaded', () => { if (!_hooksRawMode) renderHooksBuilder() })
-store.on('assistant:loaded', () => { _editingHookName = null; if (!_hooksRawMode) renderHooksBuilder() })
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Core.md Monaco Editor
-// ═══════════════════════════════════════════════════════════════════════════
-function initCoreMonaco() {
-  if (_coreMonacoReady) return
-  const doInit = (monaco) => {
-    configureMonacoTs(monaco)
-    try {
-      monaco.editor.defineTheme('assistant-designer', {
-        base: 'vs-dark', inherit: true,
-        rules: [
-          { token: 'comment', foreground: '505068' }, { token: 'keyword', foreground: 'a78bfa' },
-          { token: 'string', foreground: '4ade80' }, { token: 'number', foreground: 'fb923c' },
-          { token: 'type', foreground: '60a5fa' },
-        ],
-        colors: {
-          'editor.background': '#131320', 'editor.foreground': '#c8c8d8',
-          'editor.lineHighlightBackground': '#1a1a26', 'editor.selectionBackground': '#2c2c40',
-          'editorCursor.foreground': '#a78bfa', 'editorLineNumber.foreground': '#505068',
-          'editorLineNumber.activeForeground': '#7e7e98', 'editor.inactiveSelectionBackground': '#212130',
-        }
-      })
-    } catch {}
-
-    _coreMonacoEditor = monaco.editor.create(document.getElementById('coreMonacoContainer'), {
-      value: store.state.get('systemPrompt') || '# My Assistant\n\nYou are a helpful assistant.',
-      language: 'markdown',
-      theme: 'assistant-designer',
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      lineHeight: 1.7 * 12,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      wordWrap: 'on',
-      padding: { top: 10, bottom: 10 },
-      renderLineHighlight: 'line',
-      lineNumbers: 'on',
-      glyphMargin: false,
-      folding: true,
-      automaticLayout: true,
-      tabSize: 2,
-    })
-    _coreMonacoReady = true
-
-    let saveTimer
-    _coreMonacoEditor.onDidChangeModelContent(() => {
-      clearTimeout(saveTimer)
-      saveTimer = setTimeout(() => {
-        store.setSystemPrompt(_coreMonacoEditor.getValue())
-      }, 400)
-    })
-  }
-
-  if (window.monaco) doInit(window.monaco)
-  else if (window.require && window.require.config) {
-    window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
-  } else {
-    const s = document.createElement('script')
-    s.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
-    s.onload = () => {
-      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
-      window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
-    }
-    document.head.appendChild(s)
-  }
-}
-
-// Init core Monaco when its workspace is first shown (or on state:loaded if already visible)
-store.on('state:loaded', () => {
-  if (app.state.get('activeWorkspace') === 'core') initCoreMonaco()
-})
-
-// Boot — expose on window and start
-// ═══════════════════════════════════════════════════════════════════════════
-window.app = app
-window.luca = container
-
-await app.start()
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Prompt Runner — inline workspace (replaces drawer)
-// ═══════════════════════════════════════════════════════════════════════════
-const $promptFilename = document.getElementById('promptFilename')
-const $runPromptBtn = document.getElementById('runPromptBtn')
-const $stopPromptBtn = document.getElementById('stopPromptBtn')
-const $promptOutput = document.getElementById('promptOutput')
-const $promptStatus = document.getElementById('promptStatus')
-const $promptExitCode = document.getElementById('promptExitCode')
-const $clearOutputBtn = document.getElementById('clearOutputBtn')
-const $loadPromptBtn = document.getElementById('loadPromptBtn')
-const $savedPromptsMenu = document.getElementById('savedPromptsMenu')
-
-let promptMonacoEditor = null
-let promptMonacoReady = false
-let currentAbortController = null
-
-const DEFAULT_PROMPT = `---
-title: Build Assistant
-description: Use the luca-framework skill to scaffold an assistant
----
-
-# Build an Assistant
-
-Use the luca-framework skill to build a new assistant.
-
-## Requirements
-
-- Name: \${assistantName}
-- Description: A helpful assistant that can...
-
-## Instructions
-
-1. Use \`luca scaffold\` to generate the assistant boilerplate
-2. Customize the CORE.md system prompt
-3. Add any tools the assistant needs
-4. Test it works with \`luca describe\`
-`
-
-function initPromptMonaco() {
-  if (promptMonacoReady) return
-  const doInit = (monaco) => {
-    configureMonacoTs(monaco)
-    try {
-      monaco.editor.defineTheme('assistant-designer', {
-        base: 'vs-dark', inherit: true,
-        rules: [
-          { token: 'comment', foreground: '505068' },
-          { token: 'keyword', foreground: 'a78bfa' },
-          { token: 'string', foreground: '4ade80' },
-          { token: 'number', foreground: 'fb923c' },
-          { token: 'type', foreground: '60a5fa' },
-        ],
-        colors: {
-          'editor.background': '#131320',
-          'editor.foreground': '#c8c8d8',
-          'editor.lineHighlightBackground': '#1a1a26',
-          'editor.selectionBackground': '#2c2c40',
-          'editorCursor.foreground': '#a78bfa',
-          'editorLineNumber.foreground': '#505068',
-          'editorLineNumber.activeForeground': '#7e7e98',
-          'editor.inactiveSelectionBackground': '#212130',
-        }
-      })
-    } catch {}
-
-    promptMonacoEditor = monaco.editor.create(document.getElementById('promptMonacoContainer'), {
-      value: DEFAULT_PROMPT,
-      language: 'markdown',
-      theme: 'assistant-designer',
-      fontFamily: "'IBM Plex Mono', monospace",
-      fontSize: 12,
-      lineHeight: 1.7 * 12,
-      minimap: { enabled: false },
-      scrollBeyondLastLine: false,
-      wordWrap: 'on',
-      padding: { top: 10, bottom: 10 },
-      renderLineHighlight: 'line',
-      lineNumbers: 'on',
-      glyphMargin: false,
-      folding: true,
-      automaticLayout: true,
-      tabSize: 2,
-    })
-
-    promptMonacoReady = true
-
-    // Cmd/Ctrl+Enter to run
-    promptMonacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
-      runPrompt()
-    })
-  }
-
-  if (window.monaco) {
-    doInit(window.monaco)
-  } else if (window.require && window.require.config) {
-    window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
-  } else {
-    const loaderScript = document.createElement('script')
-    loaderScript.src = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs/loader.js'
-    loaderScript.onload = () => {
-      window.require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.47.0/min/vs' } })
-      window.require(['vs/editor/editor.main'], (m) => { window.monaco = m; doInit(m) })
-    }
-    document.head.appendChild(loaderScript)
-  }
-}
-
-// ── Run Prompt ──
-async function runPrompt() {
-  if (!promptMonacoEditor) return
-  const content = promptMonacoEditor.getValue()
-  if (!content.trim()) return
-
-  const filename = $promptFilename.value.trim().replace(/[^a-zA-Z0-9_-]/g, '') || 'prompt'
-
-  $runPromptBtn.classList.add('running')
-  $runPromptBtn.textContent = 'Running...'
-  $stopPromptBtn.style.display = ''
-  $promptStatus.textContent = 'Starting...'
-  $promptExitCode.textContent = ''
-  $promptOutput.textContent = ''
-
-  currentAbortController = new AbortController()
-
-  try {
-    const res = await fetch(`${API}/api/prompt-runner`, {
+    const res = await fetch(`${API}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, filename }),
-      signal: currentAbortController.signal,
-    })
+      body: JSON.stringify({ message: text, assistantId: state.activeId }),
+    });
 
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let eventType = ''
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
+      const { done, value } = await reader.read();
+      if (done) break;
 
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
-        if (line.startsWith('event: ')) { eventType = line.slice(7).trim(); continue }
-        if (!line.startsWith('data: ')) continue
-
-        let data
-        try { data = JSON.parse(line.slice(6)) } catch { continue }
-
-        if (eventType === 'status') {
-          $promptStatus.textContent = data.message
-        } else if (eventType === 'output') {
-          $promptOutput.textContent += data.text
-          $promptOutput.scrollTop = $promptOutput.scrollHeight
-          $promptStatus.textContent = 'Running...'
-        } else if (eventType === 'done') {
-          const code = data.exitCode
-          $promptExitCode.textContent = code === 0 ? 'exit: 0' : `exit: ${code}`
-          $promptExitCode.style.color = code === 0 ? 'var(--accent)' : 'var(--error)'
-          $promptStatus.textContent = code === 0 ? 'Completed' : 'Failed'
-        } else if (eventType === 'error') {
-          $promptOutput.textContent += `\nERROR: ${data.message}\n`
-          $promptStatus.textContent = 'Error'
+        if (line.startsWith('event: ')) {
+          var eventType = line.slice(7).trim();
+        } else if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (eventType === 'chunk') {
+              fullText += data.text || '';
+              try { msgEl.innerHTML = marked.parse(fullText); } catch { msgEl.textContent = fullText; }
+              msgEl.appendChild(cursor);
+              dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+            } else if (eventType === 'tool_start') {
+              addToolEvent('tool_start', data.name);
+            } else if (eventType === 'tool_result') {
+              addToolEvent('tool_result', data.name);
+            } else if (eventType === 'tool_error') {
+              addToolEvent('tool_error', data.name, data.error);
+            } else if (eventType === 'done') {
+              cursor.remove();
+              if (data.response && !fullText) {
+                try { msgEl.innerHTML = marked.parse(data.response); } catch { msgEl.textContent = data.response; }
+              }
+            } else if (eventType === 'error') {
+              cursor.remove();
+              msgEl.innerHTML = `<span style="color:var(--error)">${data.message || 'Error'}</span>`;
+            }
+          } catch {}
         }
       }
     }
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      $promptOutput.textContent += `\nError: ${err.message}\n`
-      $promptStatus.textContent = 'Error'
-    } else {
-      $promptStatus.textContent = 'Stopped'
-    }
-  } finally {
-    $runPromptBtn.classList.remove('running')
-    $runPromptBtn.textContent = 'Run'
-    $stopPromptBtn.style.display = 'none'
-    currentAbortController = null
+    cursor.remove();
+    msgEl.innerHTML = `<span style="color:var(--error)">Connection error: ${err.message}</span>`;
   }
+
+  cursor.remove();
+  state.isStreaming = false;
+  dom.chatSendBtn.disabled = false;
 }
 
-$runPromptBtn.addEventListener('click', runPrompt)
-
-$stopPromptBtn.addEventListener('click', () => {
-  if (currentAbortController) {
-    currentAbortController.abort()
+dom.chatSendBtn.addEventListener('click', sendChatMessage);
+dom.chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
   }
-})
+});
 
-$clearOutputBtn.addEventListener('click', () => {
-  $promptOutput.textContent = ''
-  $promptExitCode.textContent = ''
-  $promptStatus.textContent = ''
-})
+// Auto-resize chat input
+dom.chatInput.addEventListener('input', () => {
+  dom.chatInput.style.height = 'auto';
+  dom.chatInput.style.height = Math.min(dom.chatInput.scrollHeight, 80) + 'px';
+});
 
-// ── Load Saved Prompts ──
-$loadPromptBtn.addEventListener('click', async () => {
-  $savedPromptsMenu.classList.toggle('open')
-  if ($savedPromptsMenu.classList.contains('open')) {
+// Clear chat
+$('#clearChatBtn').addEventListener('click', async () => {
+  dom.chatMessages.innerHTML = '';
+  if (state.activeId) {
+    await api('/chat', { method: 'DELETE' });
+    addChatMessage('system', 'Chat cleared');
+  }
+});
+
+// ── REPL ──────────────────────────────────────────────────────────────────────
+async function runRepl() {
+  const code = dom.replInput.value.trim();
+  if (!code) return;
+
+  const entry = document.createElement('div');
+  entry.className = 'repl-entry';
+  entry.innerHTML = `<div><span class="repl-prompt">&gt; </span>${escapeHtml(code)}</div>`;
+  dom.replOutput.appendChild(entry);
+
+  try {
+    const data = await api('/eval', { method: 'POST', body: { code } });
+    const outEl = document.createElement('div');
+    if (data.ok) {
+      outEl.className = 'repl-ok';
+      outEl.textContent = data.output;
+    } else {
+      outEl.className = 'repl-err';
+      outEl.textContent = data.error;
+    }
+    entry.appendChild(outEl);
+  } catch (err) {
+    const outEl = document.createElement('div');
+    outEl.className = 'repl-err';
+    outEl.textContent = err.message;
+    entry.appendChild(outEl);
+  }
+
+  dom.replOutput.scrollTop = dom.replOutput.scrollHeight;
+  dom.replInput.value = '';
+}
+
+$('#replRunBtn').addEventListener('click', runRepl);
+dom.replInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    runRepl();
+  }
+});
+$('#clearReplBtn').addEventListener('click', () => { dom.replOutput.innerHTML = ''; });
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Hot reload toggle ─────────────────────────────────────────────────────────
+dom.hotReloadToggle.addEventListener('change', async () => {
+  state.hotReload = dom.hotReloadToggle.checked;
+  if (state.hotReload && state.activeId) {
+    await api(`/watch/${state.activeId}`, { method: 'POST' });
+    toast('File watching enabled', 'info');
+    startPolling();
+  } else {
+    stopPolling();
+  }
+});
+
+// Simple polling for file changes (fallback since we don't have a persistent WS to this workflow)
+let pollInterval = null;
+function startPolling() {
+  stopPolling();
+  pollInterval = setInterval(async () => {
+    if (!state.activeId || !state.activeFile) return;
     try {
-      const res = await fetch(`${API}/api/prompt-runner`)
-      const data = await res.json()
-      const prompts = data.prompts || []
-      if (prompts.length === 0) {
-        $savedPromptsMenu.innerHTML = '<div style="padding:8px 10px;color:var(--text-faint);font-size:11px;">No saved prompts</div>'
-      } else {
-        $savedPromptsMenu.innerHTML = prompts.map(p =>
-          `<button class="loader-item" data-path="${esc(p.path)}" data-name="${esc(p.name)}">${esc(p.name)}</button>`
-        ).join('')
-        $savedPromptsMenu.querySelectorAll('.loader-item').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            $savedPromptsMenu.classList.remove('open')
-            $promptFilename.value = btn.dataset.name
-            // Fetch file content via eval endpoint
-            const evalRes = await fetch(`${API}/api/workflows/assistant-designer/eval`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ code: `await container.feature('fs').readFile('${btn.dataset.path}', 'utf8')` }),
-            })
-            const evalData = await evalRes.json()
-            if (evalData.ok && promptMonacoEditor) {
-              // The eval returns JSON-stringified content, parse it
-              try {
-                const content = JSON.parse(evalData.output)
-                promptMonacoEditor.setValue(content)
-              } catch {
-                promptMonacoEditor.setValue(evalData.output || '')
-              }
-            }
-          })
-        })
+      const data = await api(`/assistants/${state.activeId}/files/${state.activeFile}`);
+      if (data.content !== state.files[state.activeFile]) {
+        state.files[state.activeFile] = data.content;
+        // Only update if not modified locally
+        if (!state.modified.has(state.activeFile)) {
+          state.editBuffers[state.activeFile] = data.content;
+          if (state.activeFile === state.activeFile) {
+            dom.editorTextarea.value = data.content;
+            updateLineNumbers();
+          }
+          toast(`${state.activeFile} changed externally`, 'info');
+        }
       }
     } catch {}
-    setTimeout(() => document.addEventListener('click', () => $savedPromptsMenu.classList.remove('open'), { once: true }), 0)
+  }, 2000);
+}
+function stopPolling() {
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+// ── History modal ─────────────────────────────────────────────────────────────
+$('#historyBtn').addEventListener('click', async () => {
+  $('#historyModal').classList.add('open');
+  if (!state.activeId) {
+    dom.historyBody.innerHTML = '<div class="empty">Select an assistant first</div>';
+    return;
   }
-})
+  dom.historyBody.innerHTML = '<div class="empty">Loading...</div>';
+  try {
+    const data = await api(`/assistants/${state.activeId}/history`);
+    const sessions = data.sessions || [];
+    if (!sessions.length) {
+      dom.historyBody.innerHTML = '<div class="empty">No conversation history</div>';
+      return;
+    }
+    dom.historyBody.innerHTML = sessions.map(s => `
+      <div class="history-item" data-thread="${s.threadId}">
+        <span class="thread-id">${s.threadId}</span>
+        <span class="meta">${s.messageCount} msgs${s.updatedAt ? ' &middot; ' + new Date(s.updatedAt).toLocaleDateString() : ''}</span>
+      </div>
+    `).join('');
+  } catch (err) {
+    dom.historyBody.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+  }
+});
+$('#historyClose').addEventListener('click', () => $('#historyModal').classList.remove('open'));
+$('#historyModal').addEventListener('click', (e) => {
+  if (e.target === $('#historyModal')) $('#historyModal').classList.remove('open');
+});
+
+// ── Create assistant modal ────────────────────────────────────────────────────
+$('#newAssistantBtn').addEventListener('click', () => {
+  $('#createModal').classList.add('open');
+  $('#createNameInput').value = '';
+  setTimeout(() => $('#createNameInput').focus(), 50);
+});
+$('#createClose').addEventListener('click', () => $('#createModal').classList.remove('open'));
+$('#createModal').addEventListener('click', (e) => {
+  if (e.target === $('#createModal')) $('#createModal').classList.remove('open');
+});
+
+$('#createSubmitBtn').addEventListener('click', async () => {
+  const name = $('#createNameInput').value.trim();
+  if (!name) return;
+  try {
+    const data = await api('/create', { method: 'POST', body: { name } });
+    if (data.ok) {
+      toast(`Created ${name}`, 'success');
+      $('#createModal').classList.remove('open');
+      await loadAssistants();
+      selectAssistant(name);
+    } else {
+      toast(data.error || 'Failed to create', 'error');
+    }
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+});
+$('#createNameInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') $('#createSubmitBtn').click();
+});
+
+// ── Panel toggles ─────────────────────────────────────────────────────────────
+$('#toggleSidebar').addEventListener('click', () => {
+  $('#sidebar').classList.toggle('collapsed');
+});
+$('#toggleRight').addEventListener('click', () => {
+  $('#rightPanel').classList.toggle('collapsed');
+});
+
+// ── Reload button ─────────────────────────────────────────────────────────────
+$('#reloadBtn').addEventListener('click', async () => {
+  if (!state.activeId) return;
+  try {
+    await api(`/assistants/${state.activeId}/reload`, { method: 'POST' });
+    toast('Assistant reloaded', 'success');
+    updateStatus(state.activeId, true);
+  } catch (err) {
+    toast(`Reload failed: ${err.message}`, 'error');
+  }
+});
+
+// ── Vertical resize handle ────────────────────────────────────────────────────
+const resizeHandle = $('#resizeHandleH');
+let isResizing = false;
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  e.preventDefault();
+  const chatPanel = document.querySelector('.chat-panel');
+  const replPanel = document.querySelector('.repl-panel');
+  const startY = e.clientY;
+  const startChatFlex = chatPanel.style.flex ? parseFloat(chatPanel.style.flex) : 6;
+  const startReplFlex = replPanel.style.flex ? parseFloat(replPanel.style.flex) : 4;
+  const totalFlex = startChatFlex + startReplFlex;
+  const rightPanelRect = document.querySelector('.right-panel').getBoundingClientRect();
+
+  const onMove = (e) => {
+    if (!isResizing) return;
+    const dy = e.clientY - startY;
+    const ratio = dy / rightPanelRect.height;
+    const newChat = Math.max(2, Math.min(totalFlex - 2, startChatFlex + ratio * totalFlex));
+    chatPanel.style.flex = newChat;
+    replPanel.style.flex = totalFlex - newChat;
+  };
+
+  const onUp = () => {
+    isResizing = false;
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  };
+
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+});
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadAssistants();
+
+// Auto-select from URL hash
+if (location.hash) {
+  const id = location.hash.slice(1);
+  setTimeout(() => selectAssistant(id), 300);
+}
 </script>
 </body>
 </html>

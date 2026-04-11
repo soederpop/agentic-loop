@@ -333,6 +333,16 @@
     pointer-events: none;
   }
 
+  .btn-edit {
+    border-color: var(--orange);
+    color: var(--orange);
+  }
+
+  .btn-edit:hover {
+    background: #f59e0b18;
+    box-shadow: 0 0 16px #f59e0b20;
+  }
+
   @keyframes pulse-glow {
     0%, 100% { box-shadow: 0 0 8px var(--green-dim); }
     50% { box-shadow: 0 0 24px var(--green-dim); }
@@ -639,6 +649,7 @@
           <div class="card-actions">
             ${a.hasVoice ? `<button class="btn btn-voice" onclick="startVoice('${a.id}')">&#9835; voice chat</button>` : ''}
             <button class="btn btn-chat" onclick="launchChat('${a.id}', this)">&#9654; open chat</button>
+            <button class="btn btn-edit" onclick="editAssistant('${a.id}')">&#9998; edit</button>
           </div>
         </div>
       </div>
@@ -700,6 +711,11 @@
 
   // Resize handler
   window.addEventListener('resize', () => updateCarousel())
+
+  // ── Edit in designer ──
+  window.editAssistant = function(assistantId) {
+    window.location.href = '/workflows/assistant-designer/#' + assistantId
+  }
 
   // ── Launch web-chat ──
   window.launchChat = async function(assistantId, btn) {

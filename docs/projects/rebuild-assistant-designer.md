@@ -1,7 +1,8 @@
 ---
-status: approved
+status: completed 
 goal: user-experience-improvements
 ---
+
 
 # Rebuild Assistant Designer
 
