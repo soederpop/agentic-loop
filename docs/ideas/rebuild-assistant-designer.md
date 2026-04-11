@@ -6,7 +6,7 @@ tags:
   - ui
   - workflows
   - hot-reload
-status: exploring
+status: ready
 ---
 
 # Rebuild Assistant Designer
@@ -58,3 +58,10 @@ Potential core areas of the UI:
 - The UX should optimize for editing one assistant at a time.
 - Runtime experimentation should support hot reload, especially for chat and REPL.
 - The design should reuse strong ideas from the current assistant designer where appropriate, while dropping assumptions that revolve around runtime-only construction.
+- This should be small and cohesive enough to execute through a single implementation plan.
+
+## Implementation Guide
+
+A repository-specific implementation guide has been prepared to teach the implementation assistant where to work and what to change:
+
+- [Rebuild Assistant Designer Implementation Guide](../reports/rebuild-assistant-designer-implementation-guide.md)
