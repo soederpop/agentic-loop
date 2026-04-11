@@ -187,7 +187,7 @@ export class VoiceListener extends Feature<VoiceListenerState, VoiceListenerOpti
       capabilitiesChecked: true,
       sttAvailable: this._sttAvailable,
       capabilityMissing: missing,
-      inputMode: this._sttAvailable ? 'continuous' : 'off',
+      inputMode: 'off',
     })
 
     return {

@@ -131,9 +131,9 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
     // 3. Log startup summary
     const sttReason = listener.state.get('sttAvailable') ? 'available' : `UNAVAILABLE (${((listenerCaps.missing as string[]) || []).filter(m => m.includes('sox') || m.includes('mlx_whisper')).join(', ') || 'missing dependencies'})`
     this.emit('info', '── Voice capability check ──')
-    this.emit('info', `  STT (continuous): ${sttReason}`)
-    this.emit('info', `  Active mode:      ${listener.inputMode}`)
-    this.emit('info', `  TTS/LLM:          ${ttsAvailable ? 'available' : 'UNAVAILABLE'}`)
+    this.emit('info', `  STT:         ${sttReason}`)
+    this.emit('info', `  TTS/LLM:     ${ttsAvailable ? 'available' : 'UNAVAILABLE'}`)
+    this.emit('info', `  Input:       hotkey only (no hot mic)`)
     this.emit('info', `  Assistants: ${this._entries.map(e => `${e.assistantName} [${e.aliases.join(', ')}]`).join(', ') || 'none'}`)
 
     // 4. Wire up input listener
@@ -157,11 +157,8 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
       })
     })
 
-    if (listener.inputMode === 'continuous') {
-      listener.startContinuousListening()
-    } else {
-      this.emit('info', 'Voice input disabled — no available input mode')
-    }
+    // Continuous listening (hot mic) is disabled — voice input is triggered via hotkey only.
+    // The voice listener and its STT capabilities remain available for on-demand use.
 
     this.state.set('running', true)
     this.emit('started')
@@ -182,8 +179,6 @@ export class VoiceService extends Feature<VoiceServiceState, VoiceServiceOptions
   /** Tears down the voice subsystem. */
   async stop() {
     if (!this.state.get('running')) return this
-
-    await this.listener.stopContinuousListening()
 
     this.state.set('running', false)
 
