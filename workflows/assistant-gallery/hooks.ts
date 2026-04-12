@@ -92,4 +92,28 @@ export async function onSetup({ app, container }: WorkflowHooksSetupContext) {
       res.status(500).json({ error: err.message })
     }
   })
+
+  app.post('/api/workflows/assistant-gallery/launch-memory', async (req: any, res: any) => {
+    try {
+      const { assistant } = req.body || {}
+      if (!assistant) return res.status(400).json({ error: 'assistant name required' })
+
+      const port = (req.socket?.localPort) || 7700
+      const url = `http://localhost:${port}/workflows/assistant-memory/#${assistant}`
+
+      const wm = container.feature('windowManager')
+      try {
+        await Promise.race([
+          wm.spawn({ url }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 6500)),
+        ])
+      } catch {
+        container.feature('opener').open(url)
+      }
+
+      res.json({ ok: true, assistant, url })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
 }
