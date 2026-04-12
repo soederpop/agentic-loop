@@ -40,6 +40,62 @@ That means this idea is no longer about whether message threads should exist as 
 - Support scheduled outgoing messages in addition to reactive replies.
 - Keep communication state in message threads and avoid turning them into a general-purpose operational task store.
 
+## System Boundary And Ownership
+
+This idea needs a clear boundary between the comms service, the assistant inbox capability, and the `docs/messages/*.md` documents so future implementation does not blur transport, reasoning, and storage.
+
+### Comms Service
+
+The comms service should be the transport and event-ingestion layer.
+
+Its responsibilities are:
+
+- receive and send messages for channels like Gmail, Telegram, and iMessage
+- normalize provider-specific events into a common internal shape
+- resolve or create the correct thread identity using `threadKey`
+- write raw or meaningful inbound and outbound communication events into the related `MessageThread`
+- keep provider and routing concerns out of Chief's higher-level reasoning loop
+
+The comms service should not be the place where long-horizon follow-up strategy is decided. It should not own TODOs, general planning, or non-communication operational obligations.
+
+### Assistant Inbox
+
+The assistant inbox should be the reasoning and triage layer built on top of message threads.
+
+Its responsibilities are:
+
+- read `MessageThread` documents as the durable inbox state
+- interpret communication posture such as `needs-reply`, `waiting`, `closed`, or `archived`
+- refresh summaries, assessments, and assistant-readable notes
+- decide when a thread implies proactive follow-up may be appropriate
+- decide whether the next action is a direct reply, a queued outbound action, or creation of a TODO for later follow-up
+
+The assistant inbox should not be treated as the low-level transport adapter. It consumes communication history and determines what it means.
+
+### MessageThread Documents
+
+`docs/messages/*.md` should be the durable communication ledger.
+
+They are the persistent record of:
+
+- who said what
+- which assistant and participant the thread belongs to
+- current communication posture
+- meaningful inbound and outbound events over time
+- summary and notes that help future-Chief understand the thread quickly
+
+They should not become the general-purpose store for all async work state, scheduler bookkeeping, or operational follow-up obligations.
+
+### Write Boundaries
+
+The expected write boundary should be explicit:
+
+- the comms service may create threads, resolve thread identity, and append inbound or outbound communication events
+- the assistant inbox may update summary, assessment, notes, and communication status
+- TODO plays or other async follow-up systems should update message threads only when communication state meaningfully changes, such as an outbound follow-up being sent or a blocked communication outcome that Jon would care about
+
+Routine scheduler checks should not spam `MessageThread` timelines. A message thread should record communication truth, not every internal polling step.
+
 ## Relationship To TODO-Driven Follow-Up
 
 This should be treated as related to, but distinct from, the TODO-driven autonomy idea.
