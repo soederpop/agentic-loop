@@ -119,6 +119,7 @@ export class Communications extends Feature<CommunicationsState, CommunicationsO
 
         this.imessage.on('message', this._imessageHandler)
         this.imessage.watch()
+        this.emit('log', `imsg: watcher started`)
       } else if (channel === 'telegram') {
         this._telegramHandler = async function telegramHandler(message: any) {
           comms.emit('message:received', 'telegram', message)
@@ -126,6 +127,7 @@ export class Communications extends Feature<CommunicationsState, CommunicationsO
 
         this.telegramBot.handle('message:text', this._telegramHandler)
         this.telegramBot.start()
+        this.emit('log', `telegram: listener started`)
       } else if (channel === 'gmail') {
         await this._startGmailPolling()
       }
@@ -154,23 +156,15 @@ export class Communications extends Feature<CommunicationsState, CommunicationsO
       ? `${baseQuery} {${trustedSenders.map(s => `from:${s}`).join(' ')}}`
       : baseQuery
 
-    // Seed: mark everything currently unread as "already seen"
-    try {
-      const existing = await gws.gmail.search({ query: senderQuery, maxResults: 50 })
-      const messages = existing?.messages || []
-      for (const msg of messages) {
-        this._gmailSeenIds.add(msg.id)
-      }
-      this.emit('log', `gmail: seeded ${this._gmailSeenIds.size} existing unread message(s), polling every ${interval / 1000}s (trusted senders: ${trustedSenders.length || 'all'})`)
-    } catch (err: any) {
-      this.emit('log', `gmail: seed failed — ${err.message}`)
-    }
+    this.emit('log', `gmail: started polling every ${interval / 1000}s (trusted senders: ${trustedSenders.length || 'all'})`)
 
     const poll = async () => {
       if (this.isPaused) return
       try {
         const result = await gws.gmail.search({ query: senderQuery, maxResults: 20 })
         const messages = result?.messages || []
+        const newCount = messages.filter(m => !this._gmailSeenIds.has(m.id)).length
+        this.emit('log', `gmail: polled — ${messages.length} unread, ${newCount} new`)
 
         for (const msg of messages) {
           if (this._gmailSeenIds.has(msg.id)) continue
