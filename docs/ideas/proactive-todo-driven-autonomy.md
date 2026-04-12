@@ -63,38 +63,105 @@ Over time, TODO items may need lightweight structure embedded in markdown so Chi
 - The play should not become a general autonomous planner.
 - The play's job is bounded follow-through, not unconstrained self-direction.
 - Work should flow through the existing task runner and scheduler protections when implementation is required.
-- Notification behavior should be protected against duplicate sends or spam loops.
+- Notification actions must be idempotent and auditable so Chief does not send duplicate updates or get stuck in a spam loop.
 - Processing one TODO per run is a feature, not a limitation, because it keeps behavior legible and debuggable.
+- If a TODO is ambiguous, under-specified, or appears unauthorized, the safe behavior is to skip direct action and surface the item as blocked.
+
+## Selection And Execution Semantics
+
+The play should follow a deterministic lifecycle on each run:
+
+1. Read the TODO source of truth.
+2. Select at most one eligible item using a stable rule.
+3. Claim that item for the current run.
+4. Perform one bounded action only.
+5. Record the result durably.
+6. Exit without looping.
+
+If multiple TODOs are actionable at once, the first version should prefer a simple deterministic rule such as explicit priority first, then oldest or file order. The important property is that selection remains predictable and debuggable.
+
+Claiming, acting, and completion should be treated as distinct moments even if they are represented in lightweight markdown. That separation reduces the risk of duplicate handling when the scheduler overlaps, a run fails midway through, or a notification succeeds but the final TODO update does not.
+
+## Minimum Actionable TODO Shape
+
+Even if TODOs remain markdown checklist items, machine-actionable follow-up probably requires more than freeform prose.
+
+The minimum conceptual shape should include:
+
+- a human-readable description
+- evidence of explicit authorization from Jon
+- the responsible assistant
+- the type of action to perform
+- the target artifact, thread, or subject to inspect
+- the trigger or due condition
+- the success condition
+- the follow-up behavior when complete
+- the notification policy, including channel and whether to notify on success, failure, or both
+- enough state to prevent duplicate sends
+- timestamps such as created at and last checked at when useful
+
+The markdown representation can stay simple at first, but the idea should assume that some TODOs will need lightweight structure if they are expected to drive reliable async follow-up.
+
+## Operational Safety Guarantees
+
+The play should only act on TODOs that contain enough explicit structure to evaluate safely.
+
+If the next action is obvious and authorized, the play may proceed through an allowed path. If intent, authorization, destination, or completion criteria are unclear, the play should avoid improvising and instead leave the item pending or blocked for review.
+
+Outbound actions should be treated as higher-risk than internal coordination. For some classes of TODO, the right action may be to create a downstream task or queue item rather than sending a message directly.
+
+Every run should leave a durable audit trail describing what TODO was inspected, whether it was actionable, what action was taken, and whether a notification was attempted, sent, failed, or intentionally skipped.
+
+Retries should be bounded. Repeated failure should surface for review rather than letting the play retry forever.
 
 ## Relationship To Message Threads
 
-This idea is related to, but distinct from, the assistant inbox idea backed by `docs/messages/*.md` and the `MessageThread` model.
+This idea is related to, but distinct from, the assistant inbox idea backed by `docs/messages/*.md` and the existing `MessageThread` model.
 
 Message threads are the durable record of communication state. TODOs are the durable record of promised follow-up work.
+
+`MessageThread.status` should represent communication posture, not the full state of TODO execution. For example, a thread may be `waiting` while async work is underway or `needs-reply` when user-facing follow-up is now required, but the TODO itself still carries the operational obligation and completion logic.
 
 A likely pattern is:
 
 - an inbound message or chat leads Chief to start async work
 - Chief records a TODO to check back later
+- if the TODO originated from a conversation, it should reference the related message thread when possible
 - the play eventually sees the TODO is actionable
 - Chief notifies Jon by email or another channel
-- the related message thread can then be updated with the outbound follow-up
+- the related message thread is updated when communication state meaningfully changes
 
-In other words, `docs/messages` can hold conversation history, while `docs/memories/TODO.md` holds explicit operational commitments.
+In other words, `docs/messages` can hold conversation history and communication posture, while `docs/memories/TODO.md` holds explicit operational commitments.
+
+The thread timeline should be updated for meaningful events such as inbound requests, async kickoff, outbound follow-up, or blocked outcomes that matter to Jon. It should not become a noisy scheduler log for every routine check.
 
 ## Example Behavior
 
-One example is that Jon asks Chief to follow up on an idea when it becomes a project, and then later follow up again when the project is complete with a demo link.
+One example is that Jon asks Chief to follow up on an idea when it becomes a project, and then later follow up again when the project is complete with a demo link. That TODO is not just a reminder. It is an operational commitment tied to a domain-state change.
 
-Another example is that Jon asks Chief during chat to kick off a research report and email him when it is done. Chief starts the async work immediately, records a TODO describing what to check and how to notify Jon, and leaves the conversation responsive.
+Another example is that Jon asks Chief during chat to kick off a research report and email him when it is done. Chief starts the async work immediately, records a TODO describing what to check and how to notify Jon, and leaves the conversation responsive. The related message thread, if there is one, can be marked as waiting while the research runs.
 
-Later, when the triggering condition is true, the play notices it, writes the appropriate outbound or coordination task or sends the approved email follow-up, and then marks the TODO complete.
+Later, when the triggering condition is true, the play notices it, writes the appropriate outbound or coordination task or sends the approved email follow-up, updates the related message thread with the meaningful outbound event, and then marks the TODO complete.
+
+A failure example is also important: if completion is detected but the notification target, approval level, or destination thread is ambiguous, the play should not guess. It should leave the TODO blocked or create a downstream coordination task instead of sending an unsafe message.
+
+## Edge Cases And Failure Modes
+
+- multiple TODOs become actionable at once
+- a TODO remains incomplete for a long-running job and needs backoff rather than constant re-checks
+- a notification is sent successfully but the TODO is not marked complete
+- a TODO is claimed but the notification send fails
+- the referenced report, task, or message thread no longer exists
+- the TODO is edited by a human while the play is processing it
+- a TODO becomes actionable repeatedly and needs to be one-shot or explicitly repeatable
+- the play cannot confidently interpret the item's authorization or completion condition
+
+These cases should be treated as first-class design concerns rather than implementation details, because they determine whether bounded autonomy remains safe in practice.
 
 ## Open Questions
 
-- What minimum structure should each TODO include beyond checkbox text?
+- What explicit trigger types should the first version support: time-based, artifact-state-based, task-status-based, or message-state-based?
+- Should the first version support only one-shot TODOs, with recurring behavior deferred or represented as newly scheduled one-shots?
 - Should async follow-up TODOs stay in markdown bullets, or eventually move to a dedicated follow-up model?
-- How should the play determine actionability for a TODO in a way that is transparent and debuggable?
-- Should some TODOs be one-time while others are repeatable follow-up instructions?
-- How should priority be expressed if multiple TODOs are eligible at once?
-- Should email notifications be sent directly by Chief, or only by creating a downstream task or message-queue item?
+- What deterministic selection rule should be used when multiple TODOs are eligible at once?
+- Which outbound actions are safe for Chief to send directly, and which should always require a downstream task or queue item?
