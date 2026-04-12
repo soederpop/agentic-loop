@@ -13,6 +13,13 @@ final class WebViewWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 
     override func keyDown(with event: NSEvent) {
+        // Cmd+R → reload the web view
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "r" {
+            if let webView = contentView as? WKWebView {
+                webView.reload()
+            }
+            return
+        }
         // Don't call super — it triggers NSBeep for keys the web view handles
         // (arrows, escape, etc.). The WKWebView already receives these via the
         // responder chain before NSWindow.keyDown is called.
