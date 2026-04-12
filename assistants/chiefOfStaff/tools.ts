@@ -102,6 +102,8 @@ export const schemas = {
 	presentDocument: z.object({
 		path: z.string().min(1).describe('The document id to present (e.g. "goals/user-experience-improvements"). Use the ids from the ls tool. Prefixes like "docs/" and suffixes like ".md" are stripped automatically.'),
 	}).describe('Open a contentbase document in a native window via the content service. Call ls first to see available document ids, then pass the one you want to present.'),
+	
+	listTodos: z.object({}).describe('List the TODOs in the TODO.md file in memories.  NOTE, if for some reason this does not match what you think it should, you should probably re-read your memory docs to make sure you are up to date.'),
 
 }
 
@@ -119,6 +121,24 @@ export async function ls() : Promise<string> {
 		'----',
 		'You can use readFile to read any of these documents at docs/<id>.md'
 	].join('\n')
+}
+
+export async function listTodos() : Promise<{ description: string, completed: boolean, index: number }[]> {
+	const doc = await container.docs.parseMarkdownAtPath('docs/memories/TODO.md')
+	const todosSection = doc.querySection('TODOS') 
+
+	if (!todosSection) {
+		throw new Error(`Something is off with the TODO.md in memories`)
+	}
+
+	const todoItems = todosSection.selectAll('listItem') as any[]
+	const todoLines = todosSection.selectAll('listItem paragraph text')
+
+	return todoLines.map((line,index) => ({
+		description: (line as any)?.value || '',
+		completed: todoItems[index]?.checked ?? false,
+		index: index,
+	}))
 }
 
 export async function README() : Promise<string> {
