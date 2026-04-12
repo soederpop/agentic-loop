@@ -1,12 +1,11 @@
 import { z } from 'zod'
 import type { ContainerContext } from '@soederpop/luca'
 import { CommandOptionsSchema } from '@soederpop/luca/schemas'
-import type { TaskEntry } from '../features/task-scheduler'
 import { startCommsService } from './comms-service'
+import { startTaskScheduler } from './task-scheduler'
 
 export const argsSchema = CommandOptionsSchema.extend({
   port: z.number().default(0).describe('WebSocket port (0 = auto-allocate from instance registry)'),
-  taskInterval: z.number().default(1).describe('Minutes between task scheduler ticks'),
   watchInterval: z.number().default(60_000).describe('Ms between project builder polls'),
   docsPath: z.string().default('./docs').describe('Path to the docs folder'),
   dryRun: z.boolean().default(false).describe('Show what would start without actually starting'),
@@ -15,11 +14,10 @@ export const argsSchema = CommandOptionsSchema.extend({
   unpause: z.boolean().default(false).describe('Resume all paused subsystems'),
   kill: z.boolean().default(false).describe('Fully shutdown the running main process and exit'),
   console: z.boolean().default(false).describe('Connect to running main process with a remote eval console'),
-  concurrencyOneOff: z.number().default(4).describe('Max concurrent one-off tasks'),
-  concurrencyScheduled: z.number().default(2).describe('Max concurrent scheduled tasks'),
   voiceService: z.boolean().default(true).describe('Enable voice service (use --no-voice-service to disable)'),
   contentService: z.boolean().default(true).describe('Enable content service / cnotes serve (use --no-content-service to disable)'),
   commsService: z.boolean().default(true).describe('Enable communications service (use --no-comms-service to disable)'),
+  taskScheduler: z.boolean().default(true).describe('Enable task scheduler (use --no-task-scheduler to disable)'),
 })
 
 type MainOptions = z.infer<typeof argsSchema>
@@ -38,17 +36,11 @@ function applyConfigToOptions(options: MainOptions, config: Record<string, any>)
   }
 
   const main = config.main || {}
-  const scheduler = config.scheduler || {}
   const builder = config.builder || {}
   const services = config.services || {}
 
   // main section
   if (main.docsPath != null && !wasExplicit('docsPath')) options.docsPath = main.docsPath
-
-  // scheduler section
-  if (scheduler.taskInterval != null && !wasExplicit('taskInterval')) options.taskInterval = scheduler.taskInterval
-  if (scheduler.concurrencyOneOff != null && !wasExplicit('concurrencyOneOff')) options.concurrencyOneOff = scheduler.concurrencyOneOff
-  if (scheduler.concurrencyScheduled != null && !wasExplicit('concurrencyScheduled')) options.concurrencyScheduled = scheduler.concurrencyScheduled
 
   // builder section
   if (builder.watchInterval != null && !wasExplicit('watchInterval')) options.watchInterval = builder.watchInterval
@@ -57,6 +49,7 @@ function applyConfigToOptions(options: MainOptions, config: Record<string, any>)
   if (services.voice != null && !wasExplicit('voiceService')) options.voiceService = services.voice
   if (services.content != null && !wasExplicit('contentService')) options.contentService = services.content
   if (services.comms != null && !wasExplicit('commsService')) options.commsService = services.comms
+  if (services.taskScheduler != null && !wasExplicit('taskScheduler')) options.taskScheduler = services.taskScheduler
 
   return options
 }
@@ -238,9 +231,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
   if (options.dryRun) {
     log('main', 'Dry run mode — showing configuration')
     log('main', `WebSocket port: ${options.port}`)
-    log('main', `Task interval: ${options.taskInterval}m`)
     log('main', `Watch interval: ${options.watchInterval}ms`)
-    log('main', `Probe interval: ${options.probeInterval}s`)
     log('main', `Docs path: ${options.docsPath}`)
     return
   }
@@ -315,7 +306,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     if (paused) return
     paused = true
     log('main', 'Pausing all subsystems...')
-    scheduler.stop()
     builder.stopWatcher()
     if (voiceService) voiceService.stop().catch(() => {})
     if (contentServiceProcess) {
@@ -323,6 +313,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       contentServiceProcess = null
     }
     if (commsService) commsService.pause()
+    if (taskSchedulerService) { taskSchedulerService.stop(); taskSchedulerService = null }
     log('main', 'All subsystems paused. Process alive, WebSocket still listening.')
     recordEvent('main', 'paused')
   }
@@ -331,7 +322,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     if (!paused) return
     paused = false
     log('main', 'Resuming all subsystems...')
-    await scheduler.start()
     await builder.startWatcher()
     if (voiceService) {
       try { await voiceService.start() } catch (err: any) {
@@ -364,6 +354,18 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       }
     }
     if (commsService) commsService.unpause()
+    if (options.taskScheduler && !taskSchedulerService) {
+      try {
+        const schedulerConfig = projectConfig.scheduler || {}
+        taskSchedulerService = await startTaskScheduler(container, {
+          interval: schedulerConfig.taskInterval || 15,
+          concurrencyOneOff: schedulerConfig.concurrencyOneOff || 2,
+          concurrencyScheduled: schedulerConfig.concurrencyScheduled || 2,
+        }, { log: (source, msg) => log(source, msg), recordEvent })
+      } catch (err: any) {
+        log('scheduler', `failed to resume: ${err?.message || err}`)
+      }
+    }
     log('main', 'All subsystems resumed.')
     recordEvent('main', 'resumed')
   }
@@ -373,13 +375,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       pid: process.pid,
       uptime: process.uptime(),
       paused,
-      scheduler: {
-        running: scheduler.state.get('running'),
-        taskCount: scheduler.taskCount,
-        dueOneOff: scheduler.dueOneOffTasks.length,
-        dueScheduled: scheduler.dueScheduledTasks.length,
-        inProgress: scheduler.inProgressIds,
-      },
       builder: {
         watching: builder.state.get('watching'),
         buildsInProgress: builder.buildsInProgress,
@@ -411,6 +406,10 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         paused: commsService.isPaused,
         channels: commsService.activeChannels,
       } : { started: false, disabled: true },
+      scheduler: taskSchedulerService ? {
+        running: true,
+        taskCount: taskSchedulerService.scheduler?.tasks?.length || 0,
+      } : { running: false, disabled: !options.taskScheduler },
       instance: {
         id: instanceEntry.id,
         cwd: instanceEntry.cwd,
@@ -465,11 +464,11 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     const vm = container.feature('vm')
     const ctx = vm.createContext({
       container,
-      scheduler,
       builder,
       voiceService,
       windowManager,
       commsService,
+      taskSchedulerService,
       log,
       events,
       getStatusSnapshot,
@@ -499,10 +498,8 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
         respond(getStatusSnapshot())
         break
       case 'pause':
-        if (subsystem === 'scheduler') { scheduler.stop(); respond({ ok: true }) }
         break
       case 'resume':
-        if (subsystem === 'scheduler') { scheduler.start(); respond({ ok: true }) }
         break
       case 'pause-all':
         pauseAll()
@@ -599,100 +596,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
 
   // --- Start subsystems ---
 
-  // 1. Task Scheduler
-  const outDir = container.paths.resolve('logs/prompt-outputs')
-
-  function getTaskCommand(task: TaskEntry): string[] {
-    const ts = new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 13)
-    const outFile = `${outDir}/${task.id.replace(/\//g, '--')}-${ts}.md`
-    return ['prompt', task.agent, task.id, '--out-file', outFile, '--permission-mode', 'bypassPermissions', '--exclude-sections', 'Only When,Only If,Run Condition,Conditions', '--chrome']
-  }
-
-  const scheduler = container.feature('taskScheduler', {
-    tickInterval: options.taskInterval * 60 * 1000,
-    onExecute: async (task: TaskEntry) => {
-      const args = getTaskCommand(task)
-      const label = task.id.split('/').pop() || task.id
-      log(label, `$ luca ${args.join(' ')}`)
-      recordEvent('scheduler', 'task:executing', { taskId: task.id })
-
-      const result = await proc.spawnAndCapture('luca', args, {
-        onOutput: (data: string) => {
-          for (const line of data.split('\n')) {
-            if (line) log(label, line)
-          }
-        },
-        onError: (data: string) => {
-          for (const line of data.split('\n')) {
-            if (line) log(label, `[stderr] ${line}`)
-          }
-        },
-      })
-
-      if (result.exitCode !== 0) {
-        throw new Error(result.stderr || `luca prompt exited with code ${result.exitCode}`)
-      }
-    },
-  })
-
-  await scheduler.loadTasks()
-
-  if (process.env.DISABLE_AGENTIC_LOOP) {
-	  console.log('AGENTIC LOOP DISABLED!')
-	  await scheduler.pause()
-  }
-
-  // Log loaded tasks with their schedules
-  const loadedTasks = scheduler.tasks
-  log('scheduler', `${loadedTasks.length} tasks loaded:`)
-  for (const t of loadedTasks) {
-    const sched = t.schedule || (t.repeatable ? 'no schedule' : 'one-off')
-    const lastRan = t.lastRanAt ? `last ran ${timeSince(t.lastRanAt)}` : 'never ran'
-    const due = scheduler.isDue(t) ? ui.colors.green('DUE') : ui.colors.gray('waiting')
-    log('scheduler', `  ${due} ${t.id} [${sched}, ${lastRan}]`)
-  }
-
-  scheduler.on('tick', (info: any) => {
-    if (info.dueOneOff > 0 || info.dueScheduled > 0 || info.inProgress > 0) {
-      log('scheduler', `tick: ${info.dueOneOff} one-off due, ${info.dueScheduled} scheduled due, ${info.inProgress} in progress`)
-      for (const id of info.dueIds) {
-        log('scheduler', `  → will execute: ${id}`)
-      }
-    } else {
-      log('scheduler', `tick: ${info.totalTasks} tasks, none due`)
-    }
-    recordEvent('scheduler', 'tick', info)
-  })
-
-  scheduler.on('taskStarted', (taskId: string) => {
-    log('scheduler', `started: ${taskId}`)
-    recordEvent('scheduler', 'task:started', { taskId })
-  })
-  scheduler.on('taskSkipped', (taskId: string, info: any) => {
-    log('scheduler', `skipped: ${taskId} (${info?.reason || 'unknown'})`)
-    recordEvent('scheduler', 'task:skipped', { taskId, reason: info?.reason })
-  })
-  scheduler.on('conditionError', (taskId: string, err: any) => {
-    log('scheduler', `condition error: ${taskId}: ${err?.message || err}`)
-    recordEvent('scheduler', 'condition:error', { taskId, error: err?.message || String(err) })
-  })
-  scheduler.on('taskCompleted', async (taskId: string) => {
-    log('scheduler', `completed: ${taskId}`)
-    recordEvent('scheduler', 'task:completed', { taskId })
-    await container.docs.collection.load({ refresh: true })
-    await refreshContentCounts()
-  })
-  scheduler.on('taskFailed', async (taskId: string, err: any) => {
-    log('scheduler', `FAILED: ${taskId}: ${err?.message || err}`)
-    recordEvent('scheduler', 'task:failed', { taskId, error: err?.message || String(err) })
-    await container.docs.collection.load({ refresh: true })
-    await refreshContentCounts()
-  })
-
-  await scheduler.start()
-  log('scheduler', `running (interval: ${options.taskInterval}m, next tick in ${options.taskInterval}m)`)
-
-  // 2. Project Builder (watcher mode)
+  // 1. Project Builder (watcher mode)
   const builder = container.feature('projectBuilder', {
     docsPath: options.docsPath,
     watchInterval: options.watchInterval,
@@ -857,6 +761,24 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('comms', 'disabled via --no-comms-service')
   }
 
+  // 8. Task Scheduler
+  let taskSchedulerService: any = null
+
+  if (options.taskScheduler) {
+    try {
+      const schedulerConfig = projectConfig.scheduler || {}
+      taskSchedulerService = await startTaskScheduler(container, {
+        interval: schedulerConfig.taskInterval || 15,
+        concurrencyOneOff: schedulerConfig.concurrencyOneOff || 2,
+        concurrencyScheduled: schedulerConfig.concurrencyScheduled || 2,
+      }, { log: (source, msg) => log(source, msg), recordEvent })
+    } catch (err: any) {
+      log('scheduler', `failed to start: ${err?.message || err}`)
+    }
+  } else {
+    log('scheduler', 'disabled via --no-task-scheduler')
+  }
+
   // --- Status summary ---
   log('main', '')
   log('main', `luca main running (pid ${process.pid})`)
@@ -869,13 +791,13 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     const status = getStatusSnapshot()
     log('main', '── Status ──')
     log('main', `Uptime: ${Math.round(status.uptime)}s`)
-    log('main', `Scheduler: ${status.scheduler.taskCount} tasks, ${status.scheduler.inProgress.length} in progress`)
     log('main', `Builder: ${status.builder.buildsInProgress.length} building`)
     log('main', `Voice: ${status.voice.running ? 'running' : 'stopped'}, ${status.voice.assistantCount || 0} assistants`)
     log('main', `WindowManager: ${status.windowManager.listening ? `listening` : 'off'}, client ${status.windowManager.clientConnected ? 'connected' : 'disconnected'}, ${status.windowManager.windowCount || 0} windows`)
     log('main', `WorkflowService: ${status.workflowService.listening ? `listening on :${status.workflowService.port}` : 'off'}, ${status.workflowService.workflowCount || 0} workflows`)
     log('main', `ContentService: ${status.contentService.running ? `running on :${status.contentService.port} (pid ${status.contentService.pid})` : status.contentService.disabled ? 'disabled' : 'stopped'}`)
     log('main', `Comms: ${status.comms.started ? `running [${status.comms.channels?.join(', ') || 'no channels'}]` : status.comms.disabled ? 'disabled' : 'stopped'}${status.comms.paused ? ' (paused)' : ''}`)
+    log('main', `Scheduler: ${status.scheduler.running ? `running, ${status.scheduler.taskCount} tasks` : status.scheduler.disabled ? 'disabled' : 'stopped'}`)
     log('main', '')
   })
 
@@ -884,7 +806,6 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
     log('main', `Shutting down (${signal})...`)
 
     clearInterval(gitRefreshTimer)
-    scheduler.stop()
     builder.stopWatcher()
 
     voiceService?.stop().catch(() => {})
@@ -895,6 +816,7 @@ async function runAuthority(container: any, options: MainOptions, ui: any, proc:
       contentServiceProcess = null
     }
     if (commsService?.isStarted) commsService.pause()
+    if (taskSchedulerService) taskSchedulerService.stop()
 
     wss.stop().catch(() => {})
 
@@ -1103,9 +1025,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
       : chalk.red('●') + ' wm'
 
     const indicators = [
-      status.scheduler.running
-        ? chalk.green('●') + ' scheduler ' + chalk.gray(`${status.scheduler.taskCount}t`)
-        : chalk.red('●') + ' scheduler',
       status.builder.watching
         ? chalk.green('●') + ' builder'
         : chalk.red('●') + ' builder',
@@ -1120,6 +1039,11 @@ async function runClient(container: any, options: MainOptions, ui: any) {
         : status.comms?.disabled
           ? chalk.gray('●') + ' comms ' + chalk.gray('disabled')
           : chalk.red('●') + ' comms',
+      status.scheduler?.running
+        ? chalk.green('●') + ' scheduler ' + chalk.gray(`${status.scheduler.taskCount}t`)
+        : status.scheduler?.disabled
+          ? chalk.gray('●') + ' scheduler ' + chalk.gray('disabled')
+          : chalk.red('●') + ' scheduler',
     ]
     output.push(' ' + indicators.join(chalk.gray('  │  ')))
 
@@ -1173,13 +1097,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
       }
     }
 
-    // Scheduler quick stats
-    const sched = status.scheduler
-    if (sched.inProgress.length) {
-      statsLines.push('')
-      statsLines.push(chalk.yellow(`${sched.inProgress.length} task(s) running`) + chalk.gray(`, ${sched.dueOneOff} one-off due, ${sched.dueScheduled} scheduled due`))
-    }
-
     const statsBoxH = Math.max(4, statsLines.length + 2)
     leftLines.push(boxTop(leftW, 'Stats'))
     for (let i = 0; i < statsBoxH - 2; i++) {
@@ -1189,9 +1106,6 @@ async function runClient(container: any, options: MainOptions, ui: any) {
 
     // Box 2: Tasks In Progress
     const taskLines: string[] = []
-    for (const taskId of (sched.inProgress || [])) {
-      taskLines.push(chalk.yellow('▸ ') + taskId)
-    }
     for (const slug of (status.builder.buildsInProgress || [])) {
       taskLines.push(chalk.blue('▸ ') + 'build: ' + slug)
     }
@@ -1393,7 +1307,7 @@ async function runConsole(container: any, options: MainOptions, ui: any) {
 
   console.log()
   console.log(ui.colors.dim('  Remote console — evaluating in the running luca main process.'))
-  console.log(ui.colors.dim('  Live objects: scheduler, builder, voiceService, windowManager, container'))
+  console.log(ui.colors.dim('  Live objects: builder, voiceService, windowManager, container'))
   console.log(ui.colors.dim('  Last result available as _'))
   console.log(ui.colors.dim('  Type .exit to quit.'))
   console.log()
@@ -1474,7 +1388,7 @@ async function sendCommand(container: any, port: number, action: string, subsyst
 }
 
 export default {
-  description: 'Unified orchestrator for all luca services. Runs scheduler, project builder, voice, and domain services. Second invocation connects as live dashboard.',
+  description: 'Unified orchestrator for luca services. Runs project builder, task scheduler, voice, and domain services.',
   argsSchema,
   handler: main,
 }
