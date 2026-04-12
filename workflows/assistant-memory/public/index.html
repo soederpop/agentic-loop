@@ -19,6 +19,10 @@
   .btn.loading { opacity:0.4; pointer-events:none; }
   .toast { position:fixed; bottom:16px; right:16px; background:var(--surface-2); color:var(--text); border:1px solid var(--accent); border-radius:6px; padding:8px 14px; font-size:11px; z-index:999; opacity:0; transition:opacity 0.2s; pointer-events:none; }
   .toast.visible { opacity:1; }
+  .confirm-bar { position:fixed; top:0; left:0; right:0; background:var(--surface-2); border-bottom:2px solid var(--error); padding:10px 16px; display:none; align-items:center; gap:12px; z-index:1000; font-size:12px; }
+  .confirm-bar.visible { display:flex; }
+  .confirm-bar .msg { flex:1; color:var(--text); }
+  .confirm-bar .btn { min-width:70px; text-align:center; }
   .main { display:grid; grid-template-columns:260px 340px 1fr; min-height:0; }
   .pane { min-width:0; min-height:0; border-right:1px solid var(--border); display:flex; flex-direction:column; }
   .pane:last-child { border-right:none; }
@@ -66,6 +70,7 @@
   </div>
 </div>
 <div class="toast" id="toast"></div>
+<div class="confirm-bar" id="confirmBar"><span class="msg" id="confirmMsg"></span><button class="btn danger" id="confirmYes">confirm</button><button class="btn" id="confirmNo">cancel</button></div>
 <script>
 const API = '/api/workflows/assistant-memory';
 const state = { assistants: [], activeAssistant: null, summary: null, activeCategory: null, memories: [], activeMemory: null, searchResults: null };
@@ -76,6 +81,15 @@ async function withLoading(btn, fn) {
   if (!btn || btn.classList.contains('loading')) return;
   const orig = btn.textContent; btn.classList.add('loading'); btn.textContent = orig + '…';
   try { await fn(); } finally { btn.classList.remove('loading'); btn.textContent = orig; }
+}
+function inlineConfirm(msg) {
+  return new Promise(resolve => {
+    const bar = $('#confirmBar'), msgEl = $('#confirmMsg');
+    msgEl.textContent = msg; bar.classList.add('visible');
+    const cleanup = () => { bar.classList.remove('visible'); $('#confirmYes').onclick = null; $('#confirmNo').onclick = null; };
+    $('#confirmYes').onclick = () => { cleanup(); resolve(true); };
+    $('#confirmNo').onclick = () => { cleanup(); resolve(false); };
+  });
 }
 async function api(path, opts={}) {
   const res = await fetch(API + path, { headers:{'Content-Type':'application/json'}, ...opts, body: opts.body ? JSON.stringify(opts.body) : undefined });
@@ -170,7 +184,7 @@ function renderDetail() {
 
   $('#incEpochBtn').onclick = async function() { await withLoading(this, async () => { await api(`/assistants/${state.activeAssistant}/epoch`, { method:'POST', body:{ increment:true } }); await selectAssistant(state.activeAssistant); toast('Epoch incremented'); }); };
   $('#exportBtn').onclick = async function() { await withLoading(this, async () => { const data = await api(`/assistants/${state.activeAssistant}/export`); navigator.clipboard.writeText(JSON.stringify(data.export, null, 2)); toast('Export copied to clipboard'); }); };
-  $('#wipeAllBtn').onclick = async function() { if (!confirm('Wipe all memories for this assistant?')) return; await withLoading(this, async () => { await api(`/assistants/${state.activeAssistant}`, { method:'DELETE' }); await selectAssistant(state.activeAssistant); toast('All memories wiped'); }); };
+  $('#wipeAllBtn').onclick = async function() { if (!await inlineConfirm('Wipe all memories for this assistant?')) return; await withLoading(this, async () => { await api(`/assistants/${state.activeAssistant}`, { method:'DELETE' }); await selectAssistant(state.activeAssistant); toast('All memories wiped'); }); };
   $('#runSearchBtn').onclick = async function() { await withLoading(this, runSearch); };
   $('#createMemoryBtn').onclick = async function() { await withLoading(this, () => createMemory(false)); };
   $('#createUniqueBtn').onclick = async function() { await withLoading(this, () => createMemory(true)); };
@@ -196,7 +210,7 @@ async function runSearch() {
   const category = $('#searchCategory').value.trim();
   const query = $('#searchQuery').value.trim();
   const n = $('#searchN').value.trim();
-  if (!category || !query) return alert('category + query required');
+  if (!category || !query) { toast('category + query required'); return; }
   const data = await api(`/assistants/${state.activeAssistant}/search?category=${encodeURIComponent(category)}&query=${encodeURIComponent(query)}&nResults=${encodeURIComponent(n || '10')}`);
   state.searchResults = (data.results || []).map(r => ({ ...r, record: { ...r, document: r.document || r.text || r.record?.document || '' } }));
   state.activeMemory = null;
@@ -207,7 +221,7 @@ async function createMemory(unique) {
   const text = $('#newText').value.trim();
   const rawMeta = $('#newMetadata').value.trim();
   const threshold = $('#newUniqueThreshold').value.trim();
-  if (!category || !text) return alert('category + text required');
+  if (!category || !text) { toast('category + text required'); return; }
   const metadata = rawMeta ? JSON.parse(rawMeta) : {};
   const data = await api(`/assistants/${state.activeAssistant}/memories`, { method:'POST', body:{ category, text, metadata, unique, similarityThreshold: threshold ? Number(threshold) : undefined } });
   if (data.record === null) { toast('Duplicate memory skipped by similarity threshold'); return; }
@@ -218,15 +232,15 @@ async function createMemory(unique) {
 async function createEvent() {
   const text = $('#newText').value.trim();
   const rawMeta = $('#newMetadata').value.trim();
-  if (!text) return alert('text required');
+  if (!text) { toast('text required'); return; }
   await api(`/assistants/${state.activeAssistant}/events`, { method:'POST', body:{ text, metadata: rawMeta ? JSON.parse(rawMeta) : {} } });
   await selectAssistant(state.activeAssistant);
   toast('Event created');
 }
 async function wipeCategory() {
   const category = $('#wipeCategoryInput').value.trim();
-  if (!category) return alert('category required');
-  if (!confirm(`Wipe category "${category}"?`)) return;
+  if (!category) { toast('category required'); return; }
+  if (!await inlineConfirm(`Wipe category "${category}"?`)) return;
   const result = await api(`/assistants/${state.activeAssistant}/category/${encodeURIComponent(category)}`, { method:'DELETE' });
   state.activeCategory = null; state.memories = [];
   await selectAssistant(state.activeAssistant);
@@ -234,7 +248,7 @@ async function wipeCategory() {
 }
 async function importJson(replace) {
   const raw = $('#importJson').value.trim();
-  if (!raw) return alert('paste JSON first');
+  if (!raw) { toast('paste JSON first'); return; }
   await api(`/assistants/${state.activeAssistant}/import`, { method:'POST', body:{ data: JSON.parse(raw), replace } });
   await selectAssistant(state.activeAssistant);
 }
@@ -249,7 +263,7 @@ window.saveMemory = async function() {
 };
 window.deleteMemory = async function() {
   if (!state.activeMemory) return;
-  if (!confirm(`Delete memory #${state.activeMemory.id}?`)) return;
+  if (!await inlineConfirm(`Delete memory #${state.activeMemory.id}?`)) return;
   const cat = state.activeMemory.category;
   const memId = state.activeMemory.id;
   await api(`/assistants/${state.activeAssistant}/category/${encodeURIComponent(cat)}/${memId}`, { method:'DELETE' });
