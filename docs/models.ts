@@ -224,4 +224,37 @@ export const Memory = defineModel("Memory", {
 	description: "Memories are used to control the chief of staff assistant's personality, knowledge of me, and its immediate todos"
 })
 
-
+export const MessageThread = defineModel("MessageThread", {
+	prefix: "messages",
+	description: "Durable assistant inbox threads stored as markdown. One document per thread, with human-readable state and a timeline of inbound/outbound activity.",
+	meta: z.object({
+		channel: z.enum(["imsg", "telegram", "gmail"]).describe("Channel the thread belongs to"),
+		assistant: z.string().describe("Assistant responsible for the thread").default("chief"),
+		status: z.enum(["active", "needs-reply", "waiting", "closed", "archived"]).default("active"),
+		threadKey: z.string().describe("Stable internal key used to resolve and reuse the thread"),
+		participant: z.string().describe("Primary participant for the thread"),
+		tags: z.array(z.string()).default([]).describe("Tags for categorizing the thread"),
+	}),
+	sections: {
+		summary: section("Summary", {
+			extract: (q: any) => q.selectAll("*").map((n: any) => toString(n)).join("\n"),
+			schema: z.string().optional().describe("Short human-readable summary of the thread."),
+		}),
+		participants: section("Participants", {
+			extract: (q: any) => q.selectAll("listItem").map((n: any) => toString(n)),
+			schema: z.array(z.string()).optional().describe("Participants in the thread."),
+		}),
+		assessment: section("Assessment", {
+			extract: (q: any) => q.selectAll("listItem").map((n: any) => toString(n)),
+			schema: z.array(z.string()).optional().describe("Lightweight current-state assessment for the thread."),
+		}),
+		timeline: section("Timeline", {
+			extract: (q: any) => q.selectAll("*").map((n: any) => toString(n)).join("\n"),
+			schema: z.string().optional().describe("Human-readable history of inbound/outbound events for the thread."),
+		}),
+		notes: section("Notes", {
+			extract: (q: any) => q.selectAll("*").map((n: any) => toString(n)).join("\n"),
+			schema: z.string().optional().describe("Additional notes or follow-up reasoning."),
+		}),
+	},
+})
