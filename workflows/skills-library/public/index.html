@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skills Library</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #151520;
+    --surface: #1c1c28;
+    --surface-2: #23232f;
+    --surface-3: #2a2a38;
+    --border: #2e2e42;
+    --text: #e0e0e8;
+    --text-dim: #8a8aa2;
+    --text-faint: #56566e;
+    --accent: #00fff7;
+    --accent-dim: #00fff720;
+    --accent-soft: #00fff740;
+    --assistant: #c084fc;
+    --success: #39ff14;
+    --error: #ff003c;
+    --warning: #f59e0b;
+    --input-bg: #191924;
+    --code-bg: #12121a;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  body { display: flex; flex-direction: column; }
+
+  /* ── Layout ────────────────────────────── */
+  .app-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-shrink: 0;
+  }
+
+  .app-header h1 {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: 1px;
+    white-space: nowrap;
+  }
+
+  .app-header .subtitle { font-size: 12px; color: var(--text-dim); }
+
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Sidebar ───────────────────────────── */
+  .sidebar {
+    width: 300px;
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background: var(--surface);
+  }
+
+  .search-bar {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .search-bar input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .search-bar input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .search-bar input::placeholder { color: var(--text-faint); }
+
+  .skill-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 0;
+  }
+
+  .skill-list::-webkit-scrollbar { width: 4px; }
+  .skill-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .skill-item {
+    padding: 10px 16px;
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.1s;
+  }
+
+  .skill-item:hover { background: var(--surface-2); }
+
+  .skill-item.active {
+    background: var(--surface-2);
+    border-left-color: var(--accent);
+  }
+
+  .skill-item .skill-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .skill-item .skill-desc {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .sidebar-section {
+    padding: 8px 16px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-top: 1px solid var(--border);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .location-item {
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .location-item .loc-path {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .location-item .loc-default {
+    font-size: 9px;
+    color: var(--text-faint);
+    background: var(--surface-2);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+
+  .location-item .loc-remove {
+    background: none;
+    border: none;
+    color: var(--text-faint);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 0;
+    line-height: 1;
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+
+  .location-item:hover .loc-remove { opacity: 1; }
+  .location-item .loc-remove:hover { color: var(--error); }
+
+  /* ── Content area ──────────────────────── */
+  .content-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+  }
+
+  .content::-webkit-scrollbar { width: 4px; }
+  .content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── File tree panel ───────────────────── */
+  .file-panel {
+    width: 260px;
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .file-panel-header {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .file-tree {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+    font-size: 12px;
+  }
+
+  .file-tree::-webkit-scrollbar { width: 4px; }
+  .file-tree::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .tree-node {
+    user-select: none;
+  }
+
+  .tree-row {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px 3px 0;
+    cursor: pointer;
+    transition: background 0.1s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tree-row:hover { background: var(--surface-2); }
+  .tree-row.active { background: var(--surface-2); color: var(--accent); }
+
+  .tree-icon {
+    width: 16px;
+    text-align: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    opacity: 0.7;
+  }
+
+  .tree-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .tree-children {
+    display: none;
+  }
+
+  .tree-children.open { display: block; }
+
+  .tree-dir-icon { color: var(--warning); }
+  .tree-file-icon { color: var(--text-dim); }
+  .tree-md-icon { color: var(--accent); }
+  .tree-html-icon { color: var(--assistant); }
+  .tree-json-icon { color: var(--success); }
+  .tree-skill-icon { color: var(--accent); font-weight: bold; }
+
+  /* ── Empty state ───────────────────────── */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    text-align: center;
+    gap: 12px;
+  }
+
+  .empty-state .icon { font-size: 48px; opacity: 0.3; }
+  .empty-state h2 { font-size: 16px; color: var(--text-dim); }
+  .empty-state p { font-size: 12px; color: var(--text-faint); max-width: 300px; }
+
+  /* ── Skill Detail ─────────────────────── */
+  .skill-header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .skill-header h2 {
+    font-size: 20px;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+
+  .skill-header .skill-path {
+    font-size: 11px;
+    color: var(--text-faint);
+    word-break: break-all;
+  }
+
+  .skill-meta {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .meta-badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+
+  .meta-badge.valid { border-color: var(--success); color: var(--success); }
+  .meta-badge.invalid { border-color: var(--error); color: var(--error); }
+  .meta-badge.warn { border-color: var(--warning); color: var(--warning); }
+
+  /* ── Validation panel ──────────────────── */
+  .validation {
+    margin-bottom: 20px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .validation.pass {
+    background: #39ff1410;
+    border: 1px solid #39ff1430;
+    color: var(--success);
+  }
+
+  .validation.fail {
+    background: #ff003c10;
+    border: 1px solid #ff003c30;
+    color: var(--error);
+  }
+
+  .validation h4 {
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .validation ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .validation li {
+    padding: 2px 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .validation li .check { color: var(--success); }
+  .validation li .cross { color: var(--error); }
+  .validation li .warn-icon { color: var(--warning); }
+
+  /* ── Tabs ──────────────────────────────── */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+
+  .tab {
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: inherit;
+  }
+
+  .tab:hover { color: var(--text); }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Markdown rendering ────────────────── */
+  .md-content {
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .md-content h1 { font-size: 20px; color: var(--accent); margin: 24px 0 12px; }
+  .md-content h2 { font-size: 16px; color: var(--text); margin: 20px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+  .md-content h3 { font-size: 14px; color: var(--text); margin: 16px 0 8px; }
+  .md-content h4 { font-size: 13px; color: var(--text-dim); margin: 12px 0 6px; }
+  .md-content p { margin: 8px 0; color: var(--text-dim); }
+  .md-content ul, .md-content ol { margin: 8px 0; padding-left: 24px; color: var(--text-dim); }
+  .md-content li { margin: 4px 0; }
+  .md-content strong { color: var(--text); }
+  .md-content em { color: var(--assistant); }
+
+  .md-content code {
+    background: var(--code-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+    color: var(--accent);
+  }
+
+  .md-content pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 16px;
+    overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  .md-content pre code {
+    background: none;
+    padding: 0;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .md-content blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    margin: 12px 0;
+    color: var(--text-dim);
+  }
+
+  .md-content hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+
+  .md-content a { color: var(--accent); text-decoration: none; }
+  .md-content a:hover { text-decoration: underline; }
+
+  .md-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 12px 0;
+    font-size: 12px;
+  }
+
+  .md-content th, .md-content td {
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    text-align: left;
+  }
+
+  .md-content th { background: var(--surface-2); color: var(--text); font-weight: 600; }
+  .md-content td { color: var(--text-dim); }
+
+  /* ── Frontmatter table ─────────────────── */
+  .frontmatter-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  .frontmatter-table th {
+    text-align: left;
+    color: var(--text-dim);
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 600;
+    width: 180px;
+  }
+
+  .frontmatter-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    word-break: break-word;
+  }
+
+  .frontmatter-table td code {
+    background: var(--code-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  /* ── Buttons ───────────────────────────── */
+  .btn {
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    transition: all 0.15s;
+    background: var(--surface-2);
+    color: var(--text-dim);
+  }
+
+  .btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  .btn-primary:hover { opacity: 0.85; }
+
+  .btn-sm { padding: 4px 10px; font-size: 11px; }
+
+  .btn-icon {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+  }
+
+  .btn-icon:hover { color: var(--accent); }
+
+  /* ── Modal ─────────────────────────────── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    animation: fadeIn 0.15s;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 520px;
+    animation: slideUp 0.2s ease-out;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-header h3 { font-size: 14px; color: var(--accent); }
+
+  .modal-body { padding: 20px; }
+
+  .modal-actions {
+    padding: 12px 20px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .field { margin-bottom: 14px; }
+
+  .field label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 5px;
+    font-weight: 600;
+  }
+
+  .field input, .field textarea, .field select {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus, .field textarea:focus, .field select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+
+  .field input::placeholder, .field textarea::placeholder { color: var(--text-faint); }
+  .field textarea { resize: vertical; min-height: 80px; }
+  .field-hint { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+
+  /* ── Online repos ─────────────────────── */
+  .repo-card {
+    padding: 14px;
+    margin: 8px 0;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    transition: border-color 0.15s;
+  }
+
+  .repo-card:hover { border-color: var(--accent-soft); }
+  .repo-card h4 { font-size: 13px; color: var(--text); margin-bottom: 4px; }
+  .repo-card p { font-size: 11px; color: var(--text-dim); margin-bottom: 8px; }
+  .repo-card a { font-size: 11px; color: var(--accent); text-decoration: none; }
+  .repo-card a:hover { text-decoration: underline; }
+
+  .count-badge {
+    font-size: 10px;
+    background: var(--accent-dim);
+    color: var(--accent);
+    padding: 1px 6px;
+    border-radius: 8px;
+    margin-left: 6px;
+  }
+
+  /* ── File viewer breadcrumb ────────────── */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-bottom: 12px;
+  }
+
+  .breadcrumb span { cursor: pointer; }
+  .breadcrumb span:hover { color: var(--accent); }
+  .breadcrumb .sep { color: var(--text-faint); cursor: default; }
+  .breadcrumb .current { color: var(--text-dim); cursor: default; }
+</style>
+</head>
+<body>
+
+<header class="app-header">
+  <h1>SKILLS LIBRARY</h1>
+  <span class="subtitle" id="skill-count">Loading...</span>
+  <div class="header-actions">
+    <button class="btn btn-sm" id="rescan-btn" title="Rescan all locations">Rescan</button>
+    <button class="btn btn-sm btn-primary" id="create-btn">+ New Skill</button>
+  </div>
+</header>
+
+<div class="main">
+  <aside class="sidebar">
+    <div class="search-bar">
+      <input type="text" id="search" placeholder="Search skills... (Cmd+K)" autofocus />
+    </div>
+    <div class="skill-list" id="skill-list"></div>
+    <div class="sidebar-section">
+      Locations
+      <button class="btn-icon" id="add-location-btn" title="Add location">+</button>
+    </div>
+    <div id="locations-list"></div>
+  </aside>
+
+  <div class="content-area">
+    <main class="content" id="content">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">&#128218;</div>
+        <h2>Skills Library</h2>
+        <p>Select a skill from the sidebar to browse its documentation, resources, and file tree.</p>
+      </div>
+    </main>
+    <aside class="file-panel" id="file-panel" style="display:none">
+      <div class="file-panel-header">Skill Files</div>
+      <div class="file-tree" id="file-tree"></div>
+    </aside>
+  </div>
+</div>
+
+<!-- Create Skill Modal -->
+<div class="modal-overlay" id="create-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Create New Skill</h3>
+      <button class="btn-icon" id="create-modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Skill Name</label>
+        <input type="text" id="new-skill-name" placeholder="my-skill" />
+        <div class="field-hint">Lowercase, hyphens OK. Becomes the folder name.</div>
+      </div>
+      <div class="field">
+        <label>Description</label>
+        <textarea id="new-skill-desc" placeholder="Describe when Claude should use this skill. Include trigger phrases and topic areas."></textarea>
+      </div>
+      <div class="field">
+        <label>Location</label>
+        <select id="new-skill-location"></select>
+        <div class="field-hint">Which directory to create this skill in</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="create-cancel">Cancel</button>
+      <button class="btn btn-primary" id="create-submit">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Location Modal -->
+<div class="modal-overlay" id="location-modal" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Add Skill Location</h3>
+      <button class="btn-icon" id="location-modal-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Directory Path</label>
+        <input type="text" id="new-location-path" placeholder="~/my-skills or /absolute/path" />
+        <div class="field-hint">Path to a directory containing skill folders (each with a SKILL.md)</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="location-cancel">Cancel</button>
+      <button class="btn btn-primary" id="location-submit">Add</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  const { default: container } = await import('https://esm.sh/@soederpop/luca@0.0.28/src/browser.ts')
+  const Feature = Object.getPrototypeOf(container.feature('vm').constructor)
+
+  const API = window.location.origin
+
+  // ── Helpers ──
+  function esc(str) {
+    const d = document.createElement('div')
+    d.textContent = String(str)
+    return d.innerHTML
+  }
+
+  function shortenPath(p) {
+    const home = '/Users/jonathansoeder'
+    return p.startsWith(home) ? '~' + p.slice(home.length) : p
+  }
+
+  function stripFrontmatter(content) {
+    if (content.startsWith('---')) {
+      const end = content.indexOf('---', 3)
+      if (end !== -1) return content.slice(end + 3).trim()
+    }
+    return content
+  }
+
+  function parseFrontmatter(content) {
+    if (!content.startsWith('---')) return null
+    const end = content.indexOf('---', 3)
+    if (end === -1) return null
+    const raw = content.slice(3, end).trim()
+    // Simple YAML-like parser for key: value lines
+    const meta = {}
+    let currentKey = null
+    for (const line of raw.split('\n')) {
+      const m = line.match(/^(\w[\w-]*):\s*(.*)$/)
+      if (m) {
+        currentKey = m[1]
+        let val = m[2].trim()
+        if (val === 'true') val = true
+        else if (val === 'false') val = false
+        else if (val === '' || val === '>') { val = '' }
+        else if (val.startsWith('"') && val.endsWith('"')) val = val.slice(1, -1)
+        meta[currentKey] = val
+      } else if (currentKey && line.startsWith('  ')) {
+        // Multi-line continuation
+        const prev = meta[currentKey]
+        meta[currentKey] = (prev ? prev + ' ' : '') + line.trim()
+      }
+    }
+    return meta
+  }
+
+  function fileIcon(name, type) {
+    if (type === 'directory') return { icon: '\u{1F4C1}', cls: 'tree-dir-icon' }
+    if (name === 'SKILL.md') return { icon: '\u{2B50}', cls: 'tree-skill-icon' }
+    if (name.endsWith('.md')) return { icon: '\u{1F4C4}', cls: 'tree-md-icon' }
+    if (name.endsWith('.html')) return { icon: '\u{1F310}', cls: 'tree-html-icon' }
+    if (name.endsWith('.json')) return { icon: '\u{2699}', cls: 'tree-json-icon' }
+    if (name.endsWith('.ts') || name.endsWith('.js')) return { icon: '\u{1F4DC}', cls: 'tree-md-icon' }
+    if (name.endsWith('.png') || name.endsWith('.jpg') || name.endsWith('.svg')) return { icon: '\u{1F5BC}', cls: 'tree-file-icon' }
+    return { icon: '\u{1F4CE}', cls: 'tree-file-icon' }
+  }
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes}B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}K`
+    return `${(bytes / (1024 * 1024)).toFixed(1)}M`
+  }
+
+  function countFiles(nodes) {
+    let count = 0
+    for (const n of nodes) {
+      if (n.type === 'file') count++
+      if (n.children) count += countFiles(n.children)
+    }
+    return count
+  }
+
+  // ── Markdown renderer ──
+  function renderMarkdown(src) {
+    let html = src
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) =>
+      `<pre><code class="lang-${lang || 'text'}">${esc(code.trim())}</code></pre>`)
+    html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>')
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+    html = html.replace(/^---$/gm, '<hr>')
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
+    html = html.replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, body) => {
+      const ths = header.split('|').filter(c => c.trim()).map(c => `<th>${c.trim()}</th>`).join('')
+      const rows = body.trim().split('\n').map(row => {
+        const tds = row.split('|').filter(c => c.trim()).map(c => `<td>${c.trim()}</td>`).join('')
+        return `<tr>${tds}</tr>`
+      }).join('')
+      return `<table><thead><tr>${ths}</tr></thead><tbody>${rows}</tbody></table>`
+    })
+    html = html.replace(/^- (.+)$/gm, '<li>$1</li>')
+    html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+    html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    html = html.replace(/^(?!<[a-z])((?!^\s*$).+)$/gm, '<p>$1</p>')
+    html = html.replace(/<p>\s*<\/p>/g, '')
+    return html
+  }
+
+  // ── Skill validation against Claude skill spec ──
+  function validateSkill(content, fileTree) {
+    const checks = []
+    const fm = parseFrontmatter(content)
+
+    // Required: frontmatter exists
+    checks.push({
+      pass: !!fm,
+      label: 'Has YAML frontmatter',
+      severity: 'error',
+    })
+
+    if (fm) {
+      // Required: name field
+      checks.push({
+        pass: !!fm.name,
+        label: 'Has "name" field',
+        severity: 'error',
+      })
+
+      // Required: description field
+      checks.push({
+        pass: !!fm.description && String(fm.description).length > 10,
+        label: 'Has "description" field (>10 chars)',
+        severity: 'error',
+      })
+
+      // Good practice: description includes trigger phrases
+      const desc = String(fm.description || '').toLowerCase()
+      const hasTriggerHints = desc.includes('when') || desc.includes('use this') || desc.includes('use when')
+      checks.push({
+        pass: hasTriggerHints,
+        label: 'Description includes invocation hints (when/use when)',
+        severity: 'warn',
+      })
+
+      // Check invocation control fields are valid if present
+      if (fm['disable-model-invocation'] !== undefined) {
+        checks.push({
+          pass: fm['disable-model-invocation'] === true || fm['disable-model-invocation'] === false,
+          label: '"disable-model-invocation" is boolean',
+          severity: 'warn',
+        })
+      }
+
+      if (fm['user-invocable'] !== undefined) {
+        checks.push({
+          pass: fm['user-invocable'] === true || fm['user-invocable'] === false,
+          label: '"user-invocable" is boolean',
+          severity: 'warn',
+        })
+      }
+    }
+
+    // Required: SKILL.md is present (it always is if we got here, but check tree)
+    const hasSkillMd = fileTree.some(n => n.name === 'SKILL.md')
+    checks.push({
+      pass: hasSkillMd,
+      label: 'SKILL.md file present',
+      severity: 'error',
+    })
+
+    // Content after frontmatter should have substance
+    const body = stripFrontmatter(content)
+    checks.push({
+      pass: body.length > 50,
+      label: 'Has documentation content (>50 chars after frontmatter)',
+      severity: 'warn',
+    })
+
+    // Nice to have: references directory
+    const hasRefs = fileTree.some(n => n.type === 'directory' && n.name === 'references')
+    checks.push({
+      pass: hasRefs,
+      label: 'Has references/ directory',
+      severity: 'info',
+    })
+
+    const isValid = checks.filter(c => c.severity === 'error').every(c => c.pass)
+    return { checks, isValid, frontmatter: fm }
+  }
+
+  // ═══════════════════════════════════════════
+  // Feature: SkillsApi
+  // ═══════════════════════════════════════════
+  class SkillsApi extends Feature {
+    static shortcut = 'features.skillsApi'
+    static { Feature.register(this, 'skillsApi') }
+
+    async fetchSkills() {
+      const res = await fetch(`${API}/api/workflows/skills-library/skills`)
+      return (await res.json()).skills || []
+    }
+
+    async searchSkills(q) {
+      const res = await fetch(`${API}/api/workflows/skills-library/search?q=${encodeURIComponent(q)}`)
+      return (await res.json()).skills || []
+    }
+
+    async fetchSkillDetail(name) {
+      const res = await fetch(`${API}/api/workflows/skills-library/skills/${encodeURIComponent(name)}`)
+      if (!res.ok) throw new Error('Skill not found')
+      return await res.json()
+    }
+
+    async fetchFile(skillName, relPath) {
+      const res = await fetch(`${API}/api/workflows/skills-library/skills/${encodeURIComponent(skillName)}/file/${relPath}`)
+      if (!res.ok) throw new Error('File not found')
+      return await res.json()
+    }
+
+    async fetchLocations() {
+      const res = await fetch(`${API}/api/workflows/skills-library/locations`)
+      return await res.json()
+    }
+
+    async addLocation(path) {
+      const res = await fetch(`${API}/api/workflows/skills-library/locations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      return await res.json()
+    }
+
+    async removeLocation(path) {
+      const res = await fetch(`${API}/api/workflows/skills-library/locations`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path }),
+      })
+      return await res.json()
+    }
+
+    async createSkill({ name, description, location }) {
+      const res = await fetch(`${API}/api/workflows/skills-library/skills`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, description, location }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to create skill')
+      return data
+    }
+
+    async rescan() {
+      const res = await fetch(`${API}/api/workflows/skills-library/rescan`, { method: 'POST' })
+      return await res.json()
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // Feature: SkillsStore
+  // ═══════════════════════════════════════════
+  class SkillsStore extends Feature {
+    static shortcut = 'features.skillsStore'
+    static { Feature.register(this, 'skillsStore') }
+
+    _skills = []
+    _filtered = []
+    _locations = { locations: [], defaults: [] }
+    _activeSkill = null
+    _activeDetail = null
+    _activeFile = null
+    _query = ''
+
+    get skills() { return this._skills }
+    get filtered() { return this._filtered }
+    get locations() { return this._locations }
+    get activeSkill() { return this._activeSkill }
+    get activeDetail() { return this._activeDetail }
+    get activeFile() { return this._activeFile }
+    get query() { return this._query }
+    get api() { return this.container.feature('skillsApi') }
+
+    async loadSkills() {
+      this._skills = await this.api.fetchSkills()
+      this._applyFilter()
+      this.emit('skills:loaded', this._skills)
+    }
+
+    async loadLocations() {
+      this._locations = await this.api.fetchLocations()
+      this.emit('locations:loaded', this._locations)
+    }
+
+    setQuery(q) {
+      this._query = q
+      this._applyFilter()
+      this.emit('skills:filtered', this._filtered)
+    }
+
+    _applyFilter() {
+      if (!this._query) {
+        this._filtered = [...this._skills]
+      } else {
+        const q = this._query.toLowerCase()
+        this._filtered = this._skills.filter(s => {
+          const haystack = `${s.name} ${s.description || ''}`.toLowerCase()
+          return haystack.includes(q)
+        })
+      }
+      this._filtered.sort((a, b) => a.locationPath.localeCompare(b.locationPath) || a.name.localeCompare(b.name))
+    }
+
+    async selectSkill(name) {
+      if (this._activeSkill?.name === name) return
+      this._activeFile = null
+      try {
+        this._activeDetail = await this.api.fetchSkillDetail(name)
+        this._activeSkill = this._activeDetail.skill
+        this.emit('skill:selected', this._activeDetail)
+      } catch (err) {
+        this.emit('skill:error', err)
+      }
+    }
+
+    async selectFile(skillName, relPath) {
+      try {
+        this._activeFile = await this.api.fetchFile(skillName, relPath)
+        this.emit('file:selected', this._activeFile)
+      } catch (err) {
+        this.emit('file:error', err)
+      }
+    }
+
+    clearFile() {
+      this._activeFile = null
+      this.emit('file:cleared')
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // Feature: SkillsApp (orchestrator)
+  // ═══════════════════════════════════════════
+  class SkillsApp extends Feature {
+    static shortcut = 'features.skillsApp'
+    static { Feature.register(this, 'skillsApp') }
+
+    get api() { return this.container.feature('skillsApi') }
+    get store() { return this.container.feature('skillsStore') }
+
+    async start() {
+      await Promise.all([
+        this.store.loadSkills(),
+        this.store.loadLocations(),
+      ])
+      this.emit('ready')
+    }
+
+    async rescan() {
+      await this.api.rescan()
+      await this.store.loadSkills()
+      await this.store.loadLocations()
+      this.emit('rescanned')
+    }
+
+    async createSkill({ name, description, location }) {
+      const result = await this.api.createSkill({ name, description, location })
+      await this.store.loadSkills()
+      if (result.skill) await this.store.selectSkill(result.skill.name)
+      return result
+    }
+
+    async addLocation(path) {
+      await this.api.addLocation(path)
+      await this.store.loadSkills()
+      await this.store.loadLocations()
+    }
+
+    async removeLocation(path) {
+      await this.api.removeLocation(path)
+      await this.store.loadSkills()
+      await this.store.loadLocations()
+    }
+
+    get onlineRepositories() {
+      return [
+        {
+          name: 'anthropics/claude-code',
+          description: 'Official Claude Code repository — built-in skill system reference, plugin examples, and skill spec documentation.',
+          url: 'https://github.com/anthropics/claude-code',
+        },
+        {
+          name: 'anthropics/courses',
+          description: 'Anthropic developer courses and tutorials — prompt engineering, tool use, and agent patterns.',
+          url: 'https://github.com/anthropics/courses',
+        },
+        {
+          name: 'anthropics/prompt-eng-interactive-tutorial',
+          description: 'Interactive prompt engineering tutorial with hands-on examples and best practices.',
+          url: 'https://github.com/anthropics/prompt-eng-interactive-tutorial',
+        },
+      ]
+    }
+  }
+
+  // ═══════════════════════════════════════════
+  // UI Bindings
+  // ═══════════════════════════════════════════
+  const app = container.feature('skillsApp')
+  const store = container.feature('skillsStore')
+
+  const searchEl = document.getElementById('search')
+  const skillListEl = document.getElementById('skill-list')
+  const contentEl = document.getElementById('content')
+  const emptyEl = document.getElementById('empty-state')
+  const skillCountEl = document.getElementById('skill-count')
+  const locationsListEl = document.getElementById('locations-list')
+  const filePanelEl = document.getElementById('file-panel')
+  const fileTreeEl = document.getElementById('file-tree')
+
+  // ── Render skill list ──
+  function renderSkillList(skills) {
+    skillListEl.innerHTML = ''
+    let currentLocation = null
+
+    for (const s of skills) {
+      if (s.locationPath !== currentLocation) {
+        currentLocation = s.locationPath
+        const section = document.createElement('div')
+        section.className = 'sidebar-section'
+        section.style.marginTop = '0'
+        section.textContent = shortenPath(currentLocation)
+        skillListEl.appendChild(section)
+      }
+
+      const item = document.createElement('div')
+      item.className = 'skill-item' + (store.activeSkill?.name === s.name ? ' active' : '')
+      item.innerHTML = `
+        <div class="skill-name">${esc(s.name)}</div>
+        <div class="skill-desc">${esc(s.description || 'No description')}</div>
+      `
+      item.addEventListener('click', () => store.selectSkill(s.name))
+      skillListEl.appendChild(item)
+    }
+
+    const locCount = new Set(store.skills.map(s => s.locationPath)).size
+    skillCountEl.textContent = `${store.skills.length} skill${store.skills.length !== 1 ? 's' : ''} across ${locCount} location${locCount !== 1 ? 's' : ''}`
+  }
+
+  // ── Render locations ──
+  function renderLocations() {
+    const { locations, defaults } = store.locations
+    locationsListEl.innerHTML = ''
+    const allLocs = [...new Set([...defaults, ...locations])]
+
+    for (const loc of allLocs) {
+      const isDefault = defaults.includes(loc)
+      const div = document.createElement('div')
+      div.className = 'location-item'
+      div.innerHTML = `
+        <span class="loc-path" title="${esc(loc)}">${esc(shortenPath(loc))}</span>
+        ${isDefault ? '<span class="loc-default">default</span>' : `<button class="loc-remove" title="Remove">&times;</button>`}
+      `
+      if (!isDefault) {
+        div.querySelector('.loc-remove').addEventListener('click', () => app.removeLocation(loc))
+      }
+      locationsListEl.appendChild(div)
+    }
+  }
+
+  // ── Render file tree ──
+  function renderFileTree(nodes, skillName, depth = 0) {
+    const frag = document.createDocumentFragment()
+
+    for (const node of nodes) {
+      const el = document.createElement('div')
+      el.className = 'tree-node'
+
+      const { icon, cls } = fileIcon(node.name, node.type)
+      const row = document.createElement('div')
+      row.className = 'tree-row'
+      row.style.paddingLeft = `${12 + depth * 16}px`
+      row.innerHTML = `
+        <span class="tree-icon ${cls}">${node.type === 'directory' ? '\u25B6' : icon}</span>
+        <span class="tree-label">${esc(node.name)}</span>
+        ${node.size ? `<span style="margin-left:auto;font-size:10px;color:var(--text-faint)">${formatSize(node.size)}</span>` : ''}
+      `
+
+      el.appendChild(row)
+
+      if (node.type === 'directory' && node.children) {
+        const arrowEl = row.querySelector('.tree-icon')
+        const childContainer = document.createElement('div')
+        childContainer.className = 'tree-children'
+        childContainer.appendChild(renderFileTree(node.children, skillName, depth + 1))
+        el.appendChild(childContainer)
+
+        // Auto-open first level
+        if (depth === 0) {
+          childContainer.classList.add('open')
+          arrowEl.textContent = '\u25BC'
+        }
+
+        row.addEventListener('click', () => {
+          const isOpen = childContainer.classList.toggle('open')
+          arrowEl.textContent = isOpen ? '\u25BC' : '\u25B6'
+        })
+      } else if (node.type === 'file') {
+        row.addEventListener('click', () => {
+          fileTreeEl.querySelectorAll('.tree-row').forEach(r => r.classList.remove('active'))
+          row.classList.add('active')
+          store.selectFile(skillName, node.path)
+        })
+      }
+
+      frag.appendChild(el)
+    }
+
+    return frag
+  }
+
+  // ── Render skill detail ──
+  function renderSkillDetail(detail) {
+    emptyEl.style.display = 'none'
+    const { skill, content, fileTree } = detail
+    const bodyMd = stripFrontmatter(content)
+    const validation = validateSkill(content, fileTree)
+    const fm = validation.frontmatter || {}
+    const totalFiles = countFiles(fileTree)
+
+    // Show file panel
+    filePanelEl.style.display = ''
+    fileTreeEl.innerHTML = ''
+    fileTreeEl.appendChild(renderFileTree(fileTree, skill.name))
+
+    // Build frontmatter display rows
+    const knownFields = ['name', 'description', 'user-invocable', 'disable-model-invocation', 'allowed-tools', 'context', 'agent', 'argument-hint', 'model', 'version', 'license', 'metadata']
+    const fmRows = Object.entries(fm).map(([k, v]) => {
+      const val = typeof v === 'object' ? JSON.stringify(v) : String(v)
+      const display = val.length > 120 ? val.slice(0, 120) + '...' : val
+      return `<tr><th>${esc(k)}</th><td>${k === 'description' ? esc(display) : `<code>${esc(display)}</code>`}</td></tr>`
+    }).join('')
+
+    // Invocation mode
+    let invocationMode = 'Both (user + Claude)'
+    if (fm['disable-model-invocation'] === true) invocationMode = 'User-only (/command)'
+    else if (fm['user-invocable'] === false) invocationMode = 'Claude-only (auto)'
+
+    contentEl.innerHTML = `
+      <div class="skill-header">
+        <h2>${esc(skill.name)}</h2>
+        <div class="skill-path">${esc(shortenPath(skill.path))}</div>
+        <div class="skill-meta">
+          <span class="meta-badge ${validation.isValid ? 'valid' : 'invalid'}">${validation.isValid ? 'Valid Skill' : 'Invalid'}</span>
+          <span class="meta-badge">${esc(invocationMode)}</span>
+          <span class="meta-badge">${totalFiles} file${totalFiles !== 1 ? 's' : ''}</span>
+          ${fm.version ? `<span class="meta-badge">v${esc(String(fm.version))}</span>` : ''}
+          ${fm.metadata?.author || fm.author ? `<span class="meta-badge">by ${esc(String(fm.metadata?.author || fm.author))}</span>` : ''}
+        </div>
+      </div>
+
+      <div class="validation ${validation.isValid ? 'pass' : 'fail'}">
+        <h4>${validation.isValid ? 'Skill Validation Passed' : 'Skill Validation Issues'}</h4>
+        <ul>
+          ${validation.checks.map(c => {
+            const icon = c.pass
+              ? '<span class="check">&#10003;</span>'
+              : c.severity === 'error'
+                ? '<span class="cross">&#10007;</span>'
+                : '<span class="warn-icon">&#9888;</span>'
+            return `<li>${icon} ${esc(c.label)}</li>`
+          }).join('')}
+        </ul>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="content">Documentation</button>
+        <button class="tab" data-tab="frontmatter">Frontmatter</button>
+        <button class="tab" data-tab="online">Online Resources</button>
+      </div>
+
+      <div class="tab-panel active" id="panel-content">
+        <div class="md-content">${renderMarkdown(bodyMd)}</div>
+      </div>
+
+      <div class="tab-panel" id="panel-frontmatter">
+        <table class="frontmatter-table">
+          ${fmRows || '<tr><td colspan="2" style="color:var(--text-faint)">No frontmatter found</td></tr>'}
+        </table>
+      </div>
+
+      <div class="tab-panel" id="panel-online">
+        <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">Community repositories with Claude skill patterns and references:</p>
+        ${app.onlineRepositories.map(r => `
+          <div class="repo-card">
+            <h4>${esc(r.name)}</h4>
+            <p>${esc(r.description)}</p>
+            <a href="${esc(r.url)}" target="_blank">${esc(r.url)}</a>
+          </div>
+        `).join('')}
+      </div>
+    `
+
+    // Tab switching
+    contentEl.querySelectorAll('.tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        contentEl.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+        contentEl.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'))
+        tab.classList.add('active')
+        document.getElementById('panel-' + tab.dataset.tab)?.classList.add('active')
+      })
+    })
+
+    // Highlight active skill in sidebar
+    skillListEl.querySelectorAll('.skill-item').forEach(el => {
+      const nameEl = el.querySelector('.skill-name')
+      el.classList.toggle('active', nameEl?.textContent === skill.name)
+    })
+  }
+
+  // ── Render file content (when clicking a file in the tree) ──
+  function renderFileContent(file) {
+    // Replace the main content panel with the file viewer
+    const skill = store.activeSkill
+    const parts = file.path.split('/')
+
+    let breadcrumbHtml = `<span data-action="back-to-skill">SKILL.md</span><span class="sep">/</span>`
+    for (let i = 0; i < parts.length - 1; i++) {
+      breadcrumbHtml += `<span>${esc(parts[i])}</span><span class="sep">/</span>`
+    }
+    breadcrumbHtml += `<span class="current">${esc(parts[parts.length - 1])}</span>`
+
+    const isMarkdown = file.name.endsWith('.md')
+    const isCode = /\.(ts|js|json|yaml|yml|html|css|sh)$/.test(file.name)
+
+    let body
+    if (isMarkdown) {
+      body = `<div class="md-content">${renderMarkdown(file.content)}</div>`
+    } else {
+      const lang = file.name.split('.').pop()
+      body = `<pre><code class="lang-${lang}">${esc(file.content)}</code></pre>`
+    }
+
+    contentEl.innerHTML = `
+      <div class="breadcrumb">${breadcrumbHtml}</div>
+      <div style="font-size:11px;color:var(--text-faint);margin-bottom:16px;">${esc(file.path)} &mdash; ${formatSize(file.size || file.content.length)}</div>
+      ${body}
+    `
+
+    // Breadcrumb: click skill name to go back
+    contentEl.querySelector('[data-action="back-to-skill"]')?.addEventListener('click', () => {
+      store.clearFile()
+      renderSkillDetail(store.activeDetail)
+    })
+  }
+
+  // ── Events ──
+  store.on('skills:loaded', () => renderSkillList(store.filtered))
+  store.on('skills:filtered', () => renderSkillList(store.filtered))
+  store.on('locations:loaded', () => renderLocations())
+  store.on('skill:selected', (detail) => renderSkillDetail(detail))
+  store.on('file:selected', (file) => renderFileContent(file))
+
+  store.on('file:cleared', () => {
+    if (store.activeDetail) renderSkillDetail(store.activeDetail)
+  })
+
+  // ── Search ──
+  let searchTimeout
+  searchEl.addEventListener('input', () => {
+    clearTimeout(searchTimeout)
+    searchTimeout = setTimeout(() => store.setQuery(searchEl.value.trim()), 150)
+  })
+
+  // ── Rescan ──
+  document.getElementById('rescan-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('rescan-btn')
+    btn.textContent = 'Scanning...'
+    btn.disabled = true
+    await app.rescan()
+    btn.textContent = 'Rescan'
+    btn.disabled = false
+  })
+
+  // ── Create Skill Modal ──
+  const createModal = document.getElementById('create-modal')
+  const createNameEl = document.getElementById('new-skill-name')
+  const createDescEl = document.getElementById('new-skill-desc')
+  const createLocEl = document.getElementById('new-skill-location')
+
+  function openCreateModal() {
+    const { locations, defaults } = store.locations
+    const allLocs = [...new Set([...defaults, ...locations])]
+    createLocEl.innerHTML = allLocs.map(l =>
+      `<option value="${esc(l)}">${esc(shortenPath(l))}</option>`
+    ).join('')
+    createNameEl.value = ''
+    createDescEl.value = ''
+    createModal.style.display = ''
+    createNameEl.focus()
+  }
+
+  document.getElementById('create-btn').addEventListener('click', openCreateModal)
+  document.getElementById('create-modal-close').addEventListener('click', () => createModal.style.display = 'none')
+  document.getElementById('create-cancel').addEventListener('click', () => createModal.style.display = 'none')
+
+  document.getElementById('create-submit').addEventListener('click', async () => {
+    const name = createNameEl.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-')
+    if (!name) return
+    try {
+      await app.createSkill({
+        name,
+        description: createDescEl.value.trim(),
+        location: createLocEl.value,
+      })
+      createModal.style.display = 'none'
+    } catch (err) {
+      alert(err.message)
+    }
+  })
+
+  // ── Add Location Modal ──
+  const locationModal = document.getElementById('location-modal')
+  const locationPathEl = document.getElementById('new-location-path')
+
+  document.getElementById('add-location-btn').addEventListener('click', () => {
+    locationPathEl.value = ''
+    locationModal.style.display = ''
+    locationPathEl.focus()
+  })
+
+  document.getElementById('location-modal-close').addEventListener('click', () => locationModal.style.display = 'none')
+  document.getElementById('location-cancel').addEventListener('click', () => locationModal.style.display = 'none')
+
+  document.getElementById('location-submit').addEventListener('click', async () => {
+    const path = locationPathEl.value.trim()
+    if (!path) return
+    try {
+      await app.addLocation(path)
+      locationModal.style.display = 'none'
+    } catch (err) {
+      alert(err.message)
+    }
+  })
+
+  // Close modals on overlay click
+  createModal.addEventListener('click', (e) => { if (e.target === createModal) createModal.style.display = 'none' })
+  locationModal.addEventListener('click', (e) => { if (e.target === locationModal) locationModal.style.display = 'none' })
+
+  // ── Keyboard shortcuts ──
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      createModal.style.display = 'none'
+      locationModal.style.display = 'none'
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault()
+      searchEl.focus()
+      searchEl.select()
+    }
+  })
+
+  // ── Expose for debugging ──
+  window.app = app
+  window.luca = container
+
+  // ── Boot ──
+  await app.start()
+</script>
+</body>
+</html>
