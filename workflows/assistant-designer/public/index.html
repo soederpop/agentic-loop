@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
 <style>
   html, body {
     font-family: 'IBM Plex Mono', 'SF Mono', monospace;
@@ -238,23 +239,20 @@
     flex: 1;
     position: relative;
     overflow: hidden;
+    background: var(--bg);
   }
 
-  .editor-area textarea {
-    width: 100%;
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
-    border: none;
-    padding: 12px 16px;
-    font: inherit;
-    font-size: 12px;
-    line-height: 1.7;
-    resize: none;
-    outline: none;
-    tab-size: 2;
+  .monaco-editor-shell {
+    position: absolute;
+    inset: 0;
+    display: none;
   }
-  .editor-area textarea::placeholder { color: var(--text-faint); }
+
+  .monaco-editor,
+  .monaco-editor .margin,
+  .monaco-editor .monaco-editor-background {
+    background: var(--bg) !important;
+  }
 
   .editor-empty {
     display: flex;
@@ -268,25 +266,6 @@
     line-height: 2;
   }
 
-  .line-numbers {
-    position: absolute;
-    top: 0; left: 0;
-    width: 40px;
-    height: 100%;
-    overflow: hidden;
-    padding: 12px 0;
-    background: var(--surface);
-    border-right: 1px solid var(--border);
-    text-align: right;
-    font-size: 11px;
-    line-height: 1.7;
-    color: var(--text-faint);
-    user-select: none;
-    pointer-events: none;
-  }
-  .line-numbers span { display: block; padding-right: 8px; }
-
-  .editor-area.has-lines textarea { padding-left: 52px; }
 
   /* ── Right panel ────────────────────────────────────────────── */
   .right-panel {
@@ -382,9 +361,18 @@
     animation: fadeIn .3s;
   }
 
+  .assistant-turn {
+    align-self: flex-start;
+    max-width: 95%;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    animation: slideUp .2s ease-out;
+  }
+
   .tool-event {
     font-size: 10px;
-    padding: 4px 8px;
+    padding: 6px 8px;
     margin: 2px 0;
     border-radius: 3px;
     background: var(--surface-2);
@@ -395,6 +383,18 @@
   .tool-event.error { border-left-color: var(--error); }
   .tool-event.complete { border-left-color: var(--success); }
   .tool-event .tool-name { color: var(--blue); font-weight: 600; }
+  .tool-event .tool-label { opacity: .7; margin-left: 6px; }
+  .tool-event details { margin-top: 6px; }
+  .tool-event summary { cursor: pointer; color: var(--text); }
+  .tool-event pre {
+    margin: 6px 0 0;
+    padding: 8px;
+    background: var(--bg);
+    border-radius: 3px;
+    overflow-x: auto;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
 
   .streaming-cursor {
     display: inline-block;
@@ -527,12 +527,29 @@
     padding: 8px 12px;
     font-size: 11px;
     line-height: 1.5;
-    white-space: pre-wrap;
     color: var(--text-dim);
     background: var(--bg);
   }
-  .repl-output .repl-ok { color: var(--success); }
-  .repl-output .repl-err { color: var(--error); }
+  .repl-output .repl-ok { color: var(--text); }
+  .repl-output .repl-ok p { margin: 0 0 6px; }
+  .repl-output .repl-ok p:last-child { margin: 0; }
+  .repl-output .repl-ok code {
+    background: var(--surface-3);
+    padding: 1px 4px;
+    border-radius: 2px;
+    font-size: 11px;
+  }
+  .repl-output .repl-ok pre {
+    background: var(--surface-2);
+    padding: 8px 10px;
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 6px 0;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .repl-output .repl-ok pre code { background: none; padding: 0; }
+  .repl-output .repl-err { color: var(--error); white-space: pre-wrap; }
   .repl-output .repl-entry { margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
   .repl-output .repl-entry:last-child { border-bottom: none; }
   .repl-prompt { color: var(--accent); }
@@ -579,8 +596,8 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 6px;
-    width: 480px;
-    max-height: 70vh;
+    width: min(1100px, 92vw);
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
     animation: slideUp .2s ease-out;
@@ -616,6 +633,96 @@
   }
   .modal-body .empty { color: var(--text-faint); font-style: italic; font-size: 11px; }
 
+  .history-layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 12px;
+    min-height: 0;
+  }
+  .history-list {
+    border-right: 1px solid var(--border);
+    padding-right: 12px;
+    overflow-y: auto;
+    max-height: 62vh;
+  }
+  .history-detail {
+    overflow-y: auto;
+    max-height: 62vh;
+    padding-right: 4px;
+  }
+  .history-meta {
+    margin-bottom: 12px;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface-2);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+  .history-meta .title {
+    color: var(--text);
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .history-meta .sub {
+    color: var(--text-faint);
+  }
+  .history-msg {
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .history-msg .head {
+    padding: 6px 10px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .history-msg.user .head { border-left: 3px solid var(--text-dim); }
+  .history-msg.assistant .head { border-left: 3px solid var(--accent); }
+  .history-msg.tool .head { border-left: 3px solid var(--blue); }
+  .history-msg.system .head { border-left: 3px solid var(--warning); }
+  .history-msg .body {
+    padding: 10px;
+    font-size: 12px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .history-msg .body p { margin: 0 0 6px; }
+  .history-msg .body p:last-child { margin: 0; }
+  .history-tool-call {
+    margin-top: 8px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+  }
+  .history-tool-call .tool-head {
+    padding: 6px 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--blue);
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .history-tool-call pre,
+  .history-msg pre {
+    margin: 0;
+    padding: 10px;
+    overflow-x: auto;
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--text-dim);
+  }
+
   .history-item {
     padding: 8px 10px;
     border: 1px solid var(--border);
@@ -628,6 +735,7 @@
     align-items: center;
   }
   .history-item:hover { border-color: var(--accent); background: var(--accent-dim); }
+  .history-item.active { border-color: var(--accent); background: var(--accent-dim); }
   .history-item .thread-id { font-size: 11px; color: var(--text); }
   .history-item .meta { font-size: 10px; color: var(--text-faint); }
 
@@ -703,8 +811,7 @@
       <div class="editor-empty" id="editorEmpty">
         Select an assistant from the sidebar to begin editing.
       </div>
-      <div class="line-numbers" id="lineNumbers" style="display:none"></div>
-      <textarea id="editorTextarea" style="display:none" spellcheck="false"></textarea>
+      <div class="monaco-editor-shell" id="monacoEditor"></div>
     </div>
   </div>
 
@@ -783,10 +890,17 @@ const state = {
   files: {},           // filename -> content (from disk)
   activeFile: null,
   modified: new Set(),  // filenames with unsaved changes
-  editBuffers: {},     // filename -> current textarea content
+  editBuffers: {},     // filename -> current editor content
   isStreaming: false,
   hotReload: false,
+  monacoReady: false,
+  historySessions: [],
+  selectedHistoryId: null,
 };
+
+let monacoEditor = null;
+let monacoModels = {};
+let suppressEditorChange = false;
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const $ = (sel) => document.querySelector(sel);
@@ -798,10 +912,9 @@ const dom = {
   assistantList: $('#assistantList'),
   tabBar: $('#tabBar'),
   fileLabel: $('#fileLabel'),
-  editorTextarea: $('#editorTextarea'),
+  monacoEditor: $('#monacoEditor'),
   editorEmpty: $('#editorEmpty'),
   editorArea: $('#editorArea'),
-  lineNumbers: $('#lineNumbers'),
   saveBtn: $('#saveBtn'),
   chatMessages: $('#chatMessages'),
   chatInput: $('#chatInput'),
@@ -933,57 +1046,211 @@ function renderTabs() {
   });
 }
 
-function openFile(filename) {
-  state.activeFile = filename;
-  const content = state.editBuffers[filename] ?? state.files[filename] ?? '';
+function detectEditorLanguage(filename) {
+  if (!filename) return 'plaintext';
+  const lower = filename.toLowerCase();
+  if (lower.endsWith('.ts') || lower.endsWith('.tsx')) return 'typescript';
+  if (lower.endsWith('.js') || lower.endsWith('.jsx')) return 'javascript';
+  if (lower.endsWith('.md')) return 'markdown';
+  if (lower.endsWith('.yaml') || lower.endsWith('.yml')) return 'yaml';
+  if (lower.endsWith('.json')) return 'json';
+  return 'plaintext';
+}
 
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function safeJson(value) {
+  try {
+    if (typeof value === 'string') {
+      try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return value; }
+    }
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function renderMessageContent(content) {
+  if (content == null) return '<span style="color:var(--text-faint)">[no text content]</span>';
+  if (typeof content === 'string') {
+    try { return marked.parse(content); } catch { return `<pre>${escapeHtml(content)}</pre>`; }
+  }
+  return `<pre>${escapeHtml(safeJson(content))}</pre>`;
+}
+
+function renderHistoryConversation(record) {
+  const messages = record.messages || [];
+  const meta = `
+    <div class="history-meta">
+      <div class="title">${escapeHtml(record.title || 'Untitled')}</div>
+      <div class="sub">id: ${escapeHtml(record.id || '')}</div>
+      <div class="sub">thread: ${escapeHtml(record.thread || '')}</div>
+      <div class="sub">model: ${escapeHtml(record.model || '')}</div>
+      <div class="sub">messages: ${messages.length}</div>
+      <div class="sub">updated: ${record.updatedAt ? escapeHtml(new Date(record.updatedAt).toLocaleString()) : '—'}</div>
+    </div>
+  `;
+
+  const rendered = messages.map((msg, index) => {
+    const role = msg.role || 'unknown';
+    const toolCalls = Array.isArray(msg.tool_calls) ? msg.tool_calls : [];
+    const toolCallBlocks = toolCalls.map((call) => `
+      <div class="history-tool-call">
+        <div class="tool-head">tool call · ${escapeHtml(call.function?.name || call.name || 'unknown')}</div>
+        <pre>${escapeHtml(safeJson(call.function?.arguments || call.arguments || {}))}</pre>
+      </div>
+    `).join('');
+
+    let toolResultBlock = '';
+    if (role === 'tool') {
+      let parsed = null;
+      try { parsed = typeof msg.content === 'string' ? JSON.parse(msg.content) : msg.content; } catch {}
+      const isFailure = parsed && (parsed.success === false || parsed.error);
+      toolResultBlock = `
+        <div class="history-tool-call">
+          <div class="tool-head" style="color:${isFailure ? 'var(--error)' : 'var(--success)'}">tool result${msg.tool_call_id ? ' · ' + escapeHtml(msg.tool_call_id) : ''}</div>
+          <pre>${escapeHtml(safeJson(parsed ?? msg.content))}</pre>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="history-msg ${escapeHtml(role)}">
+        <div class="head">
+          <span>${escapeHtml(role)}</span>
+          <span>#${index + 1}</span>
+        </div>
+        <div class="body">
+          ${renderMessageContent(msg.content)}
+          ${toolCallBlocks}
+          ${toolResultBlock}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return `${meta}${rendered || '<div class="empty">No messages</div>'}`;
+}
+
+function monacoUriForFile(filename) {
+  const safeAssistant = encodeURIComponent(state.activeId || 'assistant');
+  const safeFile = encodeURIComponent(filename || 'file.txt');
+  return window.monaco.Uri.parse(`file:///assistants/${safeAssistant}/${safeFile}`);
+}
+
+function ensureMonacoModel(filename) {
+  const existing = monacoModels[filename];
+  const language = detectEditorLanguage(filename);
+  const value = state.editBuffers[filename] ?? state.files[filename] ?? '';
+
+  if (existing) {
+    window.monaco.editor.setModelLanguage(existing, language);
+    if (existing.getValue() !== value) {
+      suppressEditorChange = true;
+      existing.setValue(value);
+      suppressEditorChange = false;
+    }
+    return existing;
+  }
+
+  const model = window.monaco.editor.createModel(value, language, monacoUriForFile(filename));
+  model.onDidChangeContent(() => {
+    if (suppressEditorChange || state.activeFile !== filename) return;
+    const nextValue = model.getValue();
+    state.editBuffers[filename] = nextValue;
+    const isModified = nextValue !== state.files[filename];
+    if (isModified) state.modified.add(filename);
+    else state.modified.delete(filename);
+    renderTabs();
+  });
+  monacoModels[filename] = model;
+  return model;
+}
+
+async function ensureMonaco() {
+  if (state.monacoReady) return;
+
+  await new Promise((resolve, reject) => {
+    if (!window.require) {
+      reject(new Error('Monaco loader failed to initialize'));
+      return;
+    }
+
+    window.require.config({
+      paths: {
+        vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs'
+      }
+    });
+
+    window.MonacoEnvironment = {
+      getWorkerUrl: function (_moduleId, label) {
+        const source = `
+          self.MonacoEnvironment = { baseUrl: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/' };
+          importScripts('https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/base/worker/workerMain.js');
+        `;
+        return `data:text/javascript;charset=utf-8,${encodeURIComponent(source)}`;
+      }
+    };
+
+    window.require(['vs/editor/editor.main'], resolve, reject);
+  });
+
+  window.monaco.editor.defineTheme('agentic-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#0a0e17',
+      'editorLineNumber.foreground': '#64748b',
+      'editorLineNumber.activeForeground': '#38bdf8',
+      'editorCursor.foreground': '#e2e8f0',
+      'editor.selectionBackground': '#1d4ed833',
+      'editor.inactiveSelectionBackground': '#1e293b88',
+      'editorGutter.background': '#111827',
+    }
+  });
+
+  monacoEditor = window.monaco.editor.create(dom.monacoEditor, {
+    value: '',
+    language: 'markdown',
+    theme: 'agentic-dark',
+    automaticLayout: true,
+    minimap: { enabled: false },
+    fontFamily: 'IBM Plex Mono, SF Mono, monospace',
+    fontSize: 12,
+    lineHeight: 20,
+    tabSize: 2,
+    insertSpaces: true,
+    wordWrap: 'on',
+    scrollBeyondLastLine: false,
+    renderLineHighlight: 'line',
+    padding: { top: 12, bottom: 12 },
+  });
+
+  state.monacoReady = true;
+}
+
+async function openFile(filename) {
+  state.activeFile = filename;
   dom.editorEmpty.style.display = 'none';
-  dom.editorTextarea.style.display = 'block';
-  dom.editorTextarea.value = content;
+  dom.monacoEditor.style.display = 'block';
   dom.saveBtn.style.display = 'inline-block';
   dom.fileLabel.textContent = filename;
 
-  // Line numbers
-  const showLines = filename.endsWith('.ts') || filename.endsWith('.md') || filename.endsWith('.yaml');
-  dom.lineNumbers.style.display = showLines ? 'block' : 'none';
-  dom.editorArea.classList.toggle('has-lines', showLines);
-  updateLineNumbers();
+  await ensureMonaco();
+  const model = ensureMonacoModel(filename);
+  monacoEditor.setModel(model);
+  monacoEditor.focus();
+  monacoEditor.layout();
 
   renderTabs();
-}
-
-function updateLineNumbers() {
-  const lines = dom.editorTextarea.value.split('\n').length;
-  const nums = [];
-  for (let i = 1; i <= lines; i++) nums.push(`<span>${i}</span>`);
-  dom.lineNumbers.innerHTML = nums.join('');
 }
 
 // ── Editor events ─────────────────────────────────────────────────────────────
-dom.editorTextarea.addEventListener('input', () => {
-  if (!state.activeFile) return;
-  state.editBuffers[state.activeFile] = dom.editorTextarea.value;
-  const isModified = dom.editorTextarea.value !== state.files[state.activeFile];
-  if (isModified) state.modified.add(state.activeFile);
-  else state.modified.delete(state.activeFile);
-  renderTabs();
-  updateLineNumbers();
-});
-
-dom.editorTextarea.addEventListener('scroll', () => {
-  dom.lineNumbers.scrollTop = dom.editorTextarea.scrollTop;
-});
-
-// Tab key inserts spaces
-dom.editorTextarea.addEventListener('keydown', (e) => {
-  if (e.key === 'Tab') {
-    e.preventDefault();
-    const start = dom.editorTextarea.selectionStart;
-    const end = dom.editorTextarea.selectionEnd;
-    dom.editorTextarea.value = dom.editorTextarea.value.substring(0, start) + '  ' + dom.editorTextarea.value.substring(end);
-    dom.editorTextarea.selectionStart = dom.editorTextarea.selectionEnd = start + 2;
-    dom.editorTextarea.dispatchEvent(new Event('input'));
-  }
+window.addEventListener('resize', () => {
+  if (monacoEditor) monacoEditor.layout();
 });
 
 // Cmd+S to save
@@ -996,13 +1263,14 @@ document.addEventListener('keydown', (e) => {
 
 async function saveCurrentFile() {
   if (!state.activeId || !state.activeFile) return;
-  const content = state.editBuffers[state.activeFile] ?? dom.editorTextarea.value;
+  const content = monacoEditor?.getModel()?.getValue() ?? state.editBuffers[state.activeFile] ?? '';
   try {
     await api(`/assistants/${state.activeId}/files/${state.activeFile}`, {
       method: 'PUT',
       body: { content },
     });
     state.files[state.activeFile] = content;
+    state.editBuffers[state.activeFile] = content;
     state.modified.delete(state.activeFile);
     renderTabs();
     toast(`Saved ${state.activeFile}`, 'success');
@@ -1031,12 +1299,43 @@ function addChatMessage(role, content) {
   return el;
 }
 
-function addToolEvent(type, name, detail) {
+function formatToolDetail(detail) {
+  if (detail == null) return '';
+  try {
+    return JSON.stringify(detail, null, 2);
+  } catch {
+    return String(detail);
+  }
+}
+
+function createAssistantTurn() {
+  const el = document.createElement('div');
+  el.className = 'assistant-turn';
+  dom.chatMessages.appendChild(el);
+  dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+  return el;
+}
+
+function finalizeAssistantMessage(msgEl, cursor) {
+  if (!msgEl) return null;
+  if (cursor?.parentNode === msgEl) cursor.remove();
+  const text = msgEl.textContent || '';
+  if (text.trim()) {
+    try { msgEl.innerHTML = marked.parse(text); } catch { msgEl.textContent = text; }
+    msgEl.classList.remove('streaming');
+    return msgEl;
+  }
+  msgEl.remove();
+  return null;
+}
+
+function addToolEvent(parentEl, type, name, detail) {
   const el = document.createElement('div');
   el.className = `tool-event ${type === 'tool_error' ? 'error' : type === 'tool_result' ? 'complete' : ''}`;
   const label = type === 'tool_start' ? 'calling' : type === 'tool_result' ? 'result' : 'error';
-  el.innerHTML = `<span class="tool-name">${name}</span> <span style="opacity:.6">${label}</span>`;
-  dom.chatMessages.appendChild(el);
+  const detailText = formatToolDetail(detail);
+  el.innerHTML = `<span class="tool-name">${escapeHtml(name)}</span><span class="tool-label">${label}</span>${detailText ? `<details open><summary>${type === 'tool_start' ? 'args' : type === 'tool_result' ? 'result' : 'error'}</summary><pre>${escapeHtml(detailText)}</pre></details>` : ''}`;
+  parentEl.appendChild(el);
   dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
 }
 
@@ -1049,13 +1348,21 @@ async function sendChatMessage() {
   state.isStreaming = true;
   dom.chatSendBtn.disabled = true;
 
-  // Create streaming assistant message
-  const msgEl = addChatMessage('assistant', '');
+  // Create streaming assistant turn
+  const turnEl = createAssistantTurn();
+  let msgEl = document.createElement('div');
+  msgEl.className = 'msg assistant streaming';
+  turnEl.appendChild(msgEl);
   const cursor = document.createElement('span');
   cursor.className = 'streaming-cursor';
   msgEl.appendChild(cursor);
 
-  let fullText = '';
+  function startNewAssistantSegment() {
+    msgEl = document.createElement('div');
+    msgEl.className = 'msg assistant streaming';
+    turnEl.appendChild(msgEl);
+    msgEl.appendChild(cursor);
+  }
 
   try {
     const res = await fetch(`${API}/chat`, {
@@ -1083,20 +1390,26 @@ async function sendChatMessage() {
           try {
             const data = JSON.parse(line.slice(6));
             if (eventType === 'chunk') {
-              fullText += data.text || '';
-              try { msgEl.innerHTML = marked.parse(fullText); } catch { msgEl.textContent = fullText; }
+              if (cursor.parentNode !== msgEl) msgEl.appendChild(cursor);
+              cursor.remove();
+              msgEl.textContent += data.text || '';
               msgEl.appendChild(cursor);
               dom.chatMessages.scrollTop = dom.chatMessages.scrollHeight;
+            } else if (eventType === 'segment_end') {
+              finalizeAssistantMessage(msgEl, cursor);
             } else if (eventType === 'tool_start') {
-              addToolEvent('tool_start', data.name);
+              addToolEvent(turnEl, 'tool_start', data.name, data.args);
             } else if (eventType === 'tool_result') {
-              addToolEvent('tool_result', data.name);
+              addToolEvent(turnEl, 'tool_result', data.name, data.result);
+              startNewAssistantSegment();
             } else if (eventType === 'tool_error') {
-              addToolEvent('tool_error', data.name, data.error);
+              addToolEvent(turnEl, 'tool_error', data.name, data.error);
+              startNewAssistantSegment();
             } else if (eventType === 'done') {
-              cursor.remove();
-              if (data.response && !fullText) {
-                try { msgEl.innerHTML = marked.parse(data.response); } catch { msgEl.textContent = data.response; }
+              finalizeAssistantMessage(msgEl, cursor);
+              if ((!msgEl.textContent || !msgEl.textContent.trim()) && data.response) {
+                msgEl.textContent = data.response;
+                finalizeAssistantMessage(msgEl, cursor);
               }
             } else if (eventType === 'error') {
               cursor.remove();
@@ -1150,11 +1463,11 @@ async function runRepl() {
   dom.replOutput.appendChild(entry);
 
   try {
-    const data = await api('/eval', { method: 'POST', body: { code } });
+    const data = await api('/eval', { method: 'POST', body: { code, assistantId: state.activeId } });
     const outEl = document.createElement('div');
     if (data.ok) {
       outEl.className = 'repl-ok';
-      outEl.textContent = data.output;
+      try { outEl.innerHTML = marked.parse(data.output || 'undefined'); } catch { outEl.textContent = data.output || 'undefined'; }
     } else {
       outEl.className = 'repl-err';
       outEl.textContent = data.error;
@@ -1179,10 +1492,6 @@ dom.replInput.addEventListener('keydown', (e) => {
   }
 });
 $('#clearReplBtn').addEventListener('click', () => { dom.replOutput.innerHTML = ''; });
-
-function escapeHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
 
 // ── Hot reload toggle ─────────────────────────────────────────────────────────
 dom.hotReloadToggle.addEventListener('change', async () => {
@@ -1209,9 +1518,11 @@ function startPolling() {
         // Only update if not modified locally
         if (!state.modified.has(state.activeFile)) {
           state.editBuffers[state.activeFile] = data.content;
-          if (state.activeFile === state.activeFile) {
-            dom.editorTextarea.value = data.content;
-            updateLineNumbers();
+          const model = monacoModels[state.activeFile];
+          if (model) {
+            suppressEditorChange = true;
+            model.setValue(data.content);
+            suppressEditorChange = false;
           }
           toast(`${state.activeFile} changed externally`, 'info');
         }
@@ -1224,6 +1535,44 @@ function stopPolling() {
 }
 
 // ── History modal ─────────────────────────────────────────────────────────────
+async function loadHistoryConversation(conversationId) {
+  if (!state.activeId || !conversationId) return;
+  state.selectedHistoryId = conversationId;
+
+  const listHtml = (state.historySessions || []).map(s => {
+    const active = s.id === state.selectedHistoryId ? ' active' : '';
+    return `
+      <div class="history-item${active}" data-conversation-id="${s.id}">
+        <div>
+          <div class="thread-id">${escapeHtml(s.title || s.threadId || s.id)}</div>
+          <div class="meta">${escapeHtml(s.threadId || '')}</div>
+        </div>
+        <span class="meta">${s.messageCount} msgs${s.updatedAt ? ' &middot; ' + new Date(s.updatedAt).toLocaleDateString() : ''}</span>
+      </div>
+    `;
+  }).join('');
+
+  dom.historyBody.innerHTML = `
+    <div class="history-layout">
+      <div class="history-list">${listHtml}</div>
+      <div class="history-detail"><div class="empty">Loading conversation...</div></div>
+    </div>
+  `;
+
+  dom.historyBody.querySelectorAll('.history-item').forEach(el => {
+    el.addEventListener('click', () => loadHistoryConversation(el.dataset.conversationId));
+  });
+
+  try {
+    const data = await api(`/assistants/${state.activeId}/history/${conversationId}`);
+    const detail = dom.historyBody.querySelector('.history-detail');
+    detail.innerHTML = renderHistoryConversation(data.conversation || {});
+  } catch (err) {
+    const detail = dom.historyBody.querySelector('.history-detail');
+    detail.innerHTML = `<div class="empty">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
 $('#historyBtn').addEventListener('click', async () => {
   $('#historyModal').classList.add('open');
   if (!state.activeId) {
@@ -1234,18 +1583,14 @@ $('#historyBtn').addEventListener('click', async () => {
   try {
     const data = await api(`/assistants/${state.activeId}/history`);
     const sessions = data.sessions || [];
+    state.historySessions = sessions;
     if (!sessions.length) {
       dom.historyBody.innerHTML = '<div class="empty">No conversation history</div>';
       return;
     }
-    dom.historyBody.innerHTML = sessions.map(s => `
-      <div class="history-item" data-thread="${s.threadId}">
-        <span class="thread-id">${s.threadId}</span>
-        <span class="meta">${s.messageCount} msgs${s.updatedAt ? ' &middot; ' + new Date(s.updatedAt).toLocaleDateString() : ''}</span>
-      </div>
-    `).join('');
+    await loadHistoryConversation(sessions[0].id);
   } catch (err) {
-    dom.historyBody.innerHTML = `<div class="empty">Error: ${err.message}</div>`;
+    dom.historyBody.innerHTML = `<div class="empty">Error: ${escapeHtml(err.message)}</div>`;
   }
 });
 $('#historyClose').addEventListener('click', () => $('#historyModal').classList.remove('open'));
@@ -1288,9 +1633,11 @@ $('#createNameInput').addEventListener('keydown', (e) => {
 // ── Panel toggles ─────────────────────────────────────────────────────────────
 $('#toggleSidebar').addEventListener('click', () => {
   $('#sidebar').classList.toggle('collapsed');
+  requestAnimationFrame(() => monacoEditor?.layout());
 });
 $('#toggleRight').addEventListener('click', () => {
   $('#rightPanel').classList.toggle('collapsed');
+  requestAnimationFrame(() => monacoEditor?.layout());
 });
 
 // ── Reload button ─────────────────────────────────────────────────────────────
@@ -1326,6 +1673,7 @@ resizeHandle.addEventListener('mousedown', (e) => {
     const newChat = Math.max(2, Math.min(totalFlex - 2, startChatFlex + ratio * totalFlex));
     chatPanel.style.flex = newChat;
     replPanel.style.flex = totalFlex - newChat;
+    monacoEditor?.layout();
   };
 
   const onUp = () => {

@@ -43,6 +43,137 @@
     flex-direction: column;
   }
 
+  #app-shell {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+
+  #history-sidebar {
+    width: 320px;
+    max-width: 42vw;
+    border-right: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    transition: width 0.18s ease, min-width 0.18s ease, opacity 0.18s ease;
+  }
+
+  #history-sidebar.collapsed {
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    border-right: none;
+  }
+
+  .sidebar-header {
+    padding: 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sidebar-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .sidebar-title {
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+  }
+
+  .sidebar-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .sidebar-btn, .tab-btn {
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 6px 10px;
+    cursor: pointer;
+  }
+
+  .sidebar-btn:hover, .tab-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .history-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .history-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    background: var(--input-bg);
+  }
+
+  .history-item:hover {
+    border-color: var(--assistant);
+  }
+
+  .history-item-title {
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .history-item-meta {
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  #main-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #tab-bar {
+    padding: 10px 20px 0;
+    display: flex;
+    gap: 8px;
+    background: var(--bg);
+  }
+
+  .tab-btn.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .panel {
+    flex: 1;
+    min-height: 0;
+    display: none;
+    flex-direction: column;
+  }
+
+  .panel.active {
+    display: flex;
+  }
+
   /* ── Header ─────────────────────────────── */
   header {
     padding: 12px 20px;
@@ -142,6 +273,97 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+  }
+
+  #repl-panel-inner {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 16px 20px;
+    gap: 10px;
+  }
+
+  #repl-input {
+    flex: 0 0 180px;
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 12px;
+    resize: vertical;
+    outline: none;
+  }
+
+  #repl-output {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    word-break: break-word;
+  }
+
+  #repl-output.markdown {
+    white-space: normal;
+  }
+
+  #repl-output.markdown p:first-child,
+  #repl-output.markdown > :first-child {
+    margin-top: 0;
+  }
+
+  #repl-output.markdown p:last-child,
+  #repl-output.markdown > :last-child {
+    margin-bottom: 0;
+  }
+
+  #repl-output.markdown p,
+  #repl-output.markdown ul,
+  #repl-output.markdown ol,
+  #repl-output.markdown pre,
+  #repl-output.markdown blockquote,
+  #repl-output.markdown h1,
+  #repl-output.markdown h2,
+  #repl-output.markdown h3,
+  #repl-output.markdown h4,
+  #repl-output.markdown h5,
+  #repl-output.markdown h6 {
+    margin: 0 0 0.8em 0;
+  }
+
+  #repl-output.markdown ul,
+  #repl-output.markdown ol {
+    padding-left: 1.4em;
+  }
+
+  #repl-output.markdown code {
+    background: rgba(255,255,255,0.06);
+    padding: 0.1em 0.3em;
+    border-radius: 4px;
+    font-size: 0.95em;
+  }
+
+  #repl-output.markdown pre {
+    background: rgba(0,0,0,0.28);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+    overflow-x: auto;
+  }
+
+  #repl-output.markdown pre code {
+    background: transparent;
+    padding: 0;
+  }
+
+  #repl-run {
+    align-self: flex-start;
   }
 
   .message {
@@ -583,6 +805,7 @@
   <span id="dot" class="dot disconnected"></span>
   <span id="status" class="status">connecting…</span>
   <span class="spacer"></span>
+  <button id="sidebar-toggle" class="sidebar-btn" title="Toggle history">HISTORY</button>
   <button id="voice-toggle" title="Enable voice mode">
     <span class="voice-icon">⬤</span>
     <span class="voice-label">VOICE</span>
@@ -590,18 +813,51 @@
   <select id="assistant-picker" title="Switch assistant"></select>
 </header>
 
-<div id="messages"></div>
+<div id="app-shell">
+  <aside id="history-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title-row">
+        <span class="sidebar-title">CONVERSATION HISTORY</span>
+      </div>
+      <div class="sidebar-actions">
+        <button id="save-markdown-btn" class="sidebar-btn">SAVE MD</button>
+        <button id="save-history-btn" class="sidebar-btn">SAVE SNAPSHOT</button>
+        <button id="refresh-history-btn" class="sidebar-btn">REFRESH</button>
+      </div>
+    </div>
+    <div id="history-list" class="history-list"></div>
+  </aside>
 
-<div id="voice-status">
-  <span class="voice-state-label"></span>
-  <span class="voice-preview-text"></span>
-  <div class="vu-track"></div>
-</div>
+  <main id="main-panel">
+    <div id="tab-bar">
+      <button id="chat-tab" class="tab-btn active">CHAT</button>
+      <button id="repl-tab" class="tab-btn">REPL</button>
+    </div>
 
-<div id="input-area">
-  <textarea id="input" placeholder="Say something…" rows="1"></textarea>
-  <button id="mic-btn" title="Click to speak">🎤</button>
-  <button id="send" disabled>SEND</button>
+    <section id="chat-panel" class="panel active">
+      <div id="messages"></div>
+
+      <div id="voice-status">
+        <span class="voice-state-label"></span>
+        <span class="voice-preview-text"></span>
+        <div class="vu-track"></div>
+      </div>
+
+      <div id="input-area">
+        <textarea id="input" placeholder="Say something…" rows="1"></textarea>
+        <button id="mic-btn" title="Click to speak">🎤</button>
+        <button id="send" disabled>SEND</button>
+      </div>
+    </section>
+
+    <section id="repl-panel" class="panel">
+      <div id="repl-panel-inner">
+        <textarea id="repl-input" spellcheck="false" placeholder="// assistant and container are in scope&#10;assistant.messages.length"></textarea>
+        <button id="repl-run" class="sidebar-btn">RUN</button>
+        <pre id="repl-output">Ready.</pre>
+      </div>
+    </section>
+  </main>
 </div>
 
 <script>
@@ -615,6 +871,19 @@
   const logoEl = document.querySelector('header .logo')
   const voiceToggleBtn = document.getElementById('voice-toggle')
   const micBtn = document.getElementById('mic-btn')
+  const sidebarEl = document.getElementById('history-sidebar')
+  const sidebarToggleBtn = document.getElementById('sidebar-toggle')
+  const historyListEl = document.getElementById('history-list')
+  const saveMarkdownBtn = document.getElementById('save-markdown-btn')
+  const saveHistoryBtn = document.getElementById('save-history-btn')
+  const refreshHistoryBtn = document.getElementById('refresh-history-btn')
+  const chatTabBtn = document.getElementById('chat-tab')
+  const replTabBtn = document.getElementById('repl-tab')
+  const chatPanelEl = document.getElementById('chat-panel')
+  const replPanelEl = document.getElementById('repl-panel')
+  const replInputEl = document.getElementById('repl-input')
+  const replRunBtn = document.getElementById('repl-run')
+  const replOutputEl = document.getElementById('repl-output')
 
   let ws = null
   let connected = false
@@ -647,6 +916,130 @@
   }
 
   const sessionId = getSessionId()
+  let currentTab = 'chat'
+  let localConversation = []
+
+  function setTab(tab) {
+    currentTab = tab
+    const isChat = tab === 'chat'
+    chatTabBtn.classList.toggle('active', isChat)
+    replTabBtn.classList.toggle('active', !isChat)
+    chatPanelEl.classList.toggle('active', isChat)
+    replPanelEl.classList.toggle('active', !isChat)
+  }
+
+  function recordLocalMessage(role, content) {
+    localConversation.push({ role, content })
+  }
+
+  function downloadTextFile(filename, text) {
+    const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  function conversationToMarkdown() {
+    const assistantName = pickerEl.value || getAssistantId() || defaultAssistant
+    const header = `# Conversation with ${assistantName}\n\nSaved: ${new Date().toISOString()}\n\n`
+    const body = localConversation.map(msg => {
+      const role = msg.role === 'assistant' ? assistantName : msg.role === 'user' ? 'User' : 'System'
+      return `## ${role}\n\n${String(msg.content || '').trim()}`
+    }).join('\n\n')
+    return header + body
+  }
+
+  async function saveConversationSnapshot() {
+    if (!localConversation.length) {
+      appendMessage('system', 'Nothing to save yet.')
+      return
+    }
+    const assistantId = pickerEl.value || getAssistantId() || defaultAssistant
+    const title = prompt('Title for saved conversation:', `Web Chat — ${assistantId}`)
+    if (title === null) return
+    const res = await fetch('/api/history/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assistantId, title, messages: localConversation, metadata: { sessionId } })
+    })
+    const data = await res.json()
+    if (!res.ok || data.error) {
+      appendMessage('error', data.error || 'Failed to save conversation')
+      return
+    }
+    appendMessage('system', `Saved conversation: ${data.conversation.title || data.conversation.id}`)
+    await loadHistory()
+  }
+
+  async function loadHistory() {
+    const assistantId = pickerEl.value || getAssistantId() || defaultAssistant
+    historyListEl.innerHTML = '<div class="message system">Loading history…</div>'
+    try {
+      const res = await fetch(`/api/history?assistantId=${encodeURIComponent(assistantId)}`)
+      const data = await res.json()
+      const sessions = data.sessions || []
+      if (!sessions.length) {
+        historyListEl.innerHTML = '<div class="message system">No saved conversations</div>'
+        return
+      }
+      historyListEl.innerHTML = sessions.map(item => {
+        const when = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'unknown time'
+        return `<div class="history-item" data-id="${item.id}">
+          <div class="history-item-title">${escapeHtml(item.title || item.id)}</div>
+          <div class="history-item-meta">${item.messageCount || 0} msgs · ${escapeHtml(when)}</div>
+        </div>`
+      }).join('')
+      historyListEl.querySelectorAll('.history-item').forEach(el => {
+        el.addEventListener('click', async () => {
+          const id = el.getAttribute('data-id')
+          await restoreConversation(id)
+        })
+      })
+    } catch (err) {
+      historyListEl.innerHTML = '<div class="message error">Failed to load history</div>'
+    }
+  }
+
+  async function restoreConversation(conversationId) {
+    try {
+      const res = await fetch(`/api/history/${encodeURIComponent(conversationId)}`)
+      const data = await res.json()
+      const conversation = data.conversation
+      if (!res.ok || !conversation) {
+        appendMessage('error', data.error || 'Failed to restore conversation')
+        return
+      }
+      messagesEl.innerHTML = ''
+      localConversation = []
+      for (const msg of (conversation.messages || [])) {
+        const content = Array.isArray(msg.content)
+          ? msg.content.map(part => part && part.text ? part.text : JSON.stringify(part)).join('\n')
+          : (msg.content || '')
+        if (!String(content || '').trim()) continue
+        if (msg.role === 'assistant') {
+          const turn = createAssistantTurn()
+          const el = appendMessage('assistant', '', turn)
+          renderAssistantMarkdown(el, content)
+          recordLocalMessage('assistant', content)
+        } else if (msg.role === 'user') {
+          appendMessage('user', content)
+          recordLocalMessage('user', content)
+        } else {
+          appendMessage('system', content)
+          recordLocalMessage('system', content)
+        }
+      }
+      appendMessage('system', `Restored conversation: ${conversation.title || conversation.id}`)
+      setTab('chat')
+    } catch (err) {
+      appendMessage('error', 'Failed to restore conversation')
+    }
+  }
 
   // ── Assistant picker ───────────────────
   let assistantList = []
@@ -681,6 +1074,8 @@
     setAssistantId(newAssistant)
     updateLogo(newAssistant)
     messagesEl.innerHTML = ''
+    localConversation = []
+    loadHistory()
     if (ws) ws.close()
   })
 
@@ -876,6 +1271,7 @@
         if (msg.historyLength > 1) {
           appendMessage('system', `Session resumed (${msg.historyLength - 1} messages in history)`)
         }
+        loadHistory()
         // Sync voice mode with server
         if (voiceModeOn) {
           ws.send(JSON.stringify({ type: 'set_voice_mode', mode: 'always' }))
@@ -901,12 +1297,17 @@
         break
 
       case 'chunk':
+        if (!streamingEl || !streamingEl.parentNode) startNewStreamingBlock()
         if (streamingEl) {
           removeCursor(streamingEl)
           streamingEl.textContent += msg.textDelta
           addCursor(streamingEl)
           scrollToBottom()
         }
+        break
+
+      case 'assistant_segment_end':
+        finalizeStreamingBlock()
         break
 
       case 'tool_start':
@@ -919,9 +1320,10 @@
 
       case 'assistant_message_complete':
         if (streamingEl) {
-          removeCursor(streamingEl)
-          streamingEl.classList.remove('streaming')
-          if (msg.text) renderAssistantMarkdown(streamingEl, msg.text)
+          const finalText = streamingEl.textContent || msg.text || ''
+          finalizeStreamingBlock()
+          if (streamingEl) streamingEl.classList.remove('streaming')
+          if (String(finalText).trim()) recordLocalMessage('assistant', finalText.replace(/\u2588|\|$/g, '').trim())
         }
         streaming = false
         streamingEl = null
@@ -929,6 +1331,7 @@
         sendBtn.disabled = false
         micBtn.disabled = voiceState !== 'idle'
         inputEl.focus()
+        loadHistory()
         break
 
       case 'voice_mode_changed':
@@ -985,7 +1388,27 @@
     }
   }
 
+  function finalizeStreamingBlock() {
+    if (!streamingEl) return
+    removeCursor(streamingEl)
+    const text = streamingEl.textContent || ''
+    if (text.trim()) {
+      renderAssistantMarkdown(streamingEl, text)
+    } else {
+      streamingEl.remove()
+    }
+  }
+
+  function startNewStreamingBlock() {
+    if (!currentAssistantTurnEl) currentAssistantTurnEl = createAssistantTurn()
+    streamingEl = appendMessage('assistant', '', currentAssistantTurnEl)
+    streamingEl.classList.add('streaming')
+    addCursor(streamingEl)
+  }
+
   function handleToolStart(msg) {
+    finalizeStreamingBlock()
+    streamingEl = null
     const container = ensureToolActivityContainer()
     const list = container.querySelector('.tool-activity-list')
 
@@ -1164,6 +1587,7 @@
 
     const msgEl = appendMessage('user', text)
     if (voiceModeOn) msgEl.classList.add('voice-message')
+    recordLocalMessage('user', text)
 
     ws.send(JSON.stringify({ type: 'user_message', text, voice: voiceModeOn }))
     inputEl.value = ''
@@ -1185,6 +1609,45 @@
   }
   inputEl.addEventListener('input', autoResize)
 
+  sidebarToggleBtn.addEventListener('click', () => {
+    sidebarEl.classList.toggle('collapsed')
+  })
+
+  saveMarkdownBtn.addEventListener('click', () => {
+    const assistantId = pickerEl.value || getAssistantId() || defaultAssistant
+    downloadTextFile(`${assistantId}-conversation.md`, conversationToMarkdown())
+  })
+
+  saveHistoryBtn.addEventListener('click', saveConversationSnapshot)
+  refreshHistoryBtn.addEventListener('click', loadHistory)
+
+  chatTabBtn.addEventListener('click', () => setTab('chat'))
+  replTabBtn.addEventListener('click', () => setTab('repl'))
+
+  replRunBtn.addEventListener('click', async () => {
+    const code = replInputEl.value.trim()
+    if (!code) return
+    replOutputEl.textContent = 'Running…'
+    try {
+      const res = await fetch('/api/repl', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code, assistantId: pickerEl.value || getAssistantId() || defaultAssistant })
+      })
+      const data = await res.json()
+      if (data.ok) {
+        replOutputEl.classList.add('markdown')
+        replOutputEl.innerHTML = markdownToHtml(data.output || 'undefined')
+      } else {
+        replOutputEl.classList.remove('markdown')
+        replOutputEl.textContent = `Error: ${data.error || 'Unknown error'}`
+      }
+    } catch (err) {
+      replOutputEl.classList.remove('markdown')
+      replOutputEl.textContent = `Error: ${err.message || err}`
+    }
+  })
+
   // ── Start ──────────────────────────────
   updateVoiceModeUI()
 
@@ -1202,7 +1665,10 @@
     if (voiceModeOn) connectVoiceWs()
   })
 
-  loadAssistants().then(connect)
+  loadAssistants().then(() => {
+    loadHistory()
+    connect()
+  })
 })()
 </script>
 </body>

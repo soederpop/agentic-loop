@@ -10,12 +10,40 @@ import type { WorkflowHooksSetupContext } from '../../features/workflow-service'
 // ── Known assistant file types ────────────────────────────────────────────────
 
 const KNOWN_FILES = ['CORE.md', 'ABOUT.md', 'tools.ts', 'hooks.ts', 'voice.yaml']
+const MAX_PREVIEW_LENGTH = 1200
 
 const OPENAI_CHAT_PREFIXES = ['gpt-3.5-turbo', 'gpt-4', 'gpt-5', 'o1', 'o3', 'o4']
 function isChatModel(id: string): boolean {
   if (/^(dall-e|tts-|whisper|text-embedding|omni-moderation|sora|chatgpt-image|gpt-image|ft:)/.test(id)) return false
   if (/(transcribe|tts|realtime|audio|search|deep-research|codex|computer-use)/.test(id)) return false
   return OPENAI_CHAT_PREFIXES.some((p) => id.startsWith(p))
+}
+
+function truncateLargeStrings(value: any, maxLen = MAX_PREVIEW_LENGTH): any {
+  if (typeof value === 'string') {
+    if (value.length <= maxLen) return value
+    return `${value.slice(0, maxLen)}… [truncated ${value.length - maxLen} chars]`
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => truncateLargeStrings(item, maxLen))
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [key, truncateLargeStrings(val, maxLen)])
+    )
+  }
+  return value
+}
+
+function summarizeForPreview(value: any): string {
+  try {
+    const processed = truncateLargeStrings(value)
+    const text = typeof processed === 'string' ? processed : JSON.stringify(processed)
+    return text.length > 180 ? `${text.slice(0, 180)}…` : text
+  } catch {
+    const text = String(value)
+    return text.length > 180 ? `${text.slice(0, 180)}…` : text
+  }
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -75,8 +103,7 @@ export async function onSetup({ app, container, wss, broadcast }: WorkflowHooksS
     const folder = getFolder(id)
     if (assistant) { try { assistant.removeAllListeners() } catch {} }
     await assistantsManager.discover()
-    const fullName = `assistants/${id}`
-    const inst = assistantsManager.create(fullName, { historyMode: 'session' })
+    const inst = assistantsManager.create(id, { historyMode: 'session' })
     inst.resumeThread(`designer:${id}`)
     await inst.start()
     assistant = inst
@@ -207,39 +234,40 @@ export async function onSetup({ app, container, wss, broadcast }: WorkflowHooksS
   app.get('/api/workflows/assistant-designer/assistants/:id/history', async (req: any, res: any) => {
     try {
       const { id } = req.params
-      // History is stored via the assistant's thread system
-      // List threads that match the designer prefix
-      const historyDir = container.paths.resolve('.luca', 'threads')
-      let sessions: any[] = []
-      try {
-        const allFiles = await fs.readdir(historyDir)
-        const prefix = `designer:${id}`
-        const matching = allFiles.filter((f: string) => f.startsWith(prefix) || f.includes(id))
-        sessions = await Promise.all(
-          matching.map(async (f: string) => {
-            const filePath = container.paths.join(historyDir, f)
-            try {
-              const stat = await fs.statAsync(filePath)
-              const content = ((await fs.readFileAsync(filePath, 'utf8')) as any).toString('utf-8')
-              const messages = JSON.parse(content)
-              return {
-                threadId: f.replace('.json', ''),
-                messageCount: Array.isArray(messages) ? messages.length : 0,
-                updatedAt: (stat as any).mtime,
-              }
-            } catch {
-              return { threadId: f.replace('.json', ''), messageCount: 0, updatedAt: null }
-            }
-          })
-        )
-        sessions.sort((a: any, b: any) => {
-          if (!a.updatedAt) return 1
-          if (!b.updatedAt) return -1
-          return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        })
-      } catch {}
+      await assistantsManager.discover()
+      const histAssistant = assistantsManager.create(id, { historyMode: 'session' })
+      const sessions = await histAssistant.listHistory({ limit: 100 })
 
-      res.json({ assistantId: id, sessions })
+      res.json({
+        assistantId: id,
+        sessions: (sessions || []).map((s: any) => ({
+          id: s.id,
+          threadId: s.thread,
+          title: s.title,
+          model: s.model,
+          messageCount: s.messageCount,
+          updatedAt: s.updatedAt,
+          createdAt: s.createdAt,
+          tags: s.tags || [],
+          metadata: s.metadata || {},
+        })),
+      })
+    } catch (err: any) {
+      res.status(500).json({ error: err.message })
+    }
+  })
+
+  app.get('/api/workflows/assistant-designer/assistants/:id/history/:conversationId', async (req: any, res: any) => {
+    try {
+      const { id, conversationId } = req.params
+      await assistantsManager.discover()
+      const histAssistant = assistantsManager.create(id, { historyMode: 'session' })
+      const history = histAssistant.container.feature('conversationHistory') as any
+      const record = await history.load(conversationId)
+
+      if (!record) return res.status(404).json({ error: `Conversation "${conversationId}" not found` })
+
+      res.json({ assistantId: id, conversation: record })
     } catch (err: any) {
       res.status(500).json({ error: err.message })
     }
@@ -320,10 +348,31 @@ export async function onSetup({ app, container, wss, broadcast }: WorkflowHooksS
     res.flushHeaders()
 
     const send = (event: string, data: any) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
-    const onChunk = (text: string) => send('chunk', { text })
-    const onToolCall = (name: string, args: any) => send('tool_start', { name, args })
-    const onToolResult = (name: string, result: any) => send('tool_result', { name, result })
-    const onToolError = (name: string, error: any) => send('tool_error', { name, error: error?.message || String(error) })
+    let segmentHasContent = false
+    const onChunk = (text: string) => {
+      if (text) segmentHasContent = true
+      send('chunk', { text })
+    }
+    const onToolCall = (name: string, args: any) => {
+      if (segmentHasContent) {
+        send('segment_end', {})
+        segmentHasContent = false
+      }
+      send('tool_start', {
+        name,
+        args: truncateLargeStrings(args),
+        argsPreview: summarizeForPreview(args),
+      })
+    }
+    const onToolResult = (name: string, result: any) => send('tool_result', {
+      name,
+      result: truncateLargeStrings(result),
+      resultPreview: summarizeForPreview(result),
+    })
+    const onToolError = (name: string, error: any) => send('tool_error', {
+      name,
+      error: error?.message || String(error),
+    })
 
     assistant.on('chunk', onChunk)
     assistant.on('toolCall', onToolCall)
@@ -332,6 +381,10 @@ export async function onSetup({ app, container, wss, broadcast }: WorkflowHooksS
 
     try {
       const response = await assistant.ask(message)
+      if (segmentHasContent) {
+        send('segment_end', {})
+        segmentHasContent = false
+      }
       send('done', { response, messageCount: assistant.messages?.length || 0, assistantId: activeAssistantId })
     } catch (err: any) {
       send('error', { message: err.message || String(err) })
@@ -371,15 +424,45 @@ export async function onSetup({ app, container, wss, broadcast }: WorkflowHooksS
 
   app.post('/api/workflows/assistant-designer/eval', async (req: any, res: any) => {
     try {
-      const { code } = req.body || {}
+      const { code, assistantId } = req.body || {}
       if (!code) return res.status(400).json({ error: 'Missing code' })
+
+      if (assistantId && assistantId !== activeAssistantId) {
+        try {
+          await loadAssistant(assistantId)
+        } catch (err: any) {
+          return res.status(500).json({ error: `Failed to load assistant: ${err.message}` })
+        }
+      }
+
       replContext.assistant = assistant
       replContext.activeAssistantId = activeAssistantId
       try {
         const result = await vm.run(code, replContext)
-        res.json({ ok: true, output: result === undefined ? 'undefined' : JSON.stringify(result, null, 2) })
+        const output = result === undefined
+          ? 'undefined'
+          : typeof result === 'string'
+            ? result
+            : (() => {
+                try {
+                  if (typeof result?.toMarkdown === 'function') return result.toMarkdown()
+                  if (typeof result?.toString === 'function' && result.toString !== Object.prototype.toString) {
+                    const text = String(result)
+                    if (text && text !== '[object Object]') return text
+                  }
+                  return '```json\n' + JSON.stringify(result, null, 2) + '\n```'
+                } catch {
+                  return String(result)
+                }
+              })()
+        res.json({
+          ok: true,
+          output,
+          assistantId: activeAssistantId,
+          hasAssistant: !!assistant,
+        })
       } catch (err: any) {
-        res.json({ ok: false, error: err.message || String(err) })
+        res.json({ ok: false, error: err.message || String(err), assistantId: activeAssistantId, hasAssistant: !!assistant })
       }
     } catch (err: any) {
       res.status(500).json({ error: err.message })

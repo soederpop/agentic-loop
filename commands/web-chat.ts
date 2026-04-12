@@ -7,6 +7,22 @@ import type { ChatService } from '../features/chat-service'
 import type VoiceMode from '../features/voice-mode'
 import type { VoiceListener } from '../features/voice-listener'
 
+function summarizeMessagesAsMarkdown(messages: any[] = [], assistantName = 'Assistant') {
+	return (messages || [])
+		.map((msg: any) => {
+			const role = msg?.role === 'assistant'
+				? assistantName
+				: msg?.role === 'user'
+					? 'User'
+					: String(msg?.role || 'System')
+			const content = Array.isArray(msg?.content)
+				? msg.content.map((part: any) => part?.text || JSON.stringify(part)).join('\n')
+				: (msg?.content ?? '')
+			return `## ${role}\n\n${String(content || '').trim()}`
+		})
+		.join('\n\n')
+}
+
 export const argsSchema = CommandOptionsSchema.extend({
 	port: z.number().optional().describe('Port to listen on (default: any available port)'),
 	host: z.string().default('0.0.0.0').describe('Host to bind to (0.0.0.0 for LAN)'),
@@ -29,6 +45,7 @@ function getLanAddress(): string | null {
 async function handler(options: z.infer<typeof argsSchema>, context: ContainerContext) {
 	const { container } = context
 	const { host } = options
+	const vm = container.feature('vm') as any
 
 	// Find an available port
 	const port = options.port ?? (await container.networking.findOpenPort(3100))
@@ -101,6 +118,124 @@ async function handler(options: z.infer<typeof argsSchema>, context: ContainerCo
 	app.get('/api/assistants', (_req: any, res: any) => {
 		const assistants = chatService.listAssistants()
 		res.json({ assistants, default: options.assistant })
+	})
+
+	app.get('/api/history', async (req: any, res: any) => {
+		try {
+			const assistantId = String(req.query.assistantId || options.assistant)
+			const histAssistant = assistantsManager.create(assistantId, { historyMode: 'session' }) as Assistant
+			const sessions = await histAssistant.listHistory({ limit: 100 })
+			res.json({
+				assistantId,
+				sessions: (sessions || []).map((s: any) => ({
+					id: s.id,
+					threadId: s.thread,
+					title: s.title,
+					model: s.model,
+					messageCount: s.messageCount,
+					updatedAt: s.updatedAt,
+					createdAt: s.createdAt,
+					tags: s.tags || [],
+					metadata: s.metadata || {},
+				})),
+			})
+		} catch (err: any) {
+			res.status(500).json({ error: err.message || String(err) })
+		}
+	})
+
+	app.get('/api/history/:conversationId', async (req: any, res: any) => {
+		try {
+			const { conversationId } = req.params
+			const history = container.feature('conversationHistory') as any
+			const record = await history.load(conversationId)
+			if (!record) return res.status(404).json({ error: `Conversation \"${conversationId}\" not found` })
+			res.json({ conversation: record })
+		} catch (err: any) {
+			res.status(500).json({ error: err.message || String(err) })
+		}
+	})
+
+	app.post('/api/history/save', async (req: any, res: any) => {
+		try {
+			const { assistantId, title, messages, metadata } = req.body || {}
+			if (!assistantId) return res.status(400).json({ error: 'assistantId is required' })
+			if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'messages array is required' })
+			const history = container.feature('conversationHistory') as any
+			const record = await history.create({
+				title: title || `Web Chat — ${assistantId}`,
+				model: 'web-chat',
+				messages,
+				tags: ['web-chat', assistantId],
+				thread: `web-chat:manual:${assistantId}`,
+				metadata: {
+					assistantId,
+					source: 'web-chat-manual-save',
+					...(metadata || {}),
+				},
+			})
+			res.json({ ok: true, conversation: record })
+		} catch (err: any) {
+			res.status(500).json({ error: err.message || String(err) })
+		}
+	})
+
+	app.post('/api/repl', async (req: any, res: any) => {
+		try {
+			const { code, assistantId } = req.body || {}
+			if (!code) return res.status(400).json({ error: 'Missing code' })
+			const fullName = chatService.resolveAssistantName(String(assistantId || options.assistant))
+			const replAssistant = assistantsManager.create(fullName, { historyMode: 'session' }) as any
+			await replAssistant.start()
+			const context = vm.createContext({
+				container,
+				assistant: replAssistant,
+				console,
+				Date,
+				Promise,
+				setTimeout,
+				clearTimeout,
+				JSON,
+				Math,
+				Array,
+				Object,
+				String,
+				Number,
+				Boolean,
+				RegExp,
+				Map,
+				Set,
+				Error,
+				Buffer,
+				process,
+				require,
+				fetch: globalThis.fetch,
+			})
+			const result = await vm.run(code, context)
+			const output = result === undefined
+				? 'undefined'
+				: typeof result === 'string'
+					? result
+					: (() => {
+						try {
+							if (typeof (result as any)?.toMarkdown === 'function') return (result as any).toMarkdown()
+							if (typeof (result as any)?.toString === 'function' && (result as any).toString !== Object.prototype.toString) {
+								const text = String(result)
+								if (text && text !== '[object Object]') return text
+							}
+							return '```json\n' + JSON.stringify(result, null, 2) + '\n```'
+						} catch {
+							return String(result)
+						}
+					})()
+			res.json({
+				ok: true,
+				output,
+				assistantId: replAssistant.assistantName || assistantId || options.assistant,
+			})
+		} catch (err: any) {
+			res.json({ ok: false, error: err.message || String(err) })
+		}
 	})
 
 	await expressServer.start({ port, host })

@@ -12,7 +12,6 @@ declare module '@soederpop/luca' {
   }
 }
 
-
 // ── Voice mode ──
 
 export type VoiceModeState = 'off' | 'always'
@@ -23,6 +22,7 @@ export type ChatMessageOut =
 	| { type: 'init_ok'; sessionId: string; assistantId: string; historyLength: number }
 	| { type: 'init_error'; message: string }
 	| { type: 'assistant_message_start'; messageId: string }
+	| { type: 'assistant_segment_end'; messageId: string }
 	| { type: 'chunk'; messageId: string; textDelta: string }
 	| { type: 'tool_start'; id: string; name: string; startedAt: number }
 	| { type: 'tool_end'; id: string; name: string; ok: boolean; endedAt: number; durationMs: number; summary?: string; error?: string }
@@ -270,6 +270,7 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 		text: string,
 		callbacks: {
 			onStart: (messageId: string) => void
+			onSegmentEnd: (messageId: string) => void
 			onChunk: (messageId: string, textDelta: string) => void
 			onToolStart: (id: string, name: string, startedAt: number) => void
 			onToolEnd: (id: string, name: string, ok: boolean, endedAt: number, durationMs: number, detail?: string) => void
@@ -283,12 +284,18 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 		const toolTimers = new Map<string, number>()
 		const toolCallIds = new Map<string, string>()
 		let toolCallCounter = 0
+		let segmentHasContent = false
 
 		const onChunk = (chunk: string) => {
+			if (chunk) segmentHasContent = true
 			callbacks.onChunk(messageId, chunk)
 		}
 
 		const onToolCall = (toolName: string, _args: any) => {
+			if (segmentHasContent) {
+				callbacks.onSegmentEnd(messageId)
+				segmentHasContent = false
+			}
 			const callId = `${messageId}:tool:${toolCallCounter++}`
 			toolTimers.set(callId, Date.now())
 			toolCallIds.set(toolName, callId)
@@ -329,6 +336,10 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 
 		try {
 			const response = await activeAssistant.ask(text)
+			if (segmentHasContent) {
+				callbacks.onSegmentEnd(messageId)
+				segmentHasContent = false
+			}
 
 			// If voice mode is active, wait for speech to finish
 			if (this._voiceMode && this._voiceModeState === 'always') {
@@ -370,6 +381,7 @@ export class ChatService extends Feature<ChatServiceState, ChatServiceOptions> {
 	private wsCallbacks(ws: WebSocket) {
 		return {
 			onStart: (messageId: string) => this.send(ws, { type: 'assistant_message_start', messageId }),
+			onSegmentEnd: (messageId: string) => this.send(ws, { type: 'assistant_segment_end', messageId }),
 			onChunk: (messageId: string, textDelta: string) => this.send(ws, { type: 'chunk', messageId, textDelta }),
 			onToolStart: (id: string, name: string, startedAt: number) => this.send(ws, { type: 'tool_start', id, name, startedAt }),
 			onToolEnd: (id: string, name: string, ok: boolean, endedAt: number, durationMs: number, detail?: string) => {
