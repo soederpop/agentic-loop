@@ -1,13 +1,15 @@
 ---
 agent: chiefOfStaff
 schedule: every-twenty-minutes
+running: false
+lastRanAt: 1776017524012
 ---
 
 # Chief Of Staff's TODO List
 
-Pick one of the unfinished TODO items on your list.  
+Pick one of the unfinished TODO items on your list.
 
-Create a docs/tasks/whatever.md file that will accomplish that todo. 
+Create a docs/tasks/whatever.md file that will accomplish that todo.
 
 Use whatever assistant is best suited for the task.  ( With the exception of Rocket, who doesn't work for you. )
 
@@ -30,4 +32,3 @@ if ((totalTodoCount - completedTodoCount) === 0) {
   throw new Error(`All Todo items are completed`)
 }
 ```
-

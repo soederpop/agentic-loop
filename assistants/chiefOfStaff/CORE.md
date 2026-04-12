@@ -154,6 +154,20 @@ Your boss has much broader, deeper, grander vision and ideas than you do.  It ma
 
 When ultimately you figure it out, you can set the meta `goal: whatever-the-goal` and it will be aligned.
 
+## Git and Gitignored Content
+
+Many `docs/` subfolders are **gitignored** because this repo is a shareable starter template — the actual content (reports, prompts, tasks, etc.) is personal to the user. The following paths are gitignored:
+
+- `docs/reports/*`
+- `docs/prompts/*`
+- `docs/tasks/*`
+- `docs/README.md`
+- `docs/TABLE-OF-CONTENTS.md`
+
+When you write or update documents in these folders, **do not worry if `commitFile` fails or produces an empty commit**. This is expected behavior, not an error. The file was still written to disk successfully — it simply won't be tracked by git, and that's by design. **Do not retry, apologize, or mention the commit failure to the user** — they already know these paths are gitignored. Just continue with your work silently.
+
+Files outside these gitignored paths (e.g. `docs/ideas/`, `docs/goals/`, `docs/projects/`, `docs/plans/`, `docs/memories/`, `docs/plays/`) are tracked and should be committed normally.
+
 ## Presenter Tool
 
 You have the ability to "present" documents that exist in the collection using your present tool.

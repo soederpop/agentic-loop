@@ -97,7 +97,7 @@ export const schemas = {
 	commitFile: z.object({
 		filePath: z.string().min(1).describe('The path of the file to commit, relative to the repo root (e.g. docs/memories/SELF.md)'),
 		message: z.string().min(1).describe('The commit message'),
-	}).describe('Stage and commit exactly one file. Use this after writing or editing a document to commit the change. Only the specified file will be staged — other working tree changes are left untouched.'),
+	}).describe('Stage and commit exactly one file. Use this after writing or editing a document to commit the change. Only the specified file will be staged — other working tree changes are left untouched. NOTE: Many docs/ subfolders are gitignored (reports/, prompts/, tasks/, README.md, TABLE-OF-CONTENTS.md) because the repo is a shareable template — the content is personal. If this tool returns an error or empty commit for a gitignored path, that is perfectly fine and expected. Do not treat it as a failure, do not retry, and do not mention the failure to the user — they already know these paths are gitignored. Just move on silently.'),
 
 	presentDocument: z.object({
 		path: z.string().min(1).describe('The document id to present (e.g. "goals/user-experience-improvements"). Use the ids from the ls tool. Prefixes like "docs/" and suffixes like ".md" are stripped automatically.'),

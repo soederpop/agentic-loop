@@ -18,8 +18,20 @@ export type VoiceModeState = 'off' | 'always'
 
 // ── Protocol types ──
 
+export type ConversationSettings = {
+	model?: string | null
+	maxTokens?: number | null
+	temperature?: number | null
+	topP?: number | null
+	topK?: number | null
+	frequencyPenalty?: number | null
+	presencePenalty?: number | null
+	stop?: string[] | null
+	local?: boolean | null
+}
+
 export type ChatMessageOut =
-	| { type: 'init_ok'; sessionId: string; assistantId: string; historyLength: number }
+	| { type: 'init_ok'; sessionId: string; assistantId: string; historyLength: number; settings: ConversationSettings }
 	| { type: 'init_error'; message: string }
 	| { type: 'assistant_message_start'; messageId: string }
 	| { type: 'assistant_segment_end'; messageId: string }
@@ -28,12 +40,14 @@ export type ChatMessageOut =
 	| { type: 'tool_end'; id: string; name: string; ok: boolean; endedAt: number; durationMs: number; summary?: string; error?: string }
 	| { type: 'assistant_message_complete'; messageId: string; text: string }
 	| { type: 'voice_mode_changed'; mode: VoiceModeState }
+	| { type: 'settings_updated'; settings: ConversationSettings }
 	| { type: 'error'; message: string }
 
 export type ChatMessageIn =
-	| { type: 'init'; sessionId: string; assistantId?: string }
+	| { type: 'init'; sessionId: string; assistantId?: string; settings?: ConversationSettings }
 	| { type: 'user_message'; text: string; voice?: boolean }
 	| { type: 'set_voice_mode'; mode: VoiceModeState }
+	| { type: 'set_settings'; settings: ConversationSettings }
 
 // ── Session ──
 
@@ -41,6 +55,7 @@ export interface ChatSession {
 	assistant: Assistant
 	assistantId: string
 	sessionKey: string
+	settings?: ConversationSettings
 }
 
 // ── Feature schemas ──
