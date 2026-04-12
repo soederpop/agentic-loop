@@ -188,7 +188,8 @@ async function generateForAssistant(
 
 		if (await diskCache.has(cacheKey)) {
 			console.log(`  ${i + 1}/${phrases.length}: cached -> ${finalPath}`)
-			const audio = await diskCache.get(cacheKey)
+			const cached = await diskCache.get(cacheKey, true)
+			const audio = Buffer.from(cached.data)
 			await fs.writeFileAsync(finalPath, audio)
 		} else {
 			const audio = await synthesize(synthesisText)
