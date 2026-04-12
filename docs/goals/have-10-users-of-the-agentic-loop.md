@@ -4,7 +4,8 @@ horizon: short
 
 # Have 10 Users of the Agentic Loop
 
-What this goal is about and why it matters.
+Solo-entrepreneurs, Indie-hackers, Small Business Owners, Artists & Creatives, Content Marketers, Independent Sales Bros / Agents, etc.
+
 
 ## Motivation
 

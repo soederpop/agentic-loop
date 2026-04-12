@@ -97,30 +97,49 @@ luca describe --help
 luca scaffold --help
 ```
 
-### The Main Agentic Loop Process
+### The Main Process
 
-Run the [main agentic loop process](./commands/main.ts) ( long lived server essentially ).  It is also possible to run this with launchctl on startup on your mac.
+Run the [main process](./commands/main.ts) — a long-lived server for productized services (project builder, voice, domain services, etc.).
 
 ```shell
 luca main
 ```
 
-This process is a system wide singleton and uses a locking mechanism to ensure only one is running.
+This process is a system wide singleton and uses a locking mechanism to ensure only one is running. If you run this same command in another terminal, you will get a dashboard that views the activity.
 
-If you run this same command in another terminal, you will get a dashboard that views the activity.
-
-You can pause / unpause the agentic loop with the following:
+You can pause / unpause with the following:
 
 ```shell
 luca main --pause
-luca main --resume # when you're ready for it to start back up again
+luca main --unpause
 ```
 
-You can also connect to it via a REPL
+You can also connect to it via a REPL:
 
 ```shell
 luca main --console
 ```
+
+### The Task Scheduler (`luca task-scheduler`)
+
+The task scheduler runs as part of `luca main` by default. It can also be run standalone for isolated testing or custom setups.
+
+```shell
+luca task-scheduler          # standalone mode
+luca main                    # includes task scheduler (use --no-task-scheduler to disable)
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--interval <minutes>` | 15 | Minutes between scheduler ticks |
+| `--once` | — | Run a single cycle and exit |
+| `--dry-run` | — | Print what would run without executing |
+| `--concurrency-one-off <n>` | 2 | Max concurrent one-off tasks |
+| `--concurrency-scheduled <n>` | 2 | Max concurrent scheduled tasks |
+
+**Execution model:** Two independent queues run concurrently — one-off tasks are started first each cycle, then scheduled tasks. A lockfile (`tmp/luca-task-scheduler.pid`) prevents multiple standalone instances.
 
 ### Chat with an Assistant
 
